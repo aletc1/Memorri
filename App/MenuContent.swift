@@ -6,10 +6,14 @@ import SwiftUI
 struct MenuContent: View {
     let environment: AppEnvironment
 
+    private var captureTitle: String {
+        if let shortcut = environment.shortcuts.displayText { "Capture now   \(shortcut)" } else { "Capture now" }
+    }
+
     var body: some View {
         let status = environment.state.permissionStatus
 
-        Button("Capture now") { environment.requestCapture(.menu) }
+        Button(captureTitle) { environment.requestCapture(.menu) }
         Button("Inbox") { environment.windows.show(.inbox) }
         Button("Search") { environment.windows.show(.search) }
 

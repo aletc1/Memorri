@@ -27,6 +27,7 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Verify**
   - (b) The default is applied on a clean defaults domain, and `getShortcut` returns ⌃⌥⌘M. In this version the initial value parameter is named `default:` (`Name("capture", default: …)`), not `initial:`.
   - System shortcuts: the package's `isTakenBySystem` is internal, so the app cannot reuse it. The app's `SystemShortcutChecking` adapter calls `CopySymbolicHotKeys()` (`import Carbon.HIToolbox`) itself. On this Mac it returns 234 entries and reports Command+Space as reserved.
   - The global hotkey fires while other apps are focused.
+  - Correction to R4: version 2.4.0 has no binding-mode recorder. `Recorder(name:onChange:)` saves the shortcut first and then calls `onChange`. `ShortcutAdapter` therefore validates in `onChange` and, on rejection, writes the previous shortcut back at once (the recorder updates its display from the change notification). Global handlers are disabled while a shortcut is being recorded, so the rejected shortcut is never live in practice.
 
 ## R4. Shortcut validation rules (FR-007)
 

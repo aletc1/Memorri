@@ -83,3 +83,9 @@ final class OnboardingCounter: @unchecked Sendable {
     var count: Int { lock.lock(); defer { lock.unlock() }; return value }
     func increment() { lock.lock(); value += 1; lock.unlock() }
 }
+
+/// System-shortcut checker with a fixed list of reserved combos.
+struct FakeSystemShortcuts: SystemShortcutChecking {
+    var reserved: Set<KeyCombo> = []
+    func isReservedBySystem(_ combo: KeyCombo) -> Bool { reserved.contains(combo) }
+}

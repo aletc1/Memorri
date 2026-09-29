@@ -12,6 +12,7 @@ final class AppEnvironment {
     let windows = WindowCoordinator()
     let feedback: FeedbackAdapter
     let captureService: CaptureRequestService
+    let shortcuts: ShortcutAdapter
 
     init() {
         feedbackSettings = CaptureFeedbackSettings(store: settingsStore)
@@ -24,6 +25,9 @@ final class AppEnvironment {
             settings: feedbackSettings,
             onNeedsOnboarding: { Task { @MainActor in windows.show(.onboarding) } }
         )
+        shortcuts = ShortcutAdapter(onCapture: { [captureService] in
+            Task { await captureService.request(.shortcut) }
+        })
         self.windows.contentProvider = { [unowned self] id in self.content(for: id) }
 
         Task { [state, permission] in
@@ -42,7 +46,8 @@ final class AppEnvironment {
         switch id {
         case .inbox: AnyView(PlaceholderView.inbox)
         case .search: AnyView(PlaceholderView.search)
-        case .settings, .onboarding: AnyView(Text(id.title).padding(40))
+        case .settings: AnyView(ShortcutSection(shortcuts: shortcuts).padding(30))
+        case .onboarding: AnyView(Text(id.title).padding(40))
         }
     }
 }
