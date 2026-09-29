@@ -64,10 +64,26 @@ public struct ShortcutValidator: Sendable {
     public func validate(_ combo: KeyCombo) -> ShortcutRejection?   // nil means accepted
 }
 
+// Lifecycle
+public enum SingleInstanceArbiter {
+    /// True when another running copy has a lower PID than ownPID. Own PID in otherPIDs is ignored.
+    public static func shouldExit(ownPID: Int32, otherPIDs: [Int32]) -> Bool
+}
+
+// Onboarding
+public enum OnboardingPolicy {
+    /// Opens on its own only at the first launch and only when the permission is not granted.
+    public static func shouldOpenAtLaunch(completed: Bool, status: ScreenRecordingStatus) -> Bool
+}
+
 // Settings
 public protocol SettingsStore: Sendable {
     func bool(forKey: String, default: Bool) -> Bool
     func setBool(_ value: Bool, forKey: String)
+}
+
+public struct UserDefaultsSettingsStore: SettingsStore {
+    public init(defaults: UserDefaults = .standard)
 }
 
 public struct CaptureFeedbackSettings: Sendable {
@@ -85,3 +101,5 @@ public struct CaptureFeedbackSettings: Sendable {
 - `recent` never holds more than 100 items.
 - `PermissionMonitor` follows the transition table in `data-model.md` exactly, including revocation while running.
 - `ShortcutValidator` applies `noModifier`, then `usedByMemorriAction`, then `reservedBySystem`.
+- `SingleInstanceArbiter.shouldExit` is true only when another process has a lower PID.
+- `OnboardingPolicy.shouldOpenAtLaunch` is true only when `completed` is false and the status is not `granted`.

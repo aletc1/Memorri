@@ -43,10 +43,12 @@ In a second terminal: `log stream --predicate 'subsystem == "com.aletc1.memorri"
 | Step | Expected |
 |---|---|
 | Focus any other app; press Control+Option+Command+M | One `capture requested trigger=shortcut ...` line; flash and sound. |
+| Press it 20 times in total across at least three different focused apps (SC-002) | At least 19 log lines and no duplicates. |
 | Press it twice within 300 ms | One line only. |
 | Settings, General: record Control+Option+Command+K | New shortcut works; the old one does nothing. |
 | Try recording a lone letter, then a system shortcut (for example Command+Space) | The rejection messages from the UI contract appear; the previous shortcut stays. |
-| Quit and relaunch | The chosen shortcut is still in effect. |
+| Quit and relaunch, three times (SC-005) | The chosen shortcut is still in effect after each relaunch. |
+| Clear the shortcut in Settings | No shortcut works; the menu still offers Capture now. Reset to default brings it back. |
 | Reset to default | Control+Option+Command+M works again. |
 
 ## Scenario 3: permission (User Story 3)
@@ -55,7 +57,7 @@ In a second terminal: `log stream --predicate 'subsystem == "com.aletc1.memorri"
 2. Launch: the onboarding window opens once, status "Not granted".
 3. Open System Settings from the window, enable Memorri, return: status updates within 2 seconds, and "Restart required" appears if macOS needs it. Use Relaunch.
 4. Launch again after quitting: no window opens on its own; status is "Granted".
-5. Revoke the permission while the app runs: within a few seconds the menu shows "Grant Screen Recording access…" again.
+5. Revoke the permission while the app runs (leave every window closed): within 2 seconds of opening the menu, it shows "Grant Screen Recording access…" again.
 
 ## Scenario 4: permission survives a rebuild (SC-003)
 
@@ -73,6 +75,11 @@ Negative check: temporarily rename the identity in `project.yml` to one that doe
 ## Scenario 5: single instance
 
 With Memorri running, run `open -n .build/xcode/Build/Products/Debug/Memorri.app`. Expected: no second icon, and the Settings window of the running app opens.
+
+## Scenario 5b: display and menu-bar edge cases
+
+1. With two displays, or with an app full-screen on one, open the menu and Settings: both appear on the display that holds the pointer.
+2. Hide the menu-bar icon (or crowd the menu bar so it is hidden): the shortcut still works, and launching the app again (Scenario 5) still opens Settings.
 
 ## Scenario 6: remote-desktop client (acceptance, manual)
 

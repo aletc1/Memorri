@@ -96,7 +96,7 @@ The user opens Settings and finds an organised window with sections for General 
 
 - The chosen shortcut is swallowed by the focused application (some remote-desktop clients forward all keys to the remote session): the menu-bar item still works, and the user can pick another shortcut.
 - The shortcut is pressed twice quickly: only one capture request is recorded per intended press, and none is lost.
-- The permission is revoked in System Settings while the app is running: the status changes to not granted within a few seconds or on next interaction.
+- The permission is revoked in System Settings while the app is running: the status changes to not granted within 2 seconds.
 - The app is launched while it is already running: the second launch exits at once and the running app opens its Settings window, so there is one menu-bar icon and the user sees that the app is alive.
 - The menu-bar icon is hidden because the menu bar is crowded or the user has a notch: the shortcut and Settings remain reachable.
 - The app is started with more than one display connected, or with a display in full-screen: the menu and Settings open on the active display.

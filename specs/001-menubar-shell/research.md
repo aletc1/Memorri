@@ -1,6 +1,6 @@
 # Research: Menu-bar shell, hotkey and permissions
 
-Each item: Decision, Rationale, Alternatives considered. Items marked **Verify** are assumptions that the first tasks must prove on this Mac before more code is built on them.
+Each item: Decision, Rationale, Alternatives considered. Items marked **Verify** are assumptions that the spike tasks T007 to T009 prove on this Mac before more code is built on them.
 
 ## R1. Menu-bar UI: SwiftUI `MenuBarExtra`, `.menu` style
 
@@ -30,9 +30,9 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Verify**
 
 ## R5. Screen Recording permission: check without capturing
 
-- **Decision**: `CGPreflightScreenCaptureAccess()` gives the status. `CGRequestScreenCaptureAccess()` shows the system prompt once. The status is re-read every 2 seconds while a window that shows it is open, and when the app becomes active. The deep link is `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`.
-- **Rationale**: No capture is needed in this spec, so no screen content is read. Polling is cheap and covers both "granted" and "revoked while running" (edge case).
-- **Restart required**: macOS sometimes reports granted only for processes started after the grant. The state machine treats "not granted at launch, then reported granted while running" as `restartRequired` and offers a relaunch, which is the safe reading. **Verify** on macOS 26 whether a relaunch is actually needed; if not, the state collapses to `granted` and FR-011 becomes a no-op branch.
+- **Decision**: `CGPreflightScreenCaptureAccess()` gives the status. `CGRequestScreenCaptureAccess()` shows the system prompt once. The status is re-read by a 2-second timer for as long as the app runs, when the app becomes active, and when the menu opens, so a revocation shows in the menu within 2 seconds. The deep link is `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`.
+- **Rationale**: No capture is needed in this spec, so no screen content is read. Polling is cheap and covers both "granted" and "revoked while running" (edge case). It runs in the background so the menu is never stale.
+- **Restart required**: macOS sometimes reports granted only for processes started after the grant. The state machine treats "not granted at launch, then reported granted while running" as `restartRequired` and offers a relaunch, which is the safe reading. **Verify** on macOS 26 whether a relaunch is actually needed (spike T008, before Foundational starts); if not, the state collapses to `granted` and FR-011 becomes a no-op branch.
 - **Alternatives**: Try a ScreenCaptureKit capture to detect permission (reads screen content, needs the permission it is testing, and may show the prompt again). Use the newer picker-based capture (does not fit a hotkey flow).
 
 ## R6. Single instance and second-launch signal

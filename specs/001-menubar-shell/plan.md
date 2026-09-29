@@ -36,7 +36,7 @@ Approach: SwiftUI `MenuBarExtra` for the menu, an AppKit window coordinator for 
 
 | Principle | Status | Notes |
 |---|---|---|
-| I. Local-first and private | Pass | No network code; FR-017 is checked by a test that the target links no networking entitlement and the package has no `URLSession` use. |
+| I. Local-first and private | Pass | No network code. FR-017 is checked by a source scan (no `URLSession`, `NWConnection` or `import Network`) plus a one-time runtime check that the running app holds no connections. The app is unsandboxed, so the absence of an entitlement proves nothing on its own. |
 | II. Every item carries evidence | N/A | No items yet. |
 | III. Idempotent, no duplicates | N/A | One relevant rule: a single key press produces exactly one capture request (SC-002), covered by a debounce test. |
 | IV. The user wins | Pass | The user's shortcut choice persists and is never overwritten; the previous shortcut is kept when a new one is rejected. |
@@ -76,6 +76,7 @@ App/
 ├── Windows/
 │   ├── WindowCoordinator.swift  # opens/fronts the single instance of each window (AppKit)
 │   ├── SettingsView.swift       # sidebar: General, Permissions, Ollama*, Storage*, Calendar sync*
+│   ├── ShortcutSection.swift    # recorder, clear and reset, rejection messages (used in General)
 │   ├── OnboardingView.swift     # Screen Recording status and grant flow
 │   └── PlaceholderView.swift    # Inbox and Search placeholders
 ├── Adapters/
@@ -91,10 +92,11 @@ scripts/
 Packages/MemorriCore/
 ├── Package.swift                    # tools 6.2+, macOS 26
 ├── Sources/MemorriCore/
-│   ├── Capture/                     # CaptureRequest, CaptureRequestService, CaptureTrigger
-│   ├── Permissions/                 # ScreenRecordingStatus, PermissionMonitor
+│   ├── Capture/                     # CaptureRequest, CaptureRequestService, CaptureTrigger, Clock, FeedbackPlaying
+│   ├── Lifecycle/                   # SingleInstanceArbiter
+│   ├── Permissions/                 # ScreenRecordingStatus, PermissionMonitor, OnboardingPolicy
 │   ├── Shortcuts/                   # KeyCombo, ShortcutValidator
-│   └── Settings/                    # CaptureFeedbackSettings, SettingsStore protocol
+│   └── Settings/                    # CaptureFeedbackSettings, SettingsStore protocol, UserDefaultsSettingsStore
 └── Tests/MemorriCoreTests/          # unit tests for every folder above
 ```
 
