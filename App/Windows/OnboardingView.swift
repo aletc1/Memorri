@@ -6,14 +6,26 @@ struct OnboardingView: View {
     let environment: AppEnvironment
 
     var body: some View {
-        let status = environment.state.permissionStatus
-
         VStack(alignment: .leading, spacing: 16) {
             Text("Memorri needs Screen Recording access")
                 .font(.title3.bold())
             Text("It is used to see the screens you choose to capture. Nothing leaves this Mac.")
                 .fixedSize(horizontal: false, vertical: true)
+            PermissionControls(environment: environment)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
 
+/// Status badge and the buttons to fix it. Used by the onboarding window and by Settings.
+struct PermissionControls: View {
+    let environment: AppEnvironment
+
+    var body: some View {
+        let status = environment.state.permissionStatus
+
+        VStack(alignment: .leading, spacing: 16) {
             StatusBadge(status: status)
 
             if status == .restartRequired {
@@ -32,8 +44,6 @@ struct OnboardingView: View {
                 }
             }
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

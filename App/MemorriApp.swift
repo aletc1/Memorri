@@ -3,7 +3,12 @@ import SwiftUI
 @main
 struct MemorriApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    private let environment = AppEnvironment.shared
+    /// Created on first use, which is after the single-instance check in `init`.
+    private var environment: AppEnvironment { AppEnvironment.shared }
+
+    init() {
+        SingleInstance.exitIfAnotherCopyIsRunning()
+    }
 
     var body: some Scene {
         MenuBarExtra {

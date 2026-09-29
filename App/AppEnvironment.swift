@@ -92,12 +92,12 @@ final class AppEnvironment {
         Task { [captureService] in await captureService.request(trigger) }
     }
 
-    /// Window content. Onboarding and Settings get their real views in later user stories.
+    /// The SwiftUI content of each window.
     private func content(for id: WindowID) -> AnyView {
         switch id {
         case .inbox: AnyView(PlaceholderView.inbox)
         case .search: AnyView(PlaceholderView.search)
-        case .settings: AnyView(ShortcutSection(shortcuts: shortcuts).padding(30))
+        case .settings: AnyView(SettingsView(environment: self))
         case .onboarding: AnyView(OnboardingView(environment: self))
         }
     }

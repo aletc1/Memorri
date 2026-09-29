@@ -137,13 +137,13 @@ description: "Task list for spec 001: menu-bar shell, hotkey and permissions"
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T037 [P] [US4] Write failing tests in `Packages/MemorriCore/Tests/MemorriCoreTests/SingleInstanceArbiterTests.swift` for `SingleInstanceArbiter.shouldExit(ownPID:otherPIDs:)`: no other process → `false`; another process with a lower PID → `true`; only processes with a higher PID → `false`; ignores its own PID in `otherPIDs`
+- [x] T037 [P] [US4] Write failing tests in `Packages/MemorriCore/Tests/MemorriCoreTests/SingleInstanceArbiterTests.swift` for `SingleInstanceArbiter.shouldExit(ownPID:otherPIDs:)`: no other process → `false`; another process with a lower PID → `true`; only processes with a higher PID → `false`; ignores its own PID in `otherPIDs`
 
 ### Implementation for User Story 4
 
-- [ ] T038 [US4] Implement `SingleInstanceArbiter` (new type, listed in `contracts/core-interfaces.md`) in `Packages/MemorriCore/Sources/MemorriCore/Lifecycle/SingleInstanceArbiter.swift` (rule: the process with the lowest PID keeps running); T037 passes
-- [ ] T039 [US4] In `App/AppDelegate.swift`, at launch read the other running copies with `NSRunningApplication.runningApplications(withBundleIdentifier: "com.aletc1.memorri")`, and if `SingleInstanceArbiter.shouldExit` is `true` post the distributed notification `com.aletc1.memorri.openSettings` and terminate; in the running instance observe that notification with `DistributedNotificationCenter` and show the `settings` window
-- [ ] T040 [US4] Replace the T027 stub with the full `App/Windows/SettingsView.swift`: `NavigationSplitView` with sidebar order General (selected first), Permissions, Ollama, Storage, Calendar sync; General contains `ShortcutSection` (T027) plus toggles "Flash the menu-bar icon" and "Play a sound" bound to `CaptureFeedbackSettings`; Permissions shows the status row and the same actions as `OnboardingView`; Ollama, Storage and Calendar sync show "Coming in a later version: <what will be here>." and name specs 003, 002 and 009
+- [x] T038 [US4] Implement `SingleInstanceArbiter` (new type, listed in `contracts/core-interfaces.md`) in `Packages/MemorriCore/Sources/MemorriCore/Lifecycle/SingleInstanceArbiter.swift` (rule: the process with the lowest PID keeps running); T037 passes
+- [x] T039 [US4] In `App/AppDelegate.swift`, at launch read the other running copies with `NSRunningApplication.runningApplications(withBundleIdentifier: "com.aletc1.memorri")`, and if `SingleInstanceArbiter.shouldExit` is `true` post the distributed notification `com.aletc1.memorri.openSettings` and terminate; in the running instance observe that notification with `DistributedNotificationCenter` and show the `settings` window
+- [x] T040 [US4] Replace the T027 stub with the full `App/Windows/SettingsView.swift`: `NavigationSplitView` with sidebar order General (selected first), Permissions, Ollama, Storage, Calendar sync; General contains `ShortcutSection` (T027) plus toggles "Flash the menu-bar icon" and "Play a sound" bound to `CaptureFeedbackSettings`; Permissions shows the status row and the same actions as `OnboardingView`; Ollama, Storage and Calendar sync show "Coming in a later version: <what will be here>." and name specs 003, 002 and 009
 - [ ] T041 [US4] Run quickstart Scenario 5 and Scenario 1 (Settings step), and confirm the two capture-feedback toggles change what a capture does
 
 **Checkpoint**: All four user stories work independently.
