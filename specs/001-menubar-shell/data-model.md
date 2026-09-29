@@ -60,4 +60,4 @@ A rejected combo leaves the stored value unchanged. Reset to default restores Co
 |---|---|---|
 | `memorri.onboarding.completed` | Bool | `false` |
 
-Set to `true` when the onboarding window is first shown at launch, so the automatic window appears only once (clarification 4). It is independent of the permission state.
+Set to `true` at the first launch, whatever the permission state. At that launch the onboarding window opens on its own only if the permission is not `granted`; at every later launch it does not open on its own (clarification 4). A capture requested without the permission opens it regardless (FR-010).
