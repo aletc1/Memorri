@@ -32,4 +32,4 @@
 ## Notes
 
 - FR-015 and FR-016 name signing and project-generation constraints because they come from accepted ADRs 0002 and 0007 and are part of the acceptance criteria; they do not prescribe code structure.
-- Remaining decisions (single-instance mechanism, feedback style, shortcut conflict detection) are left to the plan.
+- Remaining decisions (single-instance mechanism) are left to the plan.

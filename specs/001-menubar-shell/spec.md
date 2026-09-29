@@ -8,6 +8,15 @@
 
 **Input**: User description: "Build the Memorri macOS 26+ menu-bar app shell. It shows a menu-bar icon with a menu (Capture now, Inbox, Search, Settings, Quit). A configurable global hotkey (default Control+Option+Command+M) triggers Capture, and the menu item is a fallback. A Settings window skeleton exists. Screen Recording permission onboarding shows the current status and links to System Settings. Local builds use a stable self-signed identity so permissions persist (ADR 0007, 0008). Acceptance: the hotkey works while a remote-desktop client is focused and full-screen; permission survives a rebuild."
 
+## Clarifications
+
+### Session 2026-09-29
+
+- Q: How should the app confirm that a capture request was received? → A: The menu-bar icon flashes briefly and a short sound plays. Both can be turned off in Settings, and no notification permission is used.
+- Q: If the user launches Memorri while it is already running, what should the second launch do? → A: The second launch quits at once and opens the Settings window of the running app.
+- Q: Which key combinations should Memorri refuse when the user records a new shortcut? → A: Combinations with no modifier key, combinations macOS reports as system shortcuts, and combinations already used by another Memorri action. Other apps' shortcuts are not detected.
+- Q: When Screen Recording permission is missing, when should the onboarding window appear on its own? → A: On the very first launch, and whenever a capture is requested without the permission. The menu always shows the current status with a grant item while the permission is missing.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Trigger a capture from the menu bar (Priority: P1)
@@ -21,7 +30,7 @@ The user launches Memorri and sees its icon in the menu bar, with no Dock icon a
 **Acceptance Scenarios**:
 
 1. **Given** the app has just launched, **When** the user looks at the menu bar, **Then** the Memorri icon is visible and no Dock icon or window appears.
-2. **Given** the menu is open, **When** the user chooses Capture now, **Then** the app records a capture request and gives visible feedback that it was received.
+2. **Given** the menu is open, **When** the user chooses Capture now, **Then** the app records a capture request, the menu-bar icon flashes briefly and a short sound plays.
 3. **Given** the menu is open, **When** the user chooses Settings, **Then** the Settings window opens and comes to the front.
 4. **Given** the menu is open, **When** the user chooses Inbox or Search, **Then** a placeholder window for that feature opens and states that the feature is not built yet.
 5. **Given** the menu is open, **When** the user chooses Quit, **Then** the app exits and its icon disappears.
@@ -38,10 +47,10 @@ From any application, the user presses a keyboard shortcut (default Control+Opti
 
 **Acceptance Scenarios**:
 
-1. **Given** Memorri is running and another app is focused, **When** the user presses the default shortcut, **Then** a capture request is recorded with the same feedback as Capture now.
+1. **Given** Memorri is running and another app is focused, **When** the user presses the default shortcut, **Then** a capture request is recorded with the same flash and sound as Capture now.
 2. **Given** a remote-desktop client is focused and full-screen, **When** the user presses the shortcut, **Then** a capture request is recorded.
 3. **Given** the user opens Settings, **When** they record a new shortcut, **Then** the new shortcut works immediately and the old one no longer does.
-4. **Given** the user records a shortcut already reserved by macOS or already used by another Memorri action, **When** they confirm it, **Then** the app warns and keeps the previous shortcut.
+4. **Given** the user records a shortcut with no modifier key, one macOS reports as a system shortcut, or one already used by another Memorri action, **When** they confirm it, **Then** the app explains which rule it breaks and keeps the previous shortcut.
 5. **Given** the user has changed the shortcut, **When** they quit and relaunch the app, **Then** the chosen shortcut is still in effect.
 6. **Given** the user chose a shortcut, **When** they choose Reset to default, **Then** the default shortcut is restored.
 
@@ -57,18 +66,19 @@ On first launch, and whenever the permission is missing, the user sees a clear s
 
 **Acceptance Scenarios**:
 
-1. **Given** the permission has not been granted, **When** the app launches, **Then** an onboarding view explains why it is needed and shows the status as not granted.
+1. **Given** the permission has not been granted and this is the first launch, **When** the app launches, **Then** an onboarding window opens, explains why the permission is needed and shows the status as not granted.
+   1a. **Given** the permission has not been granted and this is not the first launch, **When** the app launches, **Then** no window opens on its own, and the menu shows the status with a "Grant Screen Recording access…" item.
 2. **Given** the onboarding is showing, **When** the user chooses to open System Settings, **Then** the Screen Recording pane of System Settings opens.
 3. **Given** the user grants the permission in System Settings, **When** they return to Memorri, **Then** the status updates to granted without needing to reopen Settings.
 4. **Given** macOS requires an app restart for the permission to take effect, **When** the permission has just been granted, **Then** the app tells the user and offers to relaunch.
 5. **Given** the permission is granted, **When** the developer rebuilds the app with the local signing setup and relaunches it, **Then** the permission is still granted and no prompt reappears.
-6. **Given** the permission is not granted, **When** the user chooses Capture now or presses the shortcut, **Then** the app shows the permission status instead of failing silently.
+6. **Given** the permission is not granted, **When** the user chooses Capture now or presses the shortcut, **Then** the onboarding window opens with the current status instead of failing silently.
 
 ---
 
 ### User Story 4 - Settings window skeleton (Priority: P2)
 
-The user opens Settings and finds an organised window with sections for General (shortcut, launch behaviour), Permissions (status), and placeholder sections for later features (Ollama, Storage, Calendar sync).
+The user opens Settings and finds an organised window with sections for General (shortcut, capture feedback), Permissions (status), and placeholder sections for later features (Ollama, Storage, Calendar sync).
 
 **Why this priority**: Later specs each add their own settings. A stable skeleton avoids reworking navigation, but it is not needed to capture.
 
@@ -87,7 +97,7 @@ The user opens Settings and finds an organised window with sections for General 
 - The chosen shortcut is swallowed by the focused application (some remote-desktop clients forward all keys to the remote session): the menu-bar item still works, and the user can pick another shortcut.
 - The shortcut is pressed twice quickly: only one capture request is recorded per intended press, and none is lost.
 - The permission is revoked in System Settings while the app is running: the status changes to not granted within a few seconds or on next interaction.
-- Two copies of the app are launched: the second one exits or hands over to the first, so there is one menu-bar icon.
+- The app is launched while it is already running: the second launch exits at once and the running app opens its Settings window, so there is one menu-bar icon and the user sees that the app is alive.
 - The menu-bar icon is hidden because the menu bar is crowded or the user has a notch: the shortcut and Settings remain reachable.
 - The app is started with more than one display connected, or with a display in full-screen: the menu and Settings open on the active display.
 - The signing identity is missing on a developer machine: the build fails with a message that points to the setup script, not a silent ad-hoc signature.
@@ -99,23 +109,24 @@ The user opens Settings and finds an organised window with sections for General 
 - **FR-001**: The app MUST run as a menu-bar-only app, with an icon in the menu bar and no Dock icon or main window.
 - **FR-002**: The menu MUST offer Capture now, Inbox, Search, Settings and Quit.
 - **FR-003**: Capture now and the global shortcut MUST both produce a capture request through the same path, so later specs attach the real capture to a single point.
-- **FR-004**: The app MUST give visible feedback when a capture request is received, and MUST record it so it can be verified in tests.
+- **FR-004**: When a capture request is received, the app MUST flash the menu-bar icon briefly and play a short sound, and MUST record the request so it can be verified in tests. The flash and the sound MUST each be switchable off in Settings, and neither requires notification permission.
 - **FR-005**: The global shortcut MUST default to Control+Option+Command+M and MUST work when any other application is focused, including a full-screen remote-desktop client.
 - **FR-006**: The user MUST be able to change, clear and reset the shortcut in Settings, and the choice MUST persist across launches.
-- **FR-007**: The app MUST reject a shortcut that conflicts with a reserved macOS shortcut or with another Memorri action, and MUST explain why.
-- **FR-008**: The app MUST show the current Screen Recording permission status and update it when it changes.
+- **FR-007**: The app MUST reject a shortcut that has no modifier key, that macOS reports as a system shortcut, or that is already used by another Memorri action, and MUST explain which rule it breaks. Conflicts with other apps' shortcuts are not detected.
+- **FR-008**: The app MUST show the current Screen Recording permission status and update it when it changes. The onboarding window MUST open on its own only on the first launch and when a capture is requested without the permission. While the permission is missing, the menu MUST show its status with an item that opens the onboarding window.
 - **FR-009**: The app MUST offer a one-step way to open the Screen Recording pane of System Settings and explain why the permission is needed.
-- **FR-010**: When a capture is requested without the permission, the app MUST show the permission status instead of failing silently.
+- **FR-010**: When a capture is requested without the permission, the app MUST open the onboarding window with the current status instead of failing silently.
 - **FR-011**: The app MUST tell the user when a restart is needed for a newly granted permission and offer to relaunch.
 - **FR-012**: The Settings window MUST provide General and Permissions sections and placeholder sections for Ollama, Storage and Calendar sync, and MUST open a single instance.
 - **FR-013**: Inbox and Search MUST open placeholder windows that say the features are not built yet.
-- **FR-014**: The app MUST run as a single instance.
+- **FR-014**: The app MUST run as a single instance. Launching it again MUST quit the new launch at once and open the Settings window of the running instance.
 - **FR-015**: Local builds MUST be signed with the stable local identity described in ADR 0007 so that the Screen Recording permission survives rebuilds, and the build MUST fail with a clear message if the identity is missing.
 - **FR-016**: The project MUST be generated from a declarative project definition and MUST build and run with the documented commands, with the logic separated into a local package as described in ADR 0002.
 - **FR-017**: The app MUST NOT send any data over the network.
 
 ### Key Entities
 
+- **Capture feedback setting**: Whether the icon flash and the sound are each on or off.
 - **Capture request**: A recorded intent to capture, with a timestamp and its trigger (menu or shortcut). Spec 002 turns it into a real capture.
 - **Shortcut setting**: The user's chosen key combination for Capture, or none.
 - **Permission status**: One of granted, not granted, or restart required, for Screen Recording.
@@ -139,5 +150,5 @@ The user opens Settings and finds an organised window with sections for General 
 - The app is for one user on one Mac and is never notarized or distributed, so the local signing identity from ADR 0007 is enough.
 - The shortcut library and default key combination are decided in ADR 0008. If a remote-desktop client swallows the default, the user picks another shortcut. There is no attempt to work around a client that captures the keyboard entirely.
 - The user has already run the signing script `scripts/create-signing-certificate.sh` on the developer machine.
-- Launch at login and notifications are out of scope, and come in spec 010.
+- Launch at login and macOS notifications are out of scope, and come in spec 010.
 - Testing the remote-desktop scenario is manual, using the user's real client, because it cannot be reproduced in an automated test.
