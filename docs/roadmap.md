@@ -4,7 +4,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 
 | # | Spec | Status |
 |---|---|---|
-| 001 | menubar-shell | Not started |
+| 001 | menubar-shell | Done |
 | 002 | capture-and-storage | Not started |
 | 003 | ollama-connector | Not started |
 | 004 | ocr-extraction-and-eval | Not started |
@@ -21,7 +21,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 Build the Memorri macOS 26+ menu-bar app shell with XcodeGen and a local MemorriCore package. It shows a menu-bar icon with a menu (Capture now, Inbox, Search, Settings, Quit). A configurable global hotkey (default Control+Option+Command+M) triggers Capture, and the menu item is a fallback. A Settings window skeleton exists. Screen Recording permission onboarding shows the current status and links to System Settings. Local builds use a stable self-signed identity so permissions persist (ADR 0007, 0008). Acceptance: the hotkey works while a remote-desktop client is focused and full-screen; permission survives a rebuild.
 
 ### 002 capture-and-storage
-Capture every display separately with ScreenCaptureKit on hotkey, store full-resolution HEIC images plus a downscaled copy for the model (configurable long edge, default 2048). Create the GRDB database, migrations, and the raw capture_events and capture_images tables. Settings shows storage used, offers cleanup by age or everything, and a retention policy. Excluded from Time Machine.
+Capture every display separately with ScreenCaptureKit on hotkey, store full-resolution HEIC images plus a downscaled copy for the model (configurable long edge, default 2048). Create the GRDB database, migrations, and the raw capture_events and capture_images tables. Settings shows storage used, offers cleanup by age or everything, and a retention policy. Excluded from Time Machine. The real capture call is the source of truth for the Screen Recording permission: a failed capture changes the tracked status and opens the onboarding window (see docs/postmortems/2026-09-29-permission-and-launch-assumptions.md).
 
 ### 003 ollama-connector
 Settings for Ollama URL, vision model picker (from /api/tags with a capability check), think level, timeout and a health check. Include a spike proving qwen3.8:27b-mlx honours a JSON-schema format with images attached, and measure latency at several image sizes. Add a serial background queue with retries and progress shown in the menu (ADR 0005).

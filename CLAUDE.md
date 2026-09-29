@@ -10,11 +10,13 @@ Read `.specify/memory/constitution.md` first. The roadmap is in `docs/roadmap.md
 - `Tools/memorri-eval`: CLI that scores the pipeline against `eval/golden`.
 
 ## Commands
-(Available once spec 001 has created the project.)
 - `xcodegen generate`
-- `xcodebuild -scheme Memorri -configuration Debug build`
+- `xcodebuild -scheme Memorri -configuration Debug -derivedDataPath .build/xcode build`
+- `open .build/xcode/Build/Products/Debug/Memorri.app`
 - `swift test --package-path Packages/MemorriCore`
-- `swift run --package-path Packages/MemorriCore memorri-eval`
+- `scripts/create-signing-certificate.sh` (once per Mac) and `scripts/check-signing-identity.sh` (runs before every build)
+- `/usr/bin/log stream --predicate 'subsystem == "com.aletc1.memorri"'` to watch the app's log (use the full path; zsh has its own `log`)
+- `swift run --package-path Packages/MemorriCore memorri-eval` (from spec 004)
 
 ## Workflow (Spec Kit)
 Skills are in `.claude/skills/`. For each feature, in order:
@@ -41,5 +43,5 @@ Specs live in `specs/NNN-name/`. Spec Kit's git extension is not installed, so c
 - Do not push or open a PR unless the user asks.
 
 <!-- SPECKIT START -->
-Active feature plan: none yet. Spec Kit updates this section.
+Active feature plan: `specs/001-menubar-shell/plan.md` (spec, research, data model, contracts and quickstart are in the same folder).
 <!-- SPECKIT END -->

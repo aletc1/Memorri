@@ -9,3 +9,6 @@ eval/out/
 eval/golden/*
 !eval/golden/README.md
 !eval/golden/synthetic/
+
+# Local state written by the Spec Kit tooling
+.spec-context.json

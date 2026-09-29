@@ -1,0 +1,88 @@
+# Research: Menu-bar shell, hotkey and permissions
+
+Each item: Decision, Rationale, Alternatives considered. Items marked **Verify** are assumptions that the spike tasks T007 to T009 prove on this Mac before more code is built on them.
+
+## R1. Menu-bar UI: SwiftUI `MenuBarExtra`, `.menu` style
+
+- **Decision**: Use `MenuBarExtra` with the menu style. The icon is a template image; a "flash" swaps to a highlighted variant for about 300 ms from observable state.
+- **Rationale**: Native, minimal code, matches ADR 0002. Menu style gives standard menu behaviour, including keyboard use.
+- **Alternatives**: `NSStatusItem` in AppKit (more control over the button and flash animation, more code). Fall back to it only if the label cannot update reliably.
+- **Outcome (T007, 2026-09-29)**: Confirmed. With `MenuBarExtra` in menu style, a label `Image` chosen from observable state changes in the menu bar every second (thin and heavy variants alternate). No `NSStatusItem` fallback is needed.
+
+## R2. Windows: AppKit `WindowCoordinator` hosting SwiftUI views
+
+- **Decision**: One `WindowCoordinator` keeps one `NSWindow` (with an `NSHostingController`) per window kind (settings, onboarding, inbox, search) and shows or fronts it on request.
+- **Rationale**: The hotkey, a capture without permission and a second launch all need to open a window from outside any SwiftUI view. The SwiftUI `openWindow` action only exists inside a view, and a menu-bar-only app has no always-present view. The SwiftUI `Settings` scene is also awkward for agent apps. A coordinator gives one instance per window by construction (spec User Story 4, scenario 3).
+- **Alternatives**: SwiftUI `Window` scenes plus `openWindow` (needs a hidden host view, fragile). SwiftUI `Settings` scene (not reliable to open from code in an agent app).
+- **Detail**: the app runs with `LSUIElement = YES`. Before showing a window, call `NSApp.activate()` so it comes to the front.
+
+## R3. Global hotkey: KeyboardShortcuts package
+
+- **Decision**: Use `KeyboardShortcuts`, name `capture`, initial value Control+Option+Command+M (ADR 0008). Handle key-up events.
+- **Rationale**: Registers a system-wide hotkey without requiring Accessibility or Input Monitoring permission, persists the choice, and ships a recorder that already refuses shortcuts taken by the system or the app's main menu.
+- **Alternatives**: Raw Carbon `RegisterEventHotKey` (what the package wraps, more code). A CGEvent tap (needs Input Monitoring, and would let the app read all typing; rejected on privacy grounds).
+- **Verify**: (a) the package's own checks, and whether it refuses a shortcut with no modifier; the spec requires this (FR-007). If it does not, `ShortcutValidator` in the core enforces it before the shortcut is saved. (b) The initial value is applied on a clean install. (c) Behaviour with a full-screen remote-desktop client (see R8).
+- **Outcome (T009, 2026-09-29, KeyboardShortcuts 2.4.0)**:
+  - (a) The recorder silently beeps for a lone letter or a Shift-only combination, with no message, so our own message is needed. It **accepts a function key alone** (F5 was saved, persisted and used after a relaunch), which the spec forbids, so `ShortcutValidator` must reject it and the recorder must run in binding mode so nothing is saved before validation.
+  - (b) The default is applied on a clean defaults domain, and `getShortcut` returns ⌃⌥⌘M. In this version the initial value parameter is named `default:` (`Name("capture", default: …)`), not `initial:`.
+  - System shortcuts: the package's `isTakenBySystem` is internal, so the app cannot reuse it. The app's `SystemShortcutChecking` adapter calls `CopySymbolicHotKeys()` (`import Carbon.HIToolbox`) itself. On this Mac it returns 234 entries and reports Command+Space as reserved.
+  - The global hotkey fires while other apps are focused.
+  - Correction to R4: version 2.4.0 has no binding-mode recorder. `Recorder(name:onChange:)` saves the shortcut first and then calls `onChange`. `ShortcutAdapter` therefore validates in `onChange` and, on rejection, writes the previous shortcut back at once (the recorder updates its display from the change notification). Global handlers are disabled while a shortcut is being recorded, so the rejected shortcut is never live in practice.
+
+## R4. Shortcut validation rules (FR-007)
+
+- **Decision**: `ShortcutValidator` in `MemorriCore` decides accept or reject with a reason: no modifier key, already used by another Memorri action, or reported as a system shortcut. The system-shortcut check is delegated to a protocol `SystemShortcutChecking`; the app adapter uses the package's own check.
+- **Rationale**: The rules are testable without UI, and the spec's "keep the previous shortcut" behaviour needs one place that decides. The recorder is used with a binding, so the app saves a shortcut only after the validator accepts it.
+- **Alternatives**: Rely entirely on the package recorder (no control over the no-modifier rule and the "explain which rule" message). Reject only after saving and then revert (flashes an invalid state).
+
+## R5. Screen Recording permission: check without capturing
+
+- **Decision**: `CGPreflightScreenCaptureAccess()` gives the status. `CGRequestScreenCaptureAccess()` shows the system prompt once. The status is followed by a 2-second probe of a freshly started copy of the app, for as long as the app runs and whenever it becomes active (see the outcome below), so a revocation shows in the menu within about 2 seconds. The deep link is `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`.
+- **Rationale**: No capture is needed in this spec, so no screen content is read. Polling is cheap and covers both "granted" and "revoked while running" (edge case). It runs in the background so the menu is never stale.
+- **Restart required**: macOS sometimes reports granted only for processes started after the grant. The state machine treats "not granted at launch, then reported granted while running" as `restartRequired` and offers a relaunch, which is the safe reading. **Verify** on macOS 26 whether a relaunch is actually needed (spike T008, before Foundational starts); if not, the state collapses to `granted` and FR-011 becomes a no-op branch.
+- **Outcome (T008, 2026-09-29)**: Relaunch is needed. A running process that requested access never saw `CGPreflightScreenCaptureAccess()` flip to true after the grant; a freshly started process reported true, and macOS offers "Quit & Reopen". **Follow-up (T049 to T052)**: the spike proved the relaunch is needed but not how the app learns of the grant. It cannot learn it from its own reading, so the first implementation never showed "Restart required" (found in manual validation). The app now asks a freshly started copy of itself (`--probe-permission`) every 2 seconds and whenever it becomes active. A later check found the same staleness for revocation: after `tccutil reset` the running app never noticed, so the probe runs whether or not a window is open, and the in-process reading is used only at launch. A probe started from a shell reports differently from one started by the app (attribution follows the launching process), so only the app-spawned probe is meaningful. The `restartRequired` state stays in the design. Also learned: an app is only listed in the Screen Recording list ("Screen & System Audio Recording") after it calls `CGRequestScreenCaptureAccess()`. Without that call it can end up only in the "system audio only" list, which does not grant screen capture. So the onboarding **Open System Settings** button must call `requestAccess()` first (which shows the system prompt and adds the app to the list) and then open the pane.
+- **Alternatives**: Try a ScreenCaptureKit capture to detect permission (reads screen content, needs the permission it is testing, and may show the prompt again). Use the newer picker-based capture (does not fit a hotkey flow).
+
+## R6. Single instance and second-launch signal
+
+- **Decision**: At launch, `NSRunningApplication.runningApplications(withBundleIdentifier:)` is checked for other processes. If an older one exists (by launch date), the new process posts a `DistributedNotificationCenter` notification `com.aletc1.memorri.openSettings` and terminates. The running instance listens (immediate delivery) and opens Settings. Clicking the app while it runs is a different event, a "reopen", which the app delegate answers the same way.
+- **Rationale**: Simple, no sockets or files, works without extra permissions, and covers FR-014.
+- **Alternatives**: A lock file (no way to signal the first instance). XPC or a local socket (more moving parts, and a socket is at odds with the "no network" rule in spirit).
+- **Edge**: the check ignores its own PID. The **oldest copy wins**, ranked by launch date, and the PID only breaks a tie. An earlier version used "lowest PID wins", which is wrong because PIDs wrap around (they did during testing). The exiting copy must keep its run loop turning for about 0.5 s after posting, otherwise the notification is lost. Relaunch waits for the old process to exit before starting the new one.
+
+## R7. Signing and the permission surviving rebuilds (FR-015)
+
+- **Decision**: `project.yml` sets manual signing with identity `Memorri Local`, no team, hardened runtime off, no sandbox entitlement. A pre-build shell phase, `scripts/check-signing-identity.sh`, runs `security find-identity -v -p codesigning` and fails with a message that names `scripts/create-signing-certificate.sh` if the identity is missing.
+- **Rationale**: macOS keys the Screen Recording grant to the app's code requirement. A stable certificate keeps that requirement identical across rebuilds; ad-hoc signing changes it each time (ADR 0007). The pre-build check turns Xcode's vague signing failure into an actionable message.
+- **Alternatives**: Ad-hoc signing (permission lost each build). An Apple development certificate (requires an Apple account and team; not needed for local-only use).
+- **Verify**: after the first build, run `codesign -dr - <app>` twice across a rebuild and confirm the requirement is identical (quickstart step).
+- **Outcome (T006, 2026-09-29)**: Confirmed. Two builds with a source change between them give the identical designated requirement, `identifier "com.aletc1.memorri" and certificate leaf = H"3964bd86..."`, which is pinned to the certificate, not to the build. Build settings need `CODE_SIGN_STYLE: Manual`, `CODE_SIGN_IDENTITY: "Memorri Local"` and an empty `DEVELOPMENT_TEAM`.
+- **Missing-identity message**: Xcode rejects an unknown identity while planning the build ("No certificate matching…"), before any build-phase script runs, so a build-phase check never shows our message. The check therefore also runs as a scheme **pre-action** (`schemes.Memorri.build.preActions` in `project.yml`), which runs first, prints the pointer to `scripts/create-signing-certificate.sh` and fails the build. The build-phase check stays as a second line of defence. The script reads the identity name from `CODE_SIGN_IDENTITY`, so it can be tested with `xcodebuild … CODE_SIGN_IDENTITY="Nonexistent Identity"`.
+
+## R8. Hotkey inside a full-screen remote-desktop client
+
+- **Decision**: Treat as a manual acceptance test with the user's real client. Design mitigations up front: configurable shortcut (done), menu-bar fallback (done), and document in the quickstart what to try if the client swallows the key.
+- **Rationale**: Some clients grab the keyboard in full-screen so that shortcuts go to the remote session instead of macOS. This cannot be simulated, and the registered system hotkey may or may not be seen first.
+- **Verify**: on the real client, with the default shortcut and one alternative, and record the result in the quickstart's results table. If both fail, write a postmortem or an ADR (for example a "capture via menu-bar click only" workflow) before spec 002.
+
+## R9. Capture request recording and feedback
+
+- **Decision**: `CaptureRequestService` in the core accepts a trigger (menu or shortcut), ignores a second request within 300 ms of the first (debounce), stores the request in an in-memory ring buffer (last 100) and logs it with `os.Logger` (subsystem `com.aletc1.memorri`, category `capture`). It calls a `FeedbackPlaying` protocol; the app adapter flashes the icon and plays the sound, each only if enabled.
+- **Rationale**: Testable in the core, observable from outside with `log stream` for the manual tests (SC-002 counts log lines), and no persistence is needed until spec 002.
+- **Alternatives**: Write to a file (extra cleanup and privacy surface). Store in a database (spec 002).
+- **Sound**: `NSSound` with a system sound name (for example "Pop"); no bundled audio file.
+
+## R10. Permission for feedback
+
+- **Decision**: No notification permission is requested (clarification 1). Nothing in this spec asks for Calendar, Reminders, Accessibility, Input Monitoring or network access.
+
+## R11. Bundle identifier and defaults keys
+
+- **Decision**: Bundle identifier `com.aletc1.memorri`; log subsystem the same. `UserDefaults` keys are prefixed `memorri.` and listed in the [UI contract](contracts/ui-contract.md).
+- **Rationale**: A fixed identifier is part of the code requirement that the permission is bound to, so it must not change after the first grant.
+
+## R12. Testing approach
+
+- **Decision**: Swift Testing for core logic (validator, debounce, permission state machine, settings). Fakes for every protocol. UI, hotkey delivery, permission flow and rebuild persistence are manual, using [quickstart.md](quickstart.md) with a results table.
+- **Rationale**: Menu-bar UI automation is brittle and the two hardest acceptance criteria (remote-desktop hotkey, TCC persistence) cannot be automated anyway.
+- **Alternatives**: XCUITest for the menu (can drive menu-bar items but adds a test host and slows every change). Deferred until the UI is larger.
