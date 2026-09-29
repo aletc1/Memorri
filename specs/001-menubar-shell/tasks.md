@@ -123,7 +123,7 @@ description: "Task list for spec 001: menu-bar shell, hotkey and permissions"
 - [x] T033 [US3] Implement relaunch in `App/AppEnvironment.swift`: start a new instance of the app bundle with `NSWorkspace` and terminate the current one after the new one has launched
 - [x] T034 [US3] Add status polling in `App/AppEnvironment.swift`: a timer calls `PermissionMonitor.refresh()` every 2 seconds for as long as the app runs, and also whenever the app becomes active (`NSApplication.didBecomeActiveNotification`) and when the menu opens; the menu (T021) and onboarding view observe `statusUpdates()`, so a revoked permission shows in the menu within 2 seconds
 - [x] T035 [US3] In `App/AppDelegate.swift`, at launch call `OnboardingPolicy.shouldOpenAtLaunch` and show the `onboarding` window when it returns `true`, then persist `completed = true`; confirm that a capture without permission (T022 `onNeedsOnboarding`) opens the same window
-- [ ] T036 [US3] Run quickstart Scenarios 3 and 4 (grant flow, no window on later launches, revoke while running, five rebuilds with the requirement unchanged and no prompt, and the negative signing-identity check)
+- [x] T036 [US3] Run quickstart Scenarios 3 and 4 (grant flow, no window on later launches, revoke while running, five rebuilds with the requirement unchanged and no prompt, and the negative signing-identity check)
 
 **Checkpoint**: User Stories 1, 2 and 3 work; the permission survives rebuilds.
 

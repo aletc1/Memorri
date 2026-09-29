@@ -1,5 +1,6 @@
 import MemorriCore
 import SwiftUI
+import os
 
 /// Creates the shared services once at launch and connects them to their system adapters.
 @MainActor
@@ -36,6 +37,8 @@ final class AppEnvironment {
         Task { [state, permission] in
             for await status in await permission.statusUpdates() {
                 state.permissionStatus = status
+                Logger(subsystem: MemorriCore.subsystem, category: "permission")
+                    .notice("permission status: \(status.rawValue, privacy: .public)")
             }
         }
         startPermissionPolling()
@@ -64,8 +67,14 @@ final class AppEnvironment {
     /// Asks macOS for access first (shows the prompt and adds the app to the Screen Recording
     /// list, spike R5), then opens the System Settings pane.
     func openScreenRecordingSettings() {
-        screenRecording.requestAccess()
-        screenRecording.openSystemSettings()
+        let granted = screenRecording.requestAccess()
+        Logger(subsystem: MemorriCore.subsystem, category: "permission")
+            .notice("requestAccess returned \(granted, privacy: .public)")
+        // Give the system prompt a moment to appear before the pane takes the focus.
+        Task { [screenRecording] in
+            try? await Task.sleep(for: .seconds(1.5))
+            screenRecording.openSystemSettings()
+        }
     }
 
     /// Starts a new copy shortly after this one quits, so the single-instance check in the
