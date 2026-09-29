@@ -18,13 +18,13 @@ public protocol FeedbackPlaying: Sendable {
     func playSound() async
 }
 
-public protocol Clock: Sendable { func now() -> Date }
+public protocol TimeSource: Sendable { func now() -> Date }   // not named Clock, which Swift already has
 
 public actor CaptureRequestService {
     public init(permission: PermissionMonitor, feedback: FeedbackPlaying,
-                settings: CaptureFeedbackSettings, clock: Clock,
+                settings: CaptureFeedbackSettings, time: TimeSource,
                 onNeedsOnboarding: @escaping @Sendable () -> Void)
-    public func request(_ trigger: CaptureTrigger) -> CaptureRequest?   // nil when debounced
+    public func request(_ trigger: CaptureTrigger) async -> CaptureRequest?   // nil when debounced
     public var recent: [CaptureRequest] { get }                          // newest last, max 100
 }
 

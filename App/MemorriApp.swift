@@ -2,12 +2,14 @@ import SwiftUI
 
 @main
 struct MemorriApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @State private var environment = AppEnvironment()
+
     var body: some Scene {
         MenuBarExtra {
-            Button("Quit Memorri") { NSApplication.shared.terminate(nil) }
-                .keyboardShortcut("q")
+            MenuContent(environment: environment)
         } label: {
-            Image("MenuBarIcon")
+            Image(environment.state.isFlashing ? "MenuBarIconFlash" : "MenuBarIcon")
         }
         .menuBarExtraStyle(.menu)
     }
