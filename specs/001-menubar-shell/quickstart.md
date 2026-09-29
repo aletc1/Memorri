@@ -89,7 +89,7 @@ With Memorri running, run `open -n .build/xcode/Build/Products/Debug/Memorri.app
 
 | Client | Shortcut | Presses | Log lines | Pass (≥ 19, no duplicates) |
 |---|---|---|---|---|
-| | | | | |
+| Windows App (full-screen, several monitors) | Control+Option+Command+M | more than 10 (not counted exactly) | 17 accepted, all `permission=granted`, none dropped as duplicates unexpectedly | Works: every press logged and the icon flashed. Strict 19 of 20 count not run. (2026-09-29) |
 
 If no shortcut passes, stop and write a postmortem or ADR before starting spec 002.
 
