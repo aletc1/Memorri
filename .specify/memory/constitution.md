@@ -35,10 +35,10 @@ Architecture decisions are written as ADRs in `docs/architecture/decisions/`. In
 
 ## Development Workflow
 - Work follows Spec Kit: specify, clarify, plan, tasks, analyze, implement. Each feature has its own branch and `specs/NNN-name/` directory.
-- Commits use English Conventional Commits.
+- Work is never committed to `main`. Every change uses a feature branch and a pull request, and both commits and PR titles use English Conventional Commits (`feat:`, `fix:`, `chore:`, and so on).
 - A spec is done only when its acceptance scenarios pass in the running app or in the eval harness.
 
 ## Governance
 This constitution supersedes other practices. Amendments require a version bump and a note in the relevant ADR. Complexity beyond these principles must be justified in the plan. `CLAUDE.md` holds runtime guidance for the coding agent.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-29 | **Last Amended**: 2026-09-29
+**Version**: 1.1.0 | **Ratified**: 2026-09-29 | **Last Amended**: 2026-09-29

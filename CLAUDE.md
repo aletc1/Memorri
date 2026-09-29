@@ -19,7 +19,7 @@ Read `.specify/memory/constitution.md` first. The roadmap is in `docs/roadmap.md
 ## Workflow (Spec Kit)
 Skills are in `.claude/skills/`. For each feature, in order:
 `/speckit-specify` → `/speckit-clarify` → `/speckit-plan` → `/speckit-tasks` → `/speckit-analyze` → `/speckit-implement`.
-Specs live in `specs/NNN-name/` on a branch of the same name. Build specs in roadmap order and do not skip ahead. EventKit sync (009) comes last.
+Specs live in `specs/NNN-name/`. Spec Kit's git extension is not installed, so create the branch `NNN-name` yourself before `/speckit-specify`. Step-by-step guides for each situation are in `DEVELOPER.md`. Build specs in roadmap order and do not skip ahead. EventKit sync (009) comes last.
 
 ## Documentation rules
 - **ADRs**: `docs/architecture/decisions/NNNN-kebab-title.md`, copied from `0000-template.md` (MADR). Statuses: Proposed, Accepted, Superseded by NNNN. Number sequentially. Never edit an accepted ADR's decision; supersede it with a new one.
@@ -31,10 +31,14 @@ Specs live in `specs/NNN-name/` on a branch of the same name. Build specs in roa
 - Never commit real screenshots, captures or model outputs from customer systems. `eval/golden/` fixtures with real content stay gitignored.
 - Never send captured content to any non-local service.
 
-## Commits and PRs
-- English Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, ...).
+## Branches, commits and PRs
+- **Never commit to `main`.** All work happens on a branch and lands through a pull request. Branch from an up-to-date `main`.
+- Branch names: `NNN-short-name` for Spec Kit features (Spec Kit needs this form); otherwise `<type>/short-description` such as `fix/duplicate-merge` or `chore/update-deps`.
+- English Conventional Commits and PR titles: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `perf:`, `build:`, `ci:`, with an optional scope, for example `feat(capture): capture each display separately`. Use `!` or a `BREAKING CHANGE:` footer for breaking changes.
+- The PR title uses the same convention, since it becomes the commit message on squash merge. The PR description states what changed and why, links the spec (`specs/NNN-name/`) and any ADRs, and says how it was verified.
 - End commits with a `Co-Authored-By: Claude <model> <noreply@anthropic.com>` line.
 - Never add a `Claude-Session:` line or any `claude.ai/code/session_` URL to commits or PRs.
+- Do not push or open a PR unless the user asks.
 
 <!-- SPECKIT START -->
 Active feature plan: none yet. Spec Kit updates this section.
