@@ -4,7 +4,7 @@ Fixtures for `memorri-eval`. Each case is a directory:
 
 ```
 case-name/
-  screenshot.png     # input (gitignored if it contains real customer data)
+  screenshot.png     # input (gitignored if it contains real captured data)
   meta.json          # capture time, display timezone, context hint
   expected.json      # expected appointments, tasks and reminders
 ```

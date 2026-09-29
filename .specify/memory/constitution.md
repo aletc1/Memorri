@@ -3,7 +3,7 @@
 ## Core Principles
 
 ### I. Local-First and Private
-All customer data stays on this Mac. Ollama is reached on localhost only. There is no telemetry, no cloud inference, and no third-party network call that carries captured content. Real screenshots are never committed to git.
+All captured data stays on this Mac. Ollama is reached on localhost only. There is no telemetry, no cloud inference, and no third-party network call that carries captured content. Real screenshots are never committed to git.
 
 ### II. Every Item Carries Evidence
 Every inferred appointment, task or reminder records where each field came from: the capture, the OCR lines, a cropped evidence image, and a confidence value. Values the model guessed (for example a default 1h duration) are flagged as inferred so later observations can overwrite them.
@@ -41,4 +41,4 @@ Architecture decisions are written as ADRs in `docs/architecture/decisions/`. In
 ## Governance
 This constitution supersedes other practices. Amendments require a version bump and a note in the relevant ADR. Complexity beyond these principles must be justified in the plan. `CLAUDE.md` holds runtime guidance for the coding agent.
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-29 | **Last Amended**: 2026-09-29
+**Version**: 1.1.1 | **Ratified**: 2026-09-29 | **Last Amended**: 2026-09-29
