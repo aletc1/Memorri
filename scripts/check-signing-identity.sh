@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-NAME="Memorri Local"
+NAME="${CODE_SIGN_IDENTITY:-Memorri Local}"
 
 if security find-identity -v -p codesigning | grep -q "\"$NAME\""; then
   exit 0

@@ -48,6 +48,8 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Verify**
 - **Rationale**: macOS keys the Screen Recording grant to the app's code requirement. A stable certificate keeps that requirement identical across rebuilds; ad-hoc signing changes it each time (ADR 0007). The pre-build check turns Xcode's vague signing failure into an actionable message.
 - **Alternatives**: Ad-hoc signing (permission lost each build). An Apple development certificate (requires an Apple account and team; not needed for local-only use).
 - **Verify**: after the first build, run `codesign -dr - <app>` twice across a rebuild and confirm the requirement is identical (quickstart step).
+- **Outcome (T006, 2026-09-29)**: Confirmed. Two builds with a source change between them give the identical designated requirement, `identifier "com.aletc1.memorri" and certificate leaf = H"3964bd86..."`, which is pinned to the certificate, not to the build. Build settings need `CODE_SIGN_STYLE: Manual`, `CODE_SIGN_IDENTITY: "Memorri Local"` and an empty `DEVELOPMENT_TEAM`.
+- **Missing-identity message**: Xcode rejects an unknown identity while planning the build ("No certificate matching…"), before any build-phase script runs, so a build-phase check never shows our message. The check therefore also runs as a scheme **pre-action** (`schemes.Memorri.build.preActions` in `project.yml`), which runs first, prints the pointer to `scripts/create-signing-certificate.sh` and fails the build. The build-phase check stays as a second line of defence. The script reads the identity name from `CODE_SIGN_IDENTITY`, so it can be tested with `xcodebuild … CODE_SIGN_IDENTITY="Nonexistent Identity"`.
 
 ## R8. Hotkey inside a full-screen remote-desktop client
 
