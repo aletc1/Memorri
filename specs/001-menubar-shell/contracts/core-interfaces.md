@@ -68,8 +68,10 @@ public struct ShortcutValidator: Sendable {
 
 // Lifecycle
 public enum SingleInstanceArbiter {
-    /// True when another running copy has a lower PID than ownPID. Own PID in otherPIDs is ignored.
-    public static func shouldExit(ownPID: Int32, otherPIDs: [Int32]) -> Bool
+    public struct Instance: Sendable, Equatable { public let pid: Int32; public let launchDate: Date? }
+    /// True when another running copy is older than `own`. A missing launch date counts as newest;
+    /// the PID only breaks ties. `own` appearing in `others` is ignored.
+    public static func shouldExit(own: Instance, others: [Instance]) -> Bool
 }
 
 // Onboarding
@@ -106,5 +108,5 @@ public struct CaptureFeedbackSettings: Sendable {
 - `recent` never holds more than 100 items.
 - `PermissionMonitor` follows the transition table in `data-model.md` exactly, including revocation while running.
 - `ShortcutValidator` applies `noModifier`, then `usedByMemorriAction`, then `reservedBySystem`.
-- `SingleInstanceArbiter.shouldExit` is true only when another process has a lower PID.
+- `SingleInstanceArbiter.shouldExit` is true only when another copy is older by launch date; a lower PID alone never decides it.
 - `OnboardingPolicy.shouldOpenAtLaunch` is true only when `completed` is false and the status is not `granted`.

@@ -18,7 +18,10 @@ packages:
     path: Packages/MemorriCore
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
-    from: 2.0.0
+    # Pinned exactly: ShortcutAdapter depends on 2.4.0 behaviour found in spike R3 (the `default:`
+    # parameter, save-then-onChange, function keys accepted). The generated .xcodeproj, and so
+    # Package.resolved, is not committed, so this is the only pin.
+    exactVersion: 2.4.0
 targets:
   Memorri:
     type: application

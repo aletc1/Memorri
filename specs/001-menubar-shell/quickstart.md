@@ -55,9 +55,9 @@ In a second terminal: `log stream --predicate 'subsystem == "com.aletc1.memorri"
 
 1. Remove Memorri from System Settings → Privacy & Security → Screen Recording (and quit the app first).
 2. Launch: the onboarding window opens once, status "Not granted".
-3. Open System Settings from the window, enable Memorri, return: status updates within 2 seconds, and "Restart required" appears if macOS needs it. Use Relaunch.
+3. Open System Settings from the window, enable Memorri, return: within about 5 seconds the badge turns orange "Restart required" and stays that way (macOS applies the permission to a process only when it starts, and the app finds out by asking a freshly started copy of itself). Use Relaunch.
 4. Launch again after quitting: no window opens on its own; status is "Granted".
-5. Revoke the permission while the app runs (leave every window closed): within 2 seconds of opening the menu, it shows "Grant Screen Recording access…" again.
+5. Revoke the permission while the app runs (leave every window closed; `tccutil reset ScreenCapture com.aletc1.memorri` does it from a terminal): within about 4 seconds the menu shows "Grant Screen Recording access…" again. Enable it again: "Restart required" appears.
 
 ## Scenario 4: permission survives a rebuild (SC-003)
 
@@ -74,7 +74,7 @@ Negative check: temporarily rename the identity in `project.yml` to one that doe
 
 ## Scenario 5: single instance
 
-With Memorri running, run `open -n .build/xcode/Build/Products/Debug/Memorri.app`. Expected: no second icon, and the Settings window of the running app opens.
+With Memorri running, run `open -n .build/xcode/Build/Products/Debug/Memorri.app`, and also click the app in Finder. Expected: no second icon, and the Settings window of the running app opens each time (on the display holding the pointer). Only one Memorri process stays: `pgrep -x Memorri` prints one PID.
 
 ## Scenario 5b: display and menu-bar edge cases
 

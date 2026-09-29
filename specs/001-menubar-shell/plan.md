@@ -14,7 +14,7 @@ Approach: SwiftUI `MenuBarExtra` for the menu, an AppKit window coordinator for 
 
 **Language/Version**: Swift 6 (Xcode toolchain on this Mac: Swift 6.4), strict concurrency on
 
-**Primary Dependencies**: SwiftUI, AppKit, ScreenCaptureKit/CoreGraphics (permission check only), [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) (SwiftPM, version 2.4.0 at the time of the spike, pinned in `Package.resolved`). No other third-party dependencies. The GRDB dependency arrives in spec 002.
+**Primary Dependencies**: SwiftUI, AppKit, ScreenCaptureKit/CoreGraphics (permission check only), [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) (SwiftPM, pinned to exactly 2.4.0 in `project.yml`; the generated project and its `Package.resolved` are not committed). No other third-party dependencies. The GRDB dependency arrives in spec 002.
 
 **Storage**: `UserDefaults` for settings (shortcut is stored by KeyboardShortcuts). No database in this spec.
 

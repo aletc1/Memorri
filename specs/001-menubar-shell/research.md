@@ -45,10 +45,10 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Verify**
 
 ## R6. Single instance and second-launch signal
 
-- **Decision**: At launch, `NSRunningApplication.runningApplications(withBundleIdentifier:)` is checked for other processes. If one exists, the new process posts a `DistributedNotificationCenter` notification `com.aletc1.memorri.openSettings` and terminates. The running instance listens and opens Settings.
+- **Decision**: At launch, `NSRunningApplication.runningApplications(withBundleIdentifier:)` is checked for other processes. If an older one exists (by launch date), the new process posts a `DistributedNotificationCenter` notification `com.aletc1.memorri.openSettings` and terminates. The running instance listens (immediate delivery) and opens Settings. Clicking the app while it runs is a different event, a "reopen", which the app delegate answers the same way.
 - **Rationale**: Simple, no sockets or files, works without extra permissions, and covers FR-014.
 - **Alternatives**: A lock file (no way to signal the first instance). XPC or a local socket (more moving parts, and a socket is at odds with the "no network" rule in spirit).
-- **Edge**: the check ignores its own PID; two near-simultaneous launches can both see the other, so the one with the higher PID exits.
+- **Edge**: the check ignores its own PID. The **oldest copy wins**, ranked by launch date, and the PID only breaks a tie. An earlier version used "lowest PID wins", which is wrong because PIDs wrap around (they did during testing). The exiting copy must keep its run loop turning for about 0.5 s after posting, otherwise the notification is lost. Relaunch waits for the old process to exit before starting the new one.
 
 ## R7. Signing and the permission surviving rebuilds (FR-015)
 

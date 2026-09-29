@@ -28,9 +28,10 @@ struct ScreenRecordingAdapter: ScreenRecordingChecking {
 
     static let probeArgument = "--probe-permission"
 
-    /// A running process keeps the permission answer it had at launch, so a grant made in System
-    /// Settings is invisible to it. A freshly started copy of the same app sees it at once. This
-    /// runs one and returns what it reported, or `nil` if it could not be run.
+    /// A running process keeps the permission answer it had at launch, so a grant or revocation
+    /// made in System Settings is invisible to it. A freshly started copy of the same app sees it
+    /// at once. This runs one and returns what it reported, or `nil` if it could not be run or
+    /// did not answer within `probeTimeout` (so a hung probe cannot stall the polling loop).
     func isGrantedInFreshProcess() async -> Bool? {
         guard let executable = Bundle.main.executableURL else { return nil }
         return await withCheckedContinuation { continuation in
@@ -40,11 +41,38 @@ struct ScreenRecordingAdapter: ScreenRecordingChecking {
             let output = Pipe()
             process.standardOutput = output
             process.standardError = FileHandle.nullDevice
+
+            let answer = OneShot(continuation)
             process.terminationHandler = { _ in
                 let data = output.fileHandleForReading.readDataToEndOfFile()
-                continuation.resume(returning: String(decoding: data, as: UTF8.self).contains("granted"))
+                answer.finish(String(decoding: data, as: UTF8.self).contains("granted"))
             }
-            do { try process.run() } catch { continuation.resume(returning: nil) }
+            do { try process.run() } catch {
+                answer.finish(nil)
+                return
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.probeTimeout) {
+                if process.isRunning { process.terminate() }
+                answer.finish(nil)
+            }
+        }
+    }
+
+    static let probeTimeout: TimeInterval = 2
+
+    /// Resumes a continuation exactly once, whichever of the answer or the timeout comes first.
+    private final class OneShot: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<Bool?, Never>?
+
+        init(_ continuation: CheckedContinuation<Bool?, Never>) { self.continuation = continuation }
+
+        func finish(_ value: Bool?) {
+            lock.lock()
+            let pending = continuation
+            continuation = nil
+            lock.unlock()
+            pending?.resume(returning: value)
         }
     }
 

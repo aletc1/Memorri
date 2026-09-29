@@ -10,10 +10,15 @@ enum SingleInstance {
     /// Call first thing at launch, before anything is created.
     static func exitIfAnotherCopyIsRunning() {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.aletc1.memorri"
-        let ownPID = ProcessInfo.processInfo.processIdentifier
-        let otherPIDs = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
-            .map(\.processIdentifier)
-        guard SingleInstanceArbiter.shouldExit(ownPID: ownPID, otherPIDs: otherPIDs) else { return }
+        // The oldest copy wins. Process IDs wrap around, so they are not used to rank copies.
+        let own = SingleInstanceArbiter.Instance(
+            pid: ProcessInfo.processInfo.processIdentifier,
+            launchDate: NSRunningApplication.current.launchDate
+        )
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).map {
+            SingleInstanceArbiter.Instance(pid: $0.processIdentifier, launchDate: $0.launchDate)
+        }
+        guard SingleInstanceArbiter.shouldExit(own: own, others: others) else { return }
 
         DistributedNotificationCenter.default().postNotificationName(
             openSettingsNotification, object: nil, userInfo: nil, deliverImmediately: true

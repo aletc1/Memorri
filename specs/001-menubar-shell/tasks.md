@@ -164,15 +164,20 @@ description: "Task list for spec 001: menu-bar shell, hotkey and permissions"
 
 ## Phase 8: Fixes found during validation
 
-**Purpose**: Defects found while running the quickstart on a real Mac. Each was reproduced first.
+**Purpose**: Defects found while running the quickstart on a real Mac, and one review. Each was reproduced or tested first. The IDs are in the order the work was done.
 
 - [x] T049 [US3] Write failing tests in `Packages/MemorriCore/Tests/MemorriCoreTests/PermissionMonitorTests.swift` for `observeFreshProcess(granted:)` (`notGranted` + granted → `restartRequired`; `restartRequired` + not granted → `notGranted`; `granted` never changed; each change emitted once) and for the flapping bug (the in-process reading must not end `restartRequired`)
 - [x] T050 [US3] Implement `PermissionMonitor.observeFreshProcess(granted:)` and make `restartRequired` ignore the in-process reading in `Packages/MemorriCore/Sources/MemorriCore/Permissions/PermissionMonitor.swift`; add `ScreenRecordingAdapter.isGrantedInFreshProcess()` and the `--probe-permission` mode (`runProbeIfRequested`, called first in `App/MemorriApp.swift`) in `App/Adapters/ScreenRecordingAdapter.swift`
 - [x] T051 [US3] Use the probe in the polling loop in `App/AppEnvironment.swift` while `WindowCoordinator.permissionStatusWindowVisible` (new, `App/Windows/WindowCoordinator.swift`) and the status is not `granted`; update the transition table in `specs/001-menubar-shell/data-model.md` and research R5
+- [x] T052 [US3] Re-run quickstart Scenario 3 on the real Mac with the log open: enabling the permission shows **Restart required** within about 5 seconds with no flapping in the log, **Relaunch Memorri** gives **Granted**, and turning it off while the app runs brings back "Grant Screen Recording access…" in the menu
 - [x] T053 [US3] Correct the design after T052 showed revocation was never noticed (a running process cannot see it): rewrite `PermissionMonitorTests.swift` and `CaptureRequestServiceTests.swift` for the probe-only model (revocation, re-grant, restart required, updates emitted once, capture after revocation opens onboarding), and see them fail
 - [x] T054 [US3] Implement it: `PermissionMonitor.observeFreshProcess(granted:)` with the full transition table and no in-process refresh, `CaptureRequestService` reading `permission.status`, and `AppEnvironment` probing every 2 seconds and whenever the app becomes active (`App/AppEnvironment.swift`); update `specs/001-menubar-shell/data-model.md`, `contracts/core-interfaces.md` and research R5
 - [x] T055 [US3] Verify revocation and the whole permission flow on the real Mac with the log open: grant → **Restart required** → **Relaunch** → **Granted**, then run `tccutil reset ScreenCapture com.aletc1.memorri` while the app runs and confirm the log shows `notGranted` within about 5 seconds and the menu shows "Grant Screen Recording access…"; then re-enable it and confirm **Restart required**
-- [x] T052 [US3] Re-run quickstart Scenario 3 on the real Mac with the log open: enabling the permission shows **Restart required** within about 5 seconds with no flapping in the log, **Relaunch Memorri** gives **Granted**, and turning it off while the app runs brings back "Grant Screen Recording access…" in the menu
+
+- [x] T056 Write `docs/postmortems/2026-09-29-permission-and-launch-assumptions.md` (wrong assumptions about permissions, reopening and launch signals) with a follow-up for spec 002
+- [x] T057 [US4] Fix the single-instance rule after review (process IDs wrap): tests first in `SingleInstanceArbiterTests.swift`, then `SingleInstanceArbiter` ranks copies by launch date with the PID as a tie-break, `App/SingleInstance.swift` passes launch dates, and relaunch waits for the old process to exit
+- [x] T058 [US3] Add a 2 second timeout to the permission probe in `App/Adapters/ScreenRecordingAdapter.swift` and pin KeyboardShortcuts to exactly 2.4.0 in `project.yml`
+- [x] T059 [US4] Open Settings when the running app is opened again from Finder (`applicationShouldHandleReopen` in `App/AppDelegate.swift`) and deliver the second-launch notification before the extra copy exits
 
 ---
 

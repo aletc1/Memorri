@@ -1,10 +1,35 @@
-/// Decides which copy of the app keeps running when more than one is started at nearly the same
-/// time: the copy with the lowest process ID stays, the others quit.
+import Foundation
+
+/// Decides which copy of the app keeps running when more than one is started: the oldest one.
+///
+/// Process IDs are not used to rank copies, because they wrap around on a busy Mac and a new
+/// launch can get a lower PID than one that has been running for days. The PID only breaks a tie.
 public enum SingleInstanceArbiter {
+    public struct Instance: Sendable, Equatable {
+        public let pid: Int32
+        /// `nil` when the system does not know it yet; such a copy counts as the newest.
+        public let launchDate: Date?
+
+        public init(pid: Int32, launchDate: Date?) {
+            self.pid = pid
+            self.launchDate = launchDate
+        }
+    }
+
     /// - Parameters:
-    ///   - ownPID: the process ID of this copy.
-    ///   - otherPIDs: process IDs of running copies of the app; `ownPID` in the list is ignored.
-    public static func shouldExit(ownPID: Int32, otherPIDs: [Int32]) -> Bool {
-        otherPIDs.contains { $0 != ownPID && $0 < ownPID }
+    ///   - own: this copy.
+    ///   - others: running copies of the app; an entry with `own`'s PID is ignored.
+    /// - Returns: `true` when another copy is older than this one.
+    public static func shouldExit(own: Instance, others: [Instance]) -> Bool {
+        others.contains { $0.pid != own.pid && isOlder($0, than: own) }
+    }
+
+    private static func isOlder(_ a: Instance, than b: Instance) -> Bool {
+        switch (a.launchDate, b.launchDate) {
+        case let (x?, y?) where x != y: return x < y
+        case (.some, nil): return true
+        case (nil, .some): return false
+        default: return a.pid < b.pid          // same launch time, or both unknown
+        }
     }
 }

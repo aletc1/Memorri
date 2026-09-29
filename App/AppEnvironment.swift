@@ -84,13 +84,15 @@ final class AppEnvironment {
         }
     }
 
-    /// Starts a new copy shortly after this one quits, so the single-instance check in the
-    /// new copy does not see this one still running.
+    /// Starts a new copy once this one has quit, so the single-instance check in the new copy
+    /// does not see this one still running. Waits for this process to exit (at most 10 seconds).
     func relaunch() {
         let path = Bundle.main.bundlePath
+        let pid = String(ProcessInfo.processInfo.processIdentifier)
+        let script = "i=0; while kill -0 \"$2\" 2>/dev/null && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done; /usr/bin/open -n \"$1\""
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", "sleep 1; /usr/bin/open -n \"$1\"", "sh", path]
+        process.arguments = ["-c", script, "sh", path, pid]
         try? process.run()
         NSApplication.shared.terminate(nil)
     }
