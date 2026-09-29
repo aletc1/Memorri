@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct MemorriApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @State private var environment = AppEnvironment()
+    private let environment = AppEnvironment.shared
 
     var body: some Scene {
         MenuBarExtra {

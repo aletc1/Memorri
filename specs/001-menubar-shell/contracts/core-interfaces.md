@@ -71,9 +71,12 @@ public enum SingleInstanceArbiter {
 }
 
 // Onboarding
-public enum OnboardingPolicy {
+public struct OnboardingPolicy: Sendable {
+    public init(store: any SettingsStore)
     /// Opens on its own only at the first launch and only when the permission is not granted.
     public static func shouldOpenAtLaunch(completed: Bool, status: ScreenRecordingStatus) -> Bool
+    /// Call once per launch: returns whether to open now and marks the first launch as done.
+    public func decideAtLaunch(status: ScreenRecordingStatus) -> Bool
 }
 
 // Settings
