@@ -1,0 +1,11 @@
+.DS_Store
+DerivedData/
+.build/
+*.xcodeproj
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+eval/out/
+eval/golden/*
+!eval/golden/README.md
+!eval/golden/synthetic/
