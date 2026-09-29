@@ -38,7 +38,9 @@ public protocol ScreenRecordingChecking: Sendable {
 public actor PermissionMonitor {
     public init(checker: ScreenRecordingChecking, startedGranted: Bool? = nil)
     public var status: ScreenRecordingStatus { get }
-    public func refresh() -> ScreenRecordingStatus   // applies the state machine in data-model.md
+    /// The only way to change the status after launch: what a freshly started copy of the app
+    /// reported. Applies the state machine in data-model.md.
+    public func observeFreshProcess(granted: Bool) -> ScreenRecordingStatus
     public func statusUpdates() -> AsyncStream<ScreenRecordingStatus>   // yields the current status first, then each change once
 }
 

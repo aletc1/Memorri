@@ -9,7 +9,7 @@ import Testing
         let feedback: FakeFeedback
         let onboarding: OnboardingCounter
         let settings: CaptureFeedbackSettings
-        let checker: FakeScreenRecordingChecker
+        let permission: PermissionMonitor
     }
 
     private func makeRig(granted: Bool = true) -> Rig {
@@ -18,15 +18,16 @@ import Testing
         let feedback = FakeFeedback()
         let onboarding = OnboardingCounter()
         let settings = CaptureFeedbackSettings(store: FakeSettingsStore())
+        let permission = PermissionMonitor(checker: checker)
         let service = CaptureRequestService(
-            permission: PermissionMonitor(checker: checker),
+            permission: permission,
             feedback: feedback,
             settings: settings,
             time: time,
             onNeedsOnboarding: { onboarding.increment() }
         )
         return Rig(service: service, time: time, feedback: feedback, onboarding: onboarding,
-                   settings: settings, checker: checker)
+                   settings: settings, permission: permission)
     }
 
     @Test func requestWithinDebounceWindowIsDropped() async {
@@ -95,9 +96,18 @@ import Testing
 
     @Test func restartRequiredIsTreatedAsNotGranted() async {
         let rig = makeRig(granted: false)
-        rig.checker.set(granted: true)        // granted while the app runs
+        _ = await rig.permission.observeFreshProcess(granted: true)   // granted while the app runs
         let request = await rig.service.request(.menu)
         #expect(request?.permissionAtRequest == .restartRequired)
+        #expect(rig.feedback.flashCount == 0)
+        #expect(rig.onboarding.count == 1)
+    }
+
+    @Test func revokedWhileRunningStopsFeedbackAndOpensOnboarding() async {
+        let rig = makeRig(granted: true)
+        _ = await rig.permission.observeFreshProcess(granted: false)
+        let request = await rig.service.request(.shortcut)
+        #expect(request?.permissionAtRequest == .notGranted)
         #expect(rig.feedback.flashCount == 0)
         #expect(rig.onboarding.count == 1)
     }

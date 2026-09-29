@@ -44,29 +44,31 @@ final class AppEnvironment {
         startPermissionPolling()
     }
 
-    /// Re-reads the permission every 2 seconds for as long as the app runs, and whenever the app
-    /// becomes active, so a grant or a revocation shows up without any button press.
+    /// Follows the permission for as long as the app runs. A running process keeps the answer it
+    /// had at launch and cannot see a grant or a revocation made afterwards, so every 2 seconds
+    /// (and whenever the app becomes active) a freshly started copy of the app is asked what macOS
+    /// says now. Each probe costs about 20 ms and a millisecond of CPU.
     private func startPermissionPolling() {
-        Task { [weak self, permission] in
+        Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
-                let status = await permission.refresh()
-                // This process cannot see a grant made after it started, so while a window shows
-                // the status, ask a fresh copy of the app what macOS says now.
-                guard let self, status != .granted, self.windows.permissionStatusWindowVisible,
-                      let granted = await self.screenRecording.isGrantedInFreshProcess() else { continue }
-                await permission.observeFreshProcess(granted: granted)
+                await self?.probePermission()
             }
         }
         NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
-        ) { [permission] _ in
-            Task { await permission.refresh() }
+        ) { [weak self] _ in
+            Task { @MainActor in await self?.probePermission() }
         }
     }
 
+    private func probePermission() async {
+        guard let granted = await screenRecording.isGrantedInFreshProcess() else { return }
+        await permission.observeFreshProcess(granted: granted)
+    }
+
     func checkPermission() {
-        Task { [permission] in await permission.refresh() }
+        Task { await probePermission() }
     }
 
     /// Asks macOS for access first (shows the prompt and adds the app to the Screen Recording

@@ -24,16 +24,15 @@ States: `granted`, `notGranted`, `restartRequired`.
 |---|---|---|
 | (start) | launch, permission reported granted | `granted` |
 | (start) | launch, permission not reported granted | `notGranted` |
-| `notGranted` | this process's own reading says granted while running | `restartRequired` (never seen in practice, see below) |
-| `notGranted` | a freshly started copy of the app reports granted | `restartRequired` |
-| `notGranted` | reported granted at a fresh launch | `granted` |
-| `granted` | this process's own reading says not granted (revoked) | `notGranted` |
-| `restartRequired` | this process's own reading, whatever it says | `restartRequired` (unchanged) |
+| `granted` | a freshly started copy of the app reports not granted (revoked) | `notGranted` |
+| `granted` | a freshly started copy reports granted | `granted` (unchanged) |
+| `notGranted` | a freshly started copy reports granted | `restartRequired` |
+| `notGranted` | a freshly started copy reports not granted | `notGranted` (unchanged) |
 | `restartRequired` | a freshly started copy reports not granted | `notGranted` |
-| `restartRequired` | app relaunched and reported granted | `granted` |
-| `granted` | a freshly started copy reports anything | `granted` (unchanged) |
+| `restartRequired` | a freshly started copy reports granted | `restartRequired` (unchanged) |
+| `restartRequired` | app relaunched, launch reading granted | `granted` |
 
-Why a fresh copy: a running process keeps the permission answer it had at launch (research R5), so it can never see a grant made afterwards, and its own reading in the `restartRequired` state says nothing. A freshly started copy of the same app sees the current state at once. While a window that shows the status is open, the app starts one every 2 seconds (`--probe-permission`: print `granted` or `denied` and quit) and feeds the answer to `observeFreshProcess(granted:)`.
+Why only fresh-copy reports after launch: a running process keeps the permission answer it had at launch, so it can see neither a grant nor a revocation made afterwards (research R5; confirmed by logs on 2026-09-29, including a revocation that the running app never noticed). A freshly started copy of the same app sees the current state at once. Every 2 seconds, and whenever the app becomes active, the app starts one (`--probe-permission`: print `granted` or `denied` and quit) and feeds the answer to `observeFreshProcess(granted:)`. A probe costs about 20 ms and about 1 ms of CPU. Re-granting after a revocation also gives `restartRequired`, because the process cannot tell whether its own view is still valid. The capture path reads the tracked status, never the process's own reading.
 
 ## ShortcutSetting (persisted by the KeyboardShortcuts package)
 

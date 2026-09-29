@@ -82,7 +82,7 @@ public actor CaptureRequestService {
         }
         lastAccepted = now
 
-        let status = await permission.refresh()
+        let status = await permission.status
         let request = CaptureRequest(timestamp: now, trigger: trigger, permissionAtRequest: status)
         history.append(request)
         if history.count > Self.historyLimit { history.removeFirst(history.count - Self.historyLimit) }

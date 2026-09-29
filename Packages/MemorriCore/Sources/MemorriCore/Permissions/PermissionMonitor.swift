@@ -14,7 +14,8 @@ public protocol ScreenRecordingChecking: Sendable {
     func isGranted() -> Bool
 }
 
-/// Tracks the permission over time. Transition rules are in `data-model.md`.
+/// Tracks the permission over time. The launch reading sets the first state; after that only
+/// fresh-process reports change it. Transition rules are in `data-model.md`.
 public actor PermissionMonitor {
     private let checker: any ScreenRecordingChecking
     public private(set) var status: ScreenRecordingStatus
@@ -27,33 +28,19 @@ public actor PermissionMonitor {
         self.status = granted ? .granted : .notGranted
     }
 
-    /// Reads the permission again, applies the transition rules and returns the new status.
-    @discardableResult
-    public func refresh() -> ScreenRecordingStatus {
-        let granted = checker.isGranted()
-        let next: ScreenRecordingStatus
-        switch (status, granted) {
-        case (.granted, true): next = .granted
-        case (.granted, false): next = .notGranted
-        case (.notGranted, true): next = .restartRequired
-        case (.notGranted, false): next = .notGranted
-        // This process cannot see a grant made after it started, so its own reading says nothing
-        // here. Only `observeFreshProcess` can end this state.
-        case (.restartRequired, _): next = .restartRequired
-        }
-        update(to: next)
-        return status
-    }
-
-    /// Records what a freshly started copy of the app reported. A running process keeps the answer
-    /// it had at launch, so this is the only way to notice a grant (or a revocation) that happens
-    /// after launch. A status this process already holds as `granted` is never undone by it.
+    /// Records what a freshly started copy of the app reported. A running process keeps the
+    /// answer it had at launch and can see neither a grant nor a revocation made afterwards, so
+    /// this is the only way to follow the permission after launch.
+    ///
+    /// - A grant after launch (or after a revocation) means the app must restart.
+    /// - A report of "not granted" means the permission is gone, whatever this process still holds.
     @discardableResult
     public func observeFreshProcess(granted: Bool) -> ScreenRecordingStatus {
         switch (status, granted) {
+        case (.granted, false): update(to: .notGranted)
         case (.notGranted, true): update(to: .restartRequired)
         case (.restartRequired, false): update(to: .notGranted)
-        default: break
+        case (.granted, true), (.notGranted, false), (.restartRequired, true): break
         }
         return status
     }
