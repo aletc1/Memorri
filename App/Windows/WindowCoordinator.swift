@@ -1,5 +1,7 @@
 import AppKit
+import MemorriCore
 import SwiftUI
+import os
 
 enum WindowID: String, CaseIterable {
     case settings, onboarding, inbox, search
@@ -38,6 +40,11 @@ final class WindowCoordinator {
         if !window.isVisible { position(window) }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
+        // An agent app is rarely active, and macOS may refuse to activate it when the request does
+        // not come from a click (for example a second launch). This shows the window regardless.
+        window.orderFrontRegardless()
+        Logger(subsystem: MemorriCore.subsystem, category: "windows")
+            .notice("show \(id.rawValue, privacy: .public) visible=\(window.isVisible, privacy: .public) onScreen=\(window.occlusionState.contains(.visible), privacy: .public) appActive=\(NSApp.isActive, privacy: .public)")
     }
 
     func isVisible(_ id: WindowID) -> Bool {
