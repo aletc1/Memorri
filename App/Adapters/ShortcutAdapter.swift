@@ -3,6 +3,7 @@ import Carbon.HIToolbox
 import KeyboardShortcuts
 import MemorriCore
 import Observation
+import os
 
 extension KeyboardShortcuts.Name {
     /// The capture shortcut. Default is Control+Option+Command+M (ADR 0008).
@@ -55,6 +56,8 @@ final class ShortcutAdapter {
 
     init(onCapture: @escaping @MainActor () -> Void) {
         accepted = KeyboardShortcuts.getShortcut(for: .capture)
+        Logger(subsystem: MemorriCore.subsystem, category: "shortcut")
+            .notice("shortcut at launch: \(self.accepted?.description ?? "none", privacy: .public)")
         KeyboardShortcuts.onKeyUp(for: .capture) {
             Task { @MainActor in onCapture() }
         }
