@@ -39,7 +39,7 @@ public actor PermissionMonitor {
     public init(checker: ScreenRecordingChecking, startedGranted: Bool? = nil)
     public var status: ScreenRecordingStatus { get }
     public func refresh() -> ScreenRecordingStatus   // applies the state machine in data-model.md
-    public func statusUpdates() -> AsyncStream<ScreenRecordingStatus>
+    public func statusUpdates() -> AsyncStream<ScreenRecordingStatus>   // yields the current status first, then each change once
 }
 
 // Shortcuts
