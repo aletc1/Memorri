@@ -1,6 +1,6 @@
 # Memorri
 
-Native macOS menu-bar app. It captures screenshots of every display (customer VDIs), runs Apple Vision OCR plus a local Ollama vision model (`qwen3.8:27b-mlx`) to infer appointments, tasks and reminders, and stores them in a local SQLite index with cropped evidence and full-text search. The last step syncs them to a chosen macOS Calendar and Reminders list through EventKit.
+Native macOS menu-bar app. It captures screenshots of every display (local apps, remote desktops and other sessions the user is permitted to capture), runs Apple Vision OCR plus a local Ollama vision model (`qwen3.8:27b-mlx`) to infer appointments, tasks and reminders, and stores them in a local SQLite index with cropped evidence and full-text search. The last step syncs them to a chosen macOS Calendar and Reminders list through EventKit.
 
 Read `.specify/memory/constitution.md` first. The roadmap is in `docs/roadmap.md`.
 
@@ -28,7 +28,7 @@ Specs live in `specs/NNN-name/`. Spec Kit's git extension is not installed, so c
 - No external documentation skill is used. These rules and templates are enough.
 
 ## Privacy
-- Never commit real screenshots, captures or model outputs from customer systems. `eval/golden/` fixtures with real content stay gitignored.
+- Never commit real screenshots, captures or model outputs from real sessions. `eval/golden/` fixtures with real content stay gitignored.
 - Never send captured content to any non-local service.
 
 ## Branches, commits and PRs

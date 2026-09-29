@@ -198,7 +198,7 @@ Prompts and models decide whether the app finds the right items, so changes are 
    swift run --package-path Packages/MemorriCore memorri-eval
    ```
 3. Precision and recall must not go down. If a case is new, add it to `eval/golden/` first, so the harness shows the failure before your fix.
-4. Only use synthetic or redacted screenshots in commits. Real customer screenshots stay in the gitignored part of `eval/golden/`.
+4. Only use synthetic or redacted screenshots in commits. Real screenshots stay in the gitignored part of `eval/golden/`.
 5. Put the before and after numbers in the pull request description.
 
 (The harness arrives with spec 004. Before that, there is nothing to run.)
@@ -235,7 +235,7 @@ Examples: `feat(capture): capture each display separately`, `fix(reconcile): mer
 4. In the description, say what changed and why, link the spec folder (`specs/NNN-name/`) and any ADRs, and say how you verified it (tests run, acceptance scenarios checked, eval numbers for prompt changes).
 5. Merge only when the Definition of done (section 10) is met. Use squash merge, then delete the branch.
 
-Never include real customer screenshots or captured content in a commit or a PR.
+Never include real screenshots or captured content in a commit or a PR.
 
 ## 10. Definition of done
 
@@ -245,7 +245,7 @@ A feature or fix is done when all of these are true:
 - [ ] Every task in `tasks.md` is ticked.
 - [ ] `swift test --package-path Packages/MemorriCore` passes.
 - [ ] The app builds and runs: `xcodegen generate && xcodebuild -scheme Memorri -configuration Debug build`.
-- [ ] No real customer data is committed (screenshots, captures, model output).
+- [ ] No real captured data is committed (screenshots, captures, model output).
 - [ ] New architecture decisions have an ADR.
 - [ ] `docs/roadmap.md` shows the new status.
 - [ ] Work is on a branch, not `main`, and commits and the PR title use English Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`).

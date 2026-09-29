@@ -1,12 +1,14 @@
 # Memorri
 
-A private "second brain" for the macOS menu bar. It reads your screen and turns what it sees into appointments, tasks and reminders.
+A private "second brain" for the macOS menu bar. It reads screenshots of your screen and turns what it sees into appointments, tasks and reminders.
 
 > **Status: pre-alpha.** The project is bootstrapped (specs, decisions, tooling) but no application code exists yet. Nothing here can be installed or run. See the [roadmap](docs/roadmap.md).
 
-## The problem
+## Why
 
-If you work through several customer VDIs (remote desktops), each one has its own calendar, mail and tasks, and none of them can sync to your Mac. Your real schedule is scattered across screens you can't connect to your own calendar.
+Your schedule and to-dos are spread across many places: calendars, inboxes and documents open in different apps, remote desktops and other sessions. Some of those can't be synced to your own devices. Memorri is a tool that reads what is on your screen, with your explicit action, and collects the appointments, tasks and reminders it finds into one place you control.
+
+Use it only on sessions and content you are permitted to capture. Check the rules that apply to you before capturing anything.
 
 ## What Memorri will do
 
