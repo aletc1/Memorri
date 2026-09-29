@@ -41,5 +41,5 @@ Specs live in `specs/NNN-name/`. Spec Kit's git extension is not installed, so c
 - Do not push or open a PR unless the user asks.
 
 <!-- SPECKIT START -->
-Active feature plan: none yet. Spec Kit updates this section.
+Active feature plan: `specs/001-menubar-shell/plan.md` (spec, research, data model, contracts and quickstart are in the same folder).
 <!-- SPECKIT END -->
