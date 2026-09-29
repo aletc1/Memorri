@@ -37,14 +37,31 @@ public actor PermissionMonitor {
         case (.granted, false): next = .notGranted
         case (.notGranted, true): next = .restartRequired
         case (.notGranted, false): next = .notGranted
-        case (.restartRequired, true): next = .restartRequired
-        case (.restartRequired, false): next = .notGranted
+        // This process cannot see a grant made after it started, so its own reading says nothing
+        // here. Only `observeFreshProcess` can end this state.
+        case (.restartRequired, _): next = .restartRequired
         }
-        if next != status {
-            status = next
-            for continuation in continuations.values { continuation.yield(next) }
+        update(to: next)
+        return status
+    }
+
+    /// Records what a freshly started copy of the app reported. A running process keeps the answer
+    /// it had at launch, so this is the only way to notice a grant (or a revocation) that happens
+    /// after launch. A status this process already holds as `granted` is never undone by it.
+    @discardableResult
+    public func observeFreshProcess(granted: Bool) -> ScreenRecordingStatus {
+        switch (status, granted) {
+        case (.notGranted, true): update(to: .restartRequired)
+        case (.restartRequired, false): update(to: .notGranted)
+        default: break
         }
         return status
+    }
+
+    private func update(to next: ScreenRecordingStatus) {
+        guard next != status else { return }
+        status = next
+        for continuation in continuations.values { continuation.yield(next) }
     }
 
     /// Emits the current status first, then every change once.

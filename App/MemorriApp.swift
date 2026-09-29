@@ -7,6 +7,7 @@ struct MemorriApp: App {
     private var environment: AppEnvironment { AppEnvironment.shared }
 
     init() {
+        ScreenRecordingAdapter.runProbeIfRequested()
         SingleInstance.exitIfAnotherCopyIsRunning()
     }
 

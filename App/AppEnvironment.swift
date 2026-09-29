@@ -47,10 +47,15 @@ final class AppEnvironment {
     /// Re-reads the permission every 2 seconds for as long as the app runs, and whenever the app
     /// becomes active, so a grant or a revocation shows up without any button press.
     private func startPermissionPolling() {
-        Task { [permission] in
+        Task { [weak self, permission] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
-                await permission.refresh()
+                let status = await permission.refresh()
+                // This process cannot see a grant made after it started, so while a window shows
+                // the status, ask a fresh copy of the app what macOS says now.
+                guard let self, status != .granted, self.windows.permissionStatusWindowVisible,
+                      let granted = await self.screenRecording.isGrantedInFreshProcess() else { continue }
+                await permission.observeFreshProcess(granted: granted)
             }
         }
         NotificationCenter.default.addObserver(

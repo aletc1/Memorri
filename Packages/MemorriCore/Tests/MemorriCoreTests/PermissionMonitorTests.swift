@@ -35,13 +35,14 @@ import Testing
         #expect(await monitor.refresh() == .restartRequired)
     }
 
-    @Test func restartRequiredThenRevokedIsNotGranted() async {
+    @Test func inProcessCheckCannotEndRestartRequired() async {
+        // This process cannot see a grant made after launch, so its own reading is always
+        // "not granted" in this state. It must not undo the state on every poll.
         let checker = FakeScreenRecordingChecker(granted: false)
         let monitor = PermissionMonitor(checker: checker)
-        checker.set(granted: true)
-        _ = await monitor.refresh()
-        checker.set(granted: false)
-        #expect(await monitor.refresh() == .notGranted)
+        _ = await monitor.observeFreshProcess(granted: true)
+        #expect(await monitor.refresh() == .restartRequired)
+        #expect(await monitor.refresh() == .restartRequired)
     }
 
     @Test func freshMonitorAfterGrantIsGranted() async {
@@ -68,9 +69,46 @@ import Testing
         checker.set(granted: true)
         _ = await monitor.refresh()      // notGranted -> restartRequired
         _ = await monitor.refresh()      // unchanged, must not emit
-        checker.set(granted: false)
-        _ = await monitor.refresh()      // restartRequired -> notGranted
+        _ = await monitor.observeFreshProcess(granted: false)   // restartRequired -> notGranted
 
+        #expect(await iterator.next() == .notGranted)
+        #expect(await iterator.next() == .restartRequired)
+        #expect(await iterator.next() == .notGranted)
+    }
+
+    // A running process keeps the answer it had at launch, so a grant made afterwards is only
+    // visible to a freshly started copy of the app (spike R5, and the check on 2026-09-29).
+
+    @Test func freshProcessSeeingAGrantNeedsARestart() async {
+        let monitor = PermissionMonitor(checker: FakeScreenRecordingChecker(granted: false))
+        #expect(await monitor.observeFreshProcess(granted: true) == .restartRequired)
+        #expect(await monitor.status == .restartRequired)
+    }
+
+    @Test func freshProcessSeeingNoGrantKeepsNotGranted() async {
+        let monitor = PermissionMonitor(checker: FakeScreenRecordingChecker(granted: false))
+        #expect(await monitor.observeFreshProcess(granted: false) == .notGranted)
+    }
+
+    @Test func freshProcessSeeingARevocationAfterAGrantGoesBack() async {
+        let monitor = PermissionMonitor(checker: FakeScreenRecordingChecker(granted: false))
+        _ = await monitor.observeFreshProcess(granted: true)
+        #expect(await monitor.observeFreshProcess(granted: false) == .notGranted)
+    }
+
+    @Test func freshProcessDoesNotChangeAGrantedStatus() async {
+        let monitor = PermissionMonitor(checker: FakeScreenRecordingChecker(granted: true))
+        #expect(await monitor.observeFreshProcess(granted: true) == .granted)
+        // A stale "denied" from a probe must not undo a permission this process already holds.
+        #expect(await monitor.observeFreshProcess(granted: false) == .granted)
+    }
+
+    @Test func freshProcessChangesAreEmittedOnce() async {
+        let monitor = PermissionMonitor(checker: FakeScreenRecordingChecker(granted: false))
+        var iterator = await monitor.statusUpdates().makeAsyncIterator()
+        _ = await monitor.observeFreshProcess(granted: true)
+        _ = await monitor.observeFreshProcess(granted: true)     // unchanged, must not emit
+        _ = await monitor.observeFreshProcess(granted: false)
         #expect(await iterator.next() == .notGranted)
         #expect(await iterator.next() == .restartRequired)
         #expect(await iterator.next() == .notGranted)

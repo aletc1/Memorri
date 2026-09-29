@@ -162,6 +162,17 @@ description: "Task list for spec 001: menu-bar shell, hotkey and permissions"
 
 ---
 
+## Phase 8: Fixes found during validation
+
+**Purpose**: Defects found while running the quickstart on a real Mac. Each was reproduced first.
+
+- [x] T049 [US3] Write failing tests in `Packages/MemorriCore/Tests/MemorriCoreTests/PermissionMonitorTests.swift` for `observeFreshProcess(granted:)` (`notGranted` + granted → `restartRequired`; `restartRequired` + not granted → `notGranted`; `granted` never changed; each change emitted once) and for the flapping bug (the in-process reading must not end `restartRequired`)
+- [x] T050 [US3] Implement `PermissionMonitor.observeFreshProcess(granted:)` and make `restartRequired` ignore the in-process reading in `Packages/MemorriCore/Sources/MemorriCore/Permissions/PermissionMonitor.swift`; add `ScreenRecordingAdapter.isGrantedInFreshProcess()` and the `--probe-permission` mode (`runProbeIfRequested`, called first in `App/MemorriApp.swift`) in `App/Adapters/ScreenRecordingAdapter.swift`
+- [x] T051 [US3] Use the probe in the polling loop in `App/AppEnvironment.swift` while `WindowCoordinator.permissionStatusWindowVisible` (new, `App/Windows/WindowCoordinator.swift`) and the status is not `granted`; update the transition table in `specs/001-menubar-shell/data-model.md` and research R5
+- [ ] T052 [US3] Re-run quickstart Scenario 3 on the real Mac with the log open: enabling the permission shows **Restart required** within about 5 seconds with no flapping in the log, **Relaunch Memorri** gives **Granted**, and turning it off while the app runs brings back "Grant Screen Recording access…" in the menu
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

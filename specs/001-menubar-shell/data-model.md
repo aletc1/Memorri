@@ -24,13 +24,16 @@ States: `granted`, `notGranted`, `restartRequired`.
 |---|---|---|
 | (start) | launch, permission reported granted | `granted` |
 | (start) | launch, permission not reported granted | `notGranted` |
-| `notGranted` | reported granted while running | `restartRequired` |
+| `notGranted` | this process's own reading says granted while running | `restartRequired` (never seen in practice, see below) |
+| `notGranted` | a freshly started copy of the app reports granted | `restartRequired` |
 | `notGranted` | reported granted at a fresh launch | `granted` |
-| `granted` | reported not granted while running (revoked) | `notGranted` |
+| `granted` | this process's own reading says not granted (revoked) | `notGranted` |
+| `restartRequired` | this process's own reading, whatever it says | `restartRequired` (unchanged) |
+| `restartRequired` | a freshly started copy reports not granted | `notGranted` |
 | `restartRequired` | app relaunched and reported granted | `granted` |
-| `restartRequired` | reported not granted | `notGranted` |
+| `granted` | a freshly started copy reports anything | `granted` (unchanged) |
 
-If research item R5 shows no relaunch is needed on macOS 26, the `notGranted` → `restartRequired` row becomes `notGranted` → `granted` and the `restartRequired` state stays unused.
+Why a fresh copy: a running process keeps the permission answer it had at launch (research R5), so it can never see a grant made afterwards, and its own reading in the `restartRequired` state says nothing. A freshly started copy of the same app sees the current state at once. While a window that shows the status is open, the app starts one every 2 seconds (`--probe-permission`: print `granted` or `denied` and quit) and feeds the answer to `observeFreshProcess(granted:)`.
 
 ## ShortcutSetting (persisted by the KeyboardShortcuts package)
 

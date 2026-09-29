@@ -51,6 +51,11 @@ final class WindowCoordinator {
         windows[id]?.isVisible ?? false
     }
 
+    /// True while a window that shows the permission status is open.
+    var permissionStatusWindowVisible: Bool {
+        isVisible(.onboarding) || isVisible(.settings)
+    }
+
     var anyWindowVisible: Bool {
         windows.values.contains { $0.isVisible }
     }
