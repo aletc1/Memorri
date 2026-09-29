@@ -155,10 +155,10 @@ description: "Task list for spec 001: menu-bar shell, hotkey and permissions"
 - [x] T042 [P] Add a test `Packages/MemorriCore/Tests/MemorriCoreTests/NoNetworkTests.swift` that scans `Packages/MemorriCore/Sources` and `App` for `URLSession`, `NWConnection`, `import Network` and `CFNetwork`, and scans `project.yml` for any `com.apple.security.network` entitlement, and fails on any match (FR-017)
 - [x] T043 [P] Update `CLAUDE.md`: remove the "(Available once spec 001 has created the project.)" line from Commands and add `scripts/check-signing-identity.sh`; update `README.md` status if the app now runs
 - [x] T044 Add a "Build and run the app" section to `DEVELOPER.md` (generate the project, build, launch, run the tests, where the log is) so a new developer can follow it without other help (FR-016, SC-006)
-- [ ] T045 Run the network check from quickstart (`lsof -i -a -p $(pgrep -x Memorri)` shows nothing) and the full quickstart top to bottom; fix anything that differs
-- [ ] T046 Run `swift test --package-path Packages/MemorriCore` and `xcodegen generate && xcodebuild -scheme Memorri -configuration Debug -derivedDataPath .build/xcode build`; both must pass with no warnings from our code
-- [ ] T047 Validate SC-006: clone the repository into a temporary directory, follow only `DEVELOPER.md` to build and run the app, time it, and confirm it takes under 15 minutes; fix the guide where it fails
-- [ ] T048 Set the status of 001 to "Done" in `docs/roadmap.md`, and tick the acceptance checklist in the pull request description (Definition of done, `DEVELOPER.md` section 10)
+- [x] T045 Run the network check from quickstart (`lsof -i -a -p $(pgrep -x Memorri)` shows nothing) and the full quickstart top to bottom; fix anything that differs
+- [x] T046 Run `swift test --package-path Packages/MemorriCore` and `xcodegen generate && xcodebuild -scheme Memorri -configuration Debug -derivedDataPath .build/xcode build`; both must pass with no warnings from our code
+- [x] T047 Validate SC-006: clone the repository into a temporary directory, follow only `DEVELOPER.md` to build and run the app, time it, and confirm it takes under 15 minutes; fix the guide where it fails
+- [x] T048 Set the status of 001 to "Done" in `docs/roadmap.md`, and tick the acceptance checklist in the pull request description (Definition of done, `DEVELOPER.md` section 10)
 
 ---
 
