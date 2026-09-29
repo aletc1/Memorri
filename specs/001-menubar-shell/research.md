@@ -6,7 +6,8 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Verify**
 
 - **Decision**: Use `MenuBarExtra` with the menu style. The icon is a template image; a "flash" swaps to a highlighted variant for about 300 ms from observable state.
 - **Rationale**: Native, minimal code, matches ADR 0002. Menu style gives standard menu behaviour, including keyboard use.
-- **Alternatives**: `NSStatusItem` in AppKit (more control over the button and flash animation, more code). Fall back to it only if the label cannot update reliably. **Verify** in the first UI task that the label image changes on state change.
+- **Alternatives**: `NSStatusItem` in AppKit (more control over the button and flash animation, more code). Fall back to it only if the label cannot update reliably.
+- **Outcome (T007, 2026-09-29)**: Confirmed. With `MenuBarExtra` in menu style, a label `Image` chosen from observable state changes in the menu bar every second (thin and heavy variants alternate). No `NSStatusItem` fallback is needed.
 
 ## R2. Windows: AppKit `WindowCoordinator` hosting SwiftUI views
 
@@ -21,6 +22,11 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Verify**
 - **Rationale**: Registers a system-wide hotkey without requiring Accessibility or Input Monitoring permission, persists the choice, and ships a recorder that already refuses shortcuts taken by the system or the app's main menu.
 - **Alternatives**: Raw Carbon `RegisterEventHotKey` (what the package wraps, more code). A CGEvent tap (needs Input Monitoring, and would let the app read all typing; rejected on privacy grounds).
 - **Verify**: (a) the package's own checks, and whether it refuses a shortcut with no modifier; the spec requires this (FR-007). If it does not, `ShortcutValidator` in the core enforces it before the shortcut is saved. (b) The initial value is applied on a clean install. (c) Behaviour with a full-screen remote-desktop client (see R8).
+- **Outcome (T009, 2026-09-29, KeyboardShortcuts 2.4.0)**:
+  - (a) The recorder silently beeps for a lone letter or a Shift-only combination, with no message, so our own message is needed. It **accepts a function key alone** (F5 was saved, persisted and used after a relaunch), which the spec forbids, so `ShortcutValidator` must reject it and the recorder must run in binding mode so nothing is saved before validation.
+  - (b) The default is applied on a clean defaults domain, and `getShortcut` returns ⌃⌥⌘M. In this version the initial value parameter is named `default:` (`Name("capture", default: …)`), not `initial:`.
+  - System shortcuts: the package's `isTakenBySystem` is internal, so the app cannot reuse it. The app's `SystemShortcutChecking` adapter calls `CopySymbolicHotKeys()` (`import Carbon.HIToolbox`) itself. On this Mac it returns 234 entries and reports Command+Space as reserved.
+  - The global hotkey fires while other apps are focused.
 
 ## R4. Shortcut validation rules (FR-007)
 
@@ -33,6 +39,7 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Verify**
 - **Decision**: `CGPreflightScreenCaptureAccess()` gives the status. `CGRequestScreenCaptureAccess()` shows the system prompt once. The status is re-read by a 2-second timer for as long as the app runs, when the app becomes active, and when the menu opens, so a revocation shows in the menu within 2 seconds. The deep link is `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`.
 - **Rationale**: No capture is needed in this spec, so no screen content is read. Polling is cheap and covers both "granted" and "revoked while running" (edge case). It runs in the background so the menu is never stale.
 - **Restart required**: macOS sometimes reports granted only for processes started after the grant. The state machine treats "not granted at launch, then reported granted while running" as `restartRequired` and offers a relaunch, which is the safe reading. **Verify** on macOS 26 whether a relaunch is actually needed (spike T008, before Foundational starts); if not, the state collapses to `granted` and FR-011 becomes a no-op branch.
+- **Outcome (T008, 2026-09-29)**: Relaunch is needed. A running process that requested access never saw `CGPreflightScreenCaptureAccess()` flip to true after the grant; a freshly started process reported true, and macOS offers "Quit & Reopen". The `restartRequired` state stays in the design. Also learned: an app is only listed in the Screen Recording list ("Screen & System Audio Recording") after it calls `CGRequestScreenCaptureAccess()`. Without that call it can end up only in the "system audio only" list, which does not grant screen capture. So the onboarding **Open System Settings** button must call `requestAccess()` first (which shows the system prompt and adds the app to the list) and then open the pane.
 - **Alternatives**: Try a ScreenCaptureKit capture to detect permission (reads screen content, needs the permission it is testing, and may show the prompt again). Use the newer picker-based capture (does not fit a hotkey flow).
 
 ## R6. Single instance and second-launch signal

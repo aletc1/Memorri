@@ -41,7 +41,7 @@ All windows open on the display that holds the pointer and are brought to the fr
 
 - Explains in one short paragraph why Screen Recording is needed (to see the screens you choose to capture; nothing leaves this Mac).
 - Status badge: Granted, Not granted, or Restart required.
-- Buttons: **Open System Settings** (deep link to the Screen Recording pane), **Check again**, and, when `restartRequired`, **Relaunch Memorri**.
+- Buttons: **Open System Settings** (first requests access so the system prompt appears and the app is listed, then opens the Screen Recording pane), **Check again**, and, when `restartRequired`, **Relaunch Memorri**.
 - The status updates on its own within 2 seconds of the change; no button press is needed (User Story 3, scenario 3).
 
 ## Shortcut rejection messages
