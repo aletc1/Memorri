@@ -2,7 +2,7 @@
 
 A private "second brain" for the macOS menu bar. It reads screenshots of your screen and turns what it sees into appointments, tasks and reminders.
 
-> **Status: pre-alpha.** The project is bootstrapped (specs, decisions, tooling) but no application code exists yet. Nothing here can be installed or run. See the [roadmap](docs/roadmap.md).
+> **Status: pre-alpha.** The menu-bar shell runs: menu, global hotkey, Screen Recording permission onboarding and Settings. It does not capture or analyse anything yet. Run it from source (see [`DEVELOPER.md`](DEVELOPER.md)). See the [roadmap](docs/roadmap.md).
 
 ## Why
 

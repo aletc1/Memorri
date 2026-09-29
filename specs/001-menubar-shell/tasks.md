@@ -144,7 +144,7 @@ description: "Task list for spec 001: menu-bar shell, hotkey and permissions"
 - [x] T038 [US4] Implement `SingleInstanceArbiter` (new type, listed in `contracts/core-interfaces.md`) in `Packages/MemorriCore/Sources/MemorriCore/Lifecycle/SingleInstanceArbiter.swift` (rule: the process with the lowest PID keeps running); T037 passes
 - [x] T039 [US4] In `App/AppDelegate.swift`, at launch read the other running copies with `NSRunningApplication.runningApplications(withBundleIdentifier: "com.aletc1.memorri")`, and if `SingleInstanceArbiter.shouldExit` is `true` post the distributed notification `com.aletc1.memorri.openSettings` and terminate; in the running instance observe that notification with `DistributedNotificationCenter` and show the `settings` window
 - [x] T040 [US4] Replace the T027 stub with the full `App/Windows/SettingsView.swift`: `NavigationSplitView` with sidebar order General (selected first), Permissions, Ollama, Storage, Calendar sync; General contains `ShortcutSection` (T027) plus toggles "Flash the menu-bar icon" and "Play a sound" bound to `CaptureFeedbackSettings`; Permissions shows the status row and the same actions as `OnboardingView`; Ollama, Storage and Calendar sync show "Coming in a later version: <what will be here>." and name specs 003, 002 and 009
-- [ ] T041 [US4] Run quickstart Scenario 5 and Scenario 1 (Settings step), and confirm the two capture-feedback toggles change what a capture does
+- [x] T041 [US4] Run quickstart Scenario 5 and Scenario 1 (Settings step), and confirm the two capture-feedback toggles change what a capture does
 
 **Checkpoint**: All four user stories work independently.
 
@@ -152,9 +152,9 @@ description: "Task list for spec 001: menu-bar shell, hotkey and permissions"
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T042 [P] Add a test `Packages/MemorriCore/Tests/MemorriCoreTests/NoNetworkTests.swift` that scans `Packages/MemorriCore/Sources` and `App` for `URLSession`, `NWConnection`, `import Network` and `CFNetwork`, and scans `project.yml` for any `com.apple.security.network` entitlement, and fails on any match (FR-017)
-- [ ] T043 [P] Update `CLAUDE.md`: remove the "(Available once spec 001 has created the project.)" line from Commands and add `scripts/check-signing-identity.sh`; update `README.md` status if the app now runs
-- [ ] T044 Add a "Build and run the app" section to `DEVELOPER.md` (generate the project, build, launch, run the tests, where the log is) so a new developer can follow it without other help (FR-016, SC-006)
+- [x] T042 [P] Add a test `Packages/MemorriCore/Tests/MemorriCoreTests/NoNetworkTests.swift` that scans `Packages/MemorriCore/Sources` and `App` for `URLSession`, `NWConnection`, `import Network` and `CFNetwork`, and scans `project.yml` for any `com.apple.security.network` entitlement, and fails on any match (FR-017)
+- [x] T043 [P] Update `CLAUDE.md`: remove the "(Available once spec 001 has created the project.)" line from Commands and add `scripts/check-signing-identity.sh`; update `README.md` status if the app now runs
+- [x] T044 Add a "Build and run the app" section to `DEVELOPER.md` (generate the project, build, launch, run the tests, where the log is) so a new developer can follow it without other help (FR-016, SC-006)
 - [ ] T045 Run the network check from quickstart (`lsof -i -a -p $(pgrep -x Memorri)` shows nothing) and the full quickstart top to bottom; fix anything that differs
 - [ ] T046 Run `swift test --package-path Packages/MemorriCore` and `xcodegen generate && xcodebuild -scheme Memorri -configuration Debug -derivedDataPath .build/xcode build`; both must pass with no warnings from our code
 - [ ] T047 Validate SC-006: clone the repository into a temporary directory, follow only `DEVELOPER.md` to build and run the app, time it, and confirm it takes under 15 minutes; fix the guide where it fails

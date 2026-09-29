@@ -38,6 +38,24 @@ Do these once per Mac.
 
 Check that it worked: type `/speckit-` in Claude Code and confirm the commands appear. If they don't, restart Claude Code.
 
+### Build and run the app
+
+From the repository root, after the setup above:
+
+```bash
+xcodegen generate                                   # creates Memorri.xcodeproj (gitignored)
+xcodebuild -scheme Memorri -configuration Debug -derivedDataPath .build/xcode build
+open .build/xcode/Build/Products/Debug/Memorri.app
+swift test --package-path Packages/MemorriCore      # the unit tests
+```
+
+- The build fails with a message pointing to `scripts/create-signing-certificate.sh` if the "Memorri Local" identity is missing (setup step 3).
+- Memorri has no Dock icon or main window. Look for its icon in the menu bar. Choose **Settings…** to see its window.
+- On the first launch a window explains the Screen Recording permission. Choose **Open System Settings**, enable Memorri, and use **Relaunch Memorri** when it asks.
+- To watch what the app does, run `/usr/bin/log stream --predicate 'subsystem == "com.aletc1.memorri"'` in another terminal. Use the full path: zsh has its own `log` command.
+- To open the project in Xcode instead, run `xcodegen generate` and open `Memorri.xcodeproj`.
+- Quick reset for testing the first launch: `tccutil reset ScreenCapture com.aletc1.memorri; defaults delete com.aletc1.memorri`.
+
 ## 2. How Spec Kit works here
 
 A **spec** is a written description of one feature. You write it before the code. Each spec goes through the same steps, and each step is a slash command typed into Claude Code:
