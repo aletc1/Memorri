@@ -235,18 +235,23 @@ Write an ADR when you choose a library, change how data is stored, change how mo
 
 ## 8. Change a prompt, schema or model
 
-Prompts and models decide whether the app finds the right items, so changes are measured, not guessed.
+Prompts and models decide whether the app finds the right items, so changes are measured, not guessed. The harness is `memorri-eval`, in `Packages/MemorriCore/Sources/memorri-eval` over `MemorriCore/Evaluation`; it runs the same `AnalysisPipeline` as the app's queue.
 
-1. Make the change in the `Extraction` module, and increase the prompt version number.
-2. Run the eval harness and note the numbers before and after:
+1. Make the change in `Extraction` and increase the prompt version (`ExtractionPrompts`) or schema version (`ExtractionSchemas`). Both are stored with every analysis.
+2. Check that the app is not analysing (pause it from the menu) and that Ollama is running with the model chosen in Settings. Then run the set and keep the report:
    ```bash
-   swift run --package-path Packages/MemorriCore memorri-eval
+   swift run --package-path Packages/MemorriCore memorri-eval run --out eval/out/before.json   # the old version
+   # ...make the change...
+   swift run --package-path Packages/MemorriCore memorri-eval run --out eval/out/after.json
+   swift run --package-path Packages/MemorriCore memorri-eval compare eval/out/before.json eval/out/after.json
    ```
-3. Precision and recall must not go down. If a case is new, add it to `eval/golden/` first, so the harness shows the failure before your fix.
-4. Only use synthetic or redacted screenshots in commits. Real screenshots stay in the gitignored part of `eval/golden/`.
-5. Put the before and after numbers in the pull request description.
+   The report lists precision, recall and field accuracy overall and by kind, classification, tags, context, reading accuracy, and every missed or unexpected finding with its dates. `run` refuses while the app's queue has a running job; `--allow-busy` overrides that and the report says so. `--only <case>` runs one case and `--replay <report.json>` scores the stored model answers again without calling the model (use it after changing only the code that resolves dates, durations, tags or contexts).
+3. Precision and recall must not go down. If a case is new, add it first so the harness shows the failure before your fix.
+4. **Golden cases** are folders with `picture.png`, `meta.json` (capture time, the Mac's time zone, context, windows, display size) and `expected.json` (kind, tags, context, drawn lines, findings). Only `eval/golden/synthetic/` is tracked; it is drawn by code (`memorri-eval generate-synthetic --out eval/golden/synthetic`, deterministic) so nothing real is stored. A case from a real session goes into the gitignored part of `eval/golden/`, never into a commit. Change a synthetic case in `MemorriCore/Evaluation/Synthetic*.swift` and regenerate.
+5. `memorri-eval sweep-size` runs the set at 1024, 1536, 2048 and 3072 px and recommends the smallest size within 0.02 of the best (ADR 0017).
+6. Put the before and after numbers in the pull request description.
 
-(The harness arrives with spec 004. Before that, there is nothing to run.)
+To try the pipeline on one picture without capturing your screen, run a Debug build with `--ingest-picture <png>` (and `--ingest-windows <json>` for window titles), or `--ingest-case <golden case folder>`, then watch the app's log: `/usr/bin/log stream --predicate 'subsystem == "com.aletc1.memorri" && category == "extraction"'` shows `read`, `classify`, `extract`, `resolve`, `context` and `analysis stored` lines (never text, titles or tag values). `scripts/fake-ollama.py --mode extract` (also `extract-bad-citation`, `extract-empty`, `classify-unsure`) stands in for the model. Settings → Analysis shows each picture's state, kind, context (with a picker), tags and findings, and has the Contexts block.
 
 ## 9. Branches, commits and pull requests
 
