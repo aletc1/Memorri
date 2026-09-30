@@ -146,6 +146,11 @@ public struct CaptureStore: CaptureStoring {
         }
     }
 
+    /// When the capture event was taken.
+    public func capturedAt(eventID: String) throws -> Date? {
+        try database.pool.read { try Date.fetchOne($0, sql: "SELECT captured_at FROM capture_events WHERE id = ?", arguments: [eventID]) }
+    }
+
     public func count() throws -> Int {
         try database.pool.read { try CaptureEventRecord.fetchCount($0) }
     }

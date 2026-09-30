@@ -55,7 +55,8 @@ public struct PipelineCaseAnalyser: CaseAnalysing {
         let copies = try PictureCopies(analysisCopy: copy.data, width: copy.width, height: copy.height)
         let zone = TimeZone(identifier: golden.meta.macTimezone) ?? .current
         let input = PipelineInput(image: image, classificationJPEG: copies.classificationJPEG, classificationSize: copies.classificationSize,
-                                  analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: zone)
+                                  analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: zone,
+                                  captureTime: golden.meta.capturedAt, locales: [Locale(identifier: "en_US"), Locale(identifier: "es_ES")])
 
         let chat: any ModelChatting = steps.map { ReplayModel(steps: $0) } ?? model
         let pipeline = AnalysisPipeline(recogniser: recogniser, model: chat, time: time)

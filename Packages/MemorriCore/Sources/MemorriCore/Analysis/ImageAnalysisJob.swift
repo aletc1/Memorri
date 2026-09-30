@@ -67,7 +67,8 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
             reuse.classification = stored
         }
         let input = PipelineInput(image: full, classificationJPEG: copies.classificationJPEG, classificationSize: size,
-                                  analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: .current, reuse: reuse)
+                                  analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: .current,
+                                  captureTime: analysisCopy.capturedAt ?? time.now(), reuse: reuse)
 
         let analysis: AnalysisResult?
         let steps: [StepRecord]

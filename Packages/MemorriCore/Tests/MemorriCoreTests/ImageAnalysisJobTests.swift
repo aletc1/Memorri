@@ -174,7 +174,14 @@ import Testing
         let stored = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
         #expect(stored.kind == .calendarWeek && stored.findingCount == 1 && stored.extractRunID == extract.id && stored.model == "qwen3.8:27b-mlx")
         let findings = try rig.results.findings(imageID: rig.fixture.imageID)
-        #expect(findings.map(\.title) == ["Team sync"] && findings[0].citedLines == [1, 2] && findings[0].unresolved == ["start": "10:00"])
+        #expect(findings.map(\.title) == ["Team sync"] && findings[0].citedLines == [1, 2] && findings[0].unresolved.isEmpty)
+        // "10:00" with no header or date: the day of the capture, in the zone it was stored with.
+        let zone = TimeZone(identifier: findings[0].timezone) ?? .current
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
+        let captured = try #require(try rig.fixture.captures.capturedAt(eventID: rig.fixture.event.id))
+        let day = calendar.dateComponents([.year, .month, .day], from: captured)
+        let expected = calendar.date(from: DateComponents(year: day.year, month: day.month, day: day.day, hour: 10, minute: 0))
+        #expect(findings[0].start == expected && findings[0].provenance["start"]?.rule == "time-only")
     }
 
     @Test func aSecondRunOfThePictureLeavesOneSetOfFindings() async throws {
