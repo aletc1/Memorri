@@ -89,4 +89,14 @@ import Testing
                 "properties": .object(["b": .object(["type": .string("string")])])])])])
         #expect(isMismatch(result(#"{"a":{"b":1}}"#, nested), mentioning: "a.b"))
     }
+
+    @Test func minLengthAndMinItemsAreChecked() {
+        let text: JSONValue = .object(["type": .string("string"), "minLength": .int(1)])
+        let list: JSONValue = .object(["type": .string("array"), "minItems": .int(1), "items": .object(["type": .string("integer")])])
+        if case .failure = SchemaValidator.validate(#""x""#, against: text) { Issue.record("one character rejected") }
+        #expect(isMismatch(result(#""""#, text)))
+        if case .failure = SchemaValidator.validate("[1]", against: list) { Issue.record("one item rejected") }
+        #expect(isMismatch(result("[]", list)))
+        #expect(isMismatch(result("[1,2.5]", list)))
+    }
 }
