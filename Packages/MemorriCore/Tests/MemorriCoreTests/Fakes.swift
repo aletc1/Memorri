@@ -527,3 +527,29 @@ func makePipelineFixture(fullSize: (Int, Int) = (1200, 600), modelSize: (Int, In
     try store.insert(event: event, images: [image], windows: windows.isEmpty ? [:] : [image.id: windows])
     return PipelineFixture(temp: temp, paths: paths, database: database, captures: store, event: event, image: image)
 }
+
+/// A text recogniser that returns scripted lines, or fails, and counts its calls.
+final class FakeTextRecogniser: TextRecogniser, @unchecked Sendable {
+    private let lock = NSLock()
+    private var scripted: [RecognisedLine]
+    private var failure: Error?
+    private var sizes: [(Int, Int)] = []
+
+    init(lines: [RecognisedLine] = [], failWith error: Error? = nil) {
+        self.scripted = lines
+        self.failure = error
+    }
+
+    var callCount: Int { lock.withLock { sizes.count } }
+    var imageSizes: [(Int, Int)] { lock.withLock { sizes } }
+
+    private func next(_ image: CGImage) throws -> [RecognisedLine] {
+        try lock.withLock {
+            sizes.append((image.width, image.height))
+            if let failure { throw failure }
+            return scripted
+        }
+    }
+
+    func recognise(_ image: CGImage) async throws -> [RecognisedLine] { try next(image) }
+}
