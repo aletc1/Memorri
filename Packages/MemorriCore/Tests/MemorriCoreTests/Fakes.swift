@@ -447,3 +447,83 @@ func waitUntil(timeout: Duration = .seconds(5), _ condition: @Sendable () -> Boo
     }
     return condition()
 }
+
+// MARK: Pipeline fakes (spec 004)
+
+/// A model that answers by the property names of the requested schema, records every request and can
+/// delay or fail. No server is involved.
+final class FakeModelChatting: ModelChatting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var answers: [String: String] = [:]
+    private var failure: (any Error)?
+    private var sent: [ChatRequest] = []
+    private var thinking: String?
+    var delay: Duration = .zero
+
+    /// `key` is a property name that appears in the schema, for example `screen_kind` or `findings`.
+    func answer(whenSchemaHas key: String, _ content: String) { lock.lock(); answers[key] = content; lock.unlock() }
+    func failWith(_ error: (any Error)?) { lock.lock(); failure = error; lock.unlock() }
+    func setThinking(_ text: String?) { lock.lock(); thinking = text; lock.unlock() }
+
+    var requests: [ChatRequest] { lock.lock(); defer { lock.unlock() }; return sent }
+    var callCount: Int { requests.count }
+    func requests(whereSchemaHas key: String) -> [ChatRequest] { requests.filter { Self.properties(of: $0.schema).contains(key) } }
+
+    func chat(_ request: ChatRequest) async throws -> ChatResponse {
+        let (content, error, think) = record(request)
+        if delay > .zero { try await Task.sleep(for: delay) }
+        if let error { throw error }
+        return ChatResponse(content: content ?? "", thinking: think, doneReason: "stop", totalDurationNanoseconds: nil,
+                            loadDurationNanoseconds: nil, promptEvalNanoseconds: nil, evalCount: nil)
+    }
+
+    func requestJSON(for request: ChatRequest) -> String {
+        OllamaClient(transport: FakeOllamaTransport()).requestJSON(for: request)
+    }
+
+    private func record(_ request: ChatRequest) -> (String?, (any Error)?, String?) {
+        lock.lock(); defer { lock.unlock() }
+        sent.append(request)
+        let keys = Self.properties(of: request.schema)
+        let content = answers.first { keys.contains($0.key) }?.value
+        return (content, failure, thinking)
+    }
+
+    static func properties(of schema: JSONValue) -> Set<String> {
+        if case .object(let root) = schema, case .object(let props)? = root["properties"] { return Set(props.keys) }
+        return []
+    }
+}
+
+/// A temporary database with one stored capture: the full-resolution and analysis pictures are real HEIC
+/// files in the capture folder, so the real picture providers can read them.
+struct PipelineFixture {
+    let temp: TempDirectory
+    let paths: AppPaths
+    let database: StorageDatabase
+    let captures: CaptureStore
+    let event: CaptureEventRecord
+    let image: CaptureImageRecord
+    var imageID: String { image.id }
+    func cleanUp() { temp.cleanUp() }
+}
+
+func makePipelineFixture(fullSize: (Int, Int) = (1200, 600), modelSize: (Int, Int) = (600, 300),
+                         windows: [WindowInfo] = []) throws -> PipelineFixture {
+    let temp = TempDirectory()
+    let paths = AppPaths(root: temp.url.appendingPathComponent("Memorri"))
+    try paths.prepare()
+    guard case .opened(let database) = try StorageDatabase.open(paths: paths) else { throw CocoaError(.fileReadUnknown) }
+    let store = CaptureStore(database: database)
+    let event = makeEventRecord()
+    var image = makeImageRecord(eventID: event.id)
+    image.pixelWidth = fullSize.0; image.pixelHeight = fullSize.1
+    image.modelWidth = modelSize.0; image.modelHeight = modelSize.1
+    for (path, size) in [(image.fullPath, fullSize), (image.modelPath, modelSize)] {
+        let url = paths.root.appendingPathComponent(path)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try makeHEICData(width: size.0, height: size.1).write(to: url)
+    }
+    try store.insert(event: event, images: [image], windows: windows.isEmpty ? [:] : [image.id: windows])
+    return PipelineFixture(temp: temp, paths: paths, database: database, captures: store, event: event, image: image)
+}
