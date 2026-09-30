@@ -6,6 +6,7 @@ import MemorriCore
 final class FeedbackAdapter: FeedbackPlaying {
     private let state: AppState
     private static let flashDuration: Duration = .milliseconds(300)
+    private static let warningDuration: Duration = .milliseconds(600)
 
     init(state: AppState) {
         self.state = state
@@ -22,5 +23,18 @@ final class FeedbackAdapter: FeedbackPlaying {
 
     func playSound() async {
         NSSound(named: "Pop")?.play()
+    }
+
+    /// The icon shows a warning triangle for about 600 ms.
+    func flashWarning() async {
+        state.isWarning = true
+        Task { [state] in
+            try? await Task.sleep(for: Self.warningDuration)
+            state.isWarning = false
+        }
+    }
+
+    func playWarningSound() async {
+        NSSound(named: "Basso")?.play()
     }
 }

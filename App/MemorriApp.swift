@@ -15,7 +15,11 @@ struct MemorriApp: App {
         MenuBarExtra {
             MenuContent(environment: environment)
         } label: {
-            Image(environment.state.isFlashing ? "MenuBarIconFlash" : "MenuBarIcon")
+            if environment.state.isWarning {
+                Image(systemName: "exclamationmark.triangle.fill")
+            } else {
+                Image(environment.state.isFlashing ? "MenuBarIconFlash" : "MenuBarIcon")
+            }
         }
         .menuBarExtraStyle(.menu)
     }

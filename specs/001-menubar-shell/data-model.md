@@ -31,8 +31,10 @@ States: `granted`, `notGranted`, `restartRequired`.
 | `restartRequired` | a freshly started copy reports not granted | `notGranted` |
 | `restartRequired` | a freshly started copy reports granted | `restartRequired` (unchanged) |
 | `restartRequired` | app relaunched, launch reading granted | `granted` |
+| any | a capture succeeds (added by spec 002, FR-010) | `granted` |
+| any | a capture is refused for lack of permission (added by spec 002, FR-007; SCStreamError -3801, which a running process does see) | `notGranted` |
 
-Why only fresh-copy reports after launch: a running process keeps the permission answer it had at launch, so it can see neither a grant nor a revocation made afterwards (research R5; confirmed by logs on 2026-09-29, including a revocation that the running app never noticed). A freshly started copy of the same app sees the current state at once. Every 2 seconds, and whenever the app becomes active, the app starts one (`--probe-permission`: print `granted` or `denied` and quit) and feeds the answer to `observeFreshProcess(granted:)`. A probe costs about 20 ms and about 1 ms of CPU. Re-granting after a revocation also gives `restartRequired`, because the process cannot tell whether its own view is still valid. The capture path reads the tracked status, never the process's own reading.
+Why only fresh-copy reports after launch: a running process keeps the permission answer it had at launch, so it can see neither a grant nor a revocation made afterwards (research R5; confirmed by logs on 2026-09-29, including a revocation that the running app never noticed). A freshly started copy of the same app sees the current state at once. Every 2 seconds, and whenever the app becomes active, the app starts one (`--probe-permission`: print `granted` or `denied` and quit) and feeds the answer to `observeFreshProcess(granted:)`. A probe costs about 20 ms and about 1 ms of CPU. Re-granting after a revocation also gives `restartRequired`, because the process cannot tell whether its own view is still valid. From spec 002 the capture itself also reports the permission (last two rows), and the capture path no longer depends on the tracked status: the real capture is the source of truth.
 
 ## ShortcutSetting (persisted by the KeyboardShortcuts package)
 

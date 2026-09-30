@@ -17,7 +17,7 @@ enum WindowID: String, CaseIterable {
 
     var contentSize: NSSize {
         switch self {
-        case .settings: NSSize(width: 640, height: 420)
+        case .settings: NSSize(width: 680, height: 600)
         case .onboarding: NSSize(width: 460, height: 340)
         case .inbox, .search: NSSize(width: 420, height: 220)
         }

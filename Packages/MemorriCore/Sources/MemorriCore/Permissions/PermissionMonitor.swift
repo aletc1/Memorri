@@ -45,6 +45,17 @@ public actor PermissionMonitor {
         return status
     }
 
+    /// A capture worked, so the permission is granted whatever was tracked before (FR-010).
+    public func captureSucceeded() {
+        update(to: .granted)
+    }
+
+    /// macOS refused a capture for lack of permission, so it is not granted (FR-007). Running
+    /// processes do see a revocation through a real capture (spike S2, SCStreamError -3801).
+    public func captureDeniedByPermission() {
+        update(to: .notGranted)
+    }
+
     private func update(to next: ScreenRecordingStatus) {
         guard next != status else { return }
         status = next

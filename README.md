@@ -2,7 +2,7 @@
 
 A private "second brain" for the macOS menu bar. It reads screenshots of your screen and turns what it sees into appointments, tasks and reminders.
 
-> **Status: pre-alpha.** The menu-bar shell runs: menu, global hotkey, Screen Recording permission onboarding and Settings. It does not capture or analyse anything yet. Run it from source (see [`DEVELOPER.md`](DEVELOPER.md)). See the [roadmap](docs/roadmap.md).
+> **Status: pre-alpha.** The menu-bar app runs: menu, global hotkey, Screen Recording permission onboarding and Settings. It now captures every display and keeps the pictures locally (with storage figures, clean-up and a retention policy in Settings). It does not read or analyse them yet. Run it from source (see [`DEVELOPER.md`](DEVELOPER.md)). See the [roadmap](docs/roadmap.md).
 
 ## Why
 

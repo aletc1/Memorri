@@ -30,9 +30,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var comingLater: String? {
         switch self {
         case .ollama: "the address and model used to read your screenshots (spec 003)."
-        case .storage: "how much space captures use, and clean-up options (spec 002)."
         case .calendarSync: "the calendar and reminders list your items are copied to (spec 009)."
-        case .general, .permissions: nil
+        case .general, .permissions, .storage: nil
         }
     }
 }
@@ -65,7 +64,9 @@ struct SettingsView: View {
                 PermissionControls(environment: environment)
             }
             .padding(24)
-        case .ollama, .storage, .calendarSync:
+        case .storage:
+            StorageSettingsView(environment: environment)
+        case .ollama, .calendarSync:
             VStack(alignment: .leading, spacing: 8) {
                 Text(section.title).font(.headline)
                 Text("Coming in a later version: \(section.comingLater ?? "")")

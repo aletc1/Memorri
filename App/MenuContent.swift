@@ -13,6 +13,7 @@ struct MenuContent: View {
     var body: some View {
         let status = environment.state.permissionStatus
 
+        Text(environment.state.lastCaptureLine)
         Button(captureTitle) { environment.requestCapture(.menu) }
         Button("Inbox") { environment.windows.show(.inbox) }
         Button("Search") { environment.windows.show(.search) }

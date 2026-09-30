@@ -17,16 +17,35 @@ final class AppEnvironment {
     let feedback: FeedbackAdapter
     let captureService: CaptureRequestService
     let shortcuts: ShortcutAdapter
+    /// `nil` when the storage could not be opened at all.
+    let storage: StorageContext?
+    /// The figures and clean-up shown in Settings; `nil` when the storage is unavailable.
+    let storageServices: StorageServices?
+    private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
         feedbackSettings = CaptureFeedbackSettings(store: settingsStore)
         permission = PermissionMonitor(checker: screenRecording)
         feedback = FeedbackAdapter(state: state)
         let windows = self.windows
+        let state = self.state
+        let opened = Self.openStorage(settingsStore: settingsStore)
+        storage = opened.storage
+        if let context = opened.storage, let store = context.store {
+            let cleanup = CleanupService(paths: context.paths, store: store, files: context.files)
+            let settings = StorageSettings(store: settingsStore)
+            storageServices = StorageServices(
+                stats: StorageStats(paths: context.paths, store: store), cleanup: cleanup, settings: settings,
+                retention: RetentionService(cleanup: cleanup, settings: settings, store: settingsStore))
+        } else {
+            storageServices = nil
+        }
         captureService = CaptureRequestService(
+            runner: opened.runner,
             permission: permission,
             feedback: feedback,
             settings: feedbackSettings,
+            onOutcome: { outcome in Task { @MainActor in state.record(outcome) } },
             onNeedsOnboarding: { Task { @MainActor in windows.show(.onboarding) } }
         )
         shortcuts = ShortcutAdapter(onCapture: { [captureService] in
@@ -42,6 +61,48 @@ final class AppEnvironment {
             }
         }
         startPermissionPolling()
+        startClockTick()
+        if let storage { StartupAlerts.showIfNeeded(for: storage) }
+        startRetention()
+    }
+
+    /// The retention policy is applied at start and then checked every hour; it runs about daily.
+    private func startRetention() {
+        guard let retention = storageServices?.retention else { return }
+        Task.detached {
+            _ = try? retention.runNow(now: Date())
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3600))
+                _ = try? retention.runIfDue(now: Date())
+            }
+        }
+    }
+
+    /// Opens the storage and builds the capture pipeline. When storage cannot be used, capturing
+    /// reports why instead of crashing.
+    private static func openStorage(settingsStore: any SettingsStore) -> (runner: any CaptureRunning, storage: StorageContext?) {
+        do {
+            let context = try StorageBootstrap.start(paths: try AppPaths.standard())
+            guard let store = context.store else {
+                return (UnavailableCaptureRunner(reason: context.capturingDisabledReason ?? "could not open the capture storage"), context)
+            }
+            let pipeline = CapturePipeline(capturer: ScreenCaptureKitCapturer(), encoder: HEICImageEncoder(),
+                                           disk: DiskSpaceAdapter(), files: context.files, store: store,
+                                           paths: context.paths, settings: StorageSettings(store: settingsStore))
+            return (pipeline, context)
+        } catch {
+            logger.error("storage unavailable: \(error.localizedDescription, privacy: .public)")
+            return (UnavailableCaptureRunner(reason: "could not open the capture storage"), nil)
+        }
+    }
+
+    private func startClockTick() {
+        Task { @MainActor [state] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                state.now = Date()
+            }
+        }
     }
 
     /// Follows the permission for as long as the app runs. A running process keeps the answer it
