@@ -27,14 +27,15 @@ public enum ExtractionSchemas {
 
     public static func schemaVersion(for kind: ScreenKind) -> String { "schema-\(kind.rawValue)-v1" }
 
-    /// `{ "findings": [ ... ] }`. Every finding has a kind, a non-empty title and at least one cited line number; dates
+    /// `{ "findings": [ ... ] }`. Every finding has a kind, a non-empty title and a list of cited line numbers (the citation check drops findings that cite none); dates
     /// and times are literal texts (the resolver turns them into instants). Week and day views add the column header
     /// line, email the time it was sent, chat the time of the message.
     public static func extractSchema(for kind: ScreenKind) -> JSONValue {
         var properties: [String: JSONValue] = [
             "kind": .object(["type": .string("string"), "enum": .array(FindingKind.allCases.map { .string($0.rawValue) })]),
             "title": .object(["type": .string("string"), "minLength": .int(1)]),
-            "cited_lines": .object(["type": .string("array"), "minItems": .int(1), "items": integer]),
+            // No minItems: a finding that cites nothing is discarded and recorded (FR-006), not a reason to reject the whole answer.
+            "cited_lines": .object(["type": .string("array"), "items": integer]),
             "start_text": string, "end_text": string, "date_text": string, "due_text": string, "remind_text": string,
             "all_day": boolean,
             "people": .object(["type": .string("array"), "items": string]),

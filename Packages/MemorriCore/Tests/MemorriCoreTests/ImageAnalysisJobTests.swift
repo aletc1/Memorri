@@ -10,6 +10,7 @@ import Testing
         let model: FakeModelChatting
         let runner: ImageAnalysisJobRunner
         let ocr: OCRStore
+        let results: AnalysisResultStore
         let jobs: AnalysisStore
         let settings: OllamaSettings
     }
@@ -24,6 +25,7 @@ import Testing
         let recogniser = FakeTextRecogniser(lines: lines ?? sampleLines(), failWith: error)
         let model = FakeModelChatting()
         model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer)
+        model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Team sync","cited_lines":[1,2],"start_text":"10:00"}]}"#)
         let transport = FakeOllamaTransport()
         transport.set("/api/version", .json(#"{"version":"0.34.4"}"#))
         transport.set("/api/tags", .json(#"{"models":[{"name":"qwen3.8:27b-mlx","capabilities":["completion","vision","thinking"]}]}"#))
@@ -32,12 +34,13 @@ import Testing
         let time = FakeTimeSource(1000)
         let service = OllamaService(settings: settings, makeTransport: { _ in transport }, time: time)
         let ocr = OCRStore(database: fixture.database)
+        let results = AnalysisResultStore(database: fixture.database)
         let provider = StoredPictureProvider(paths: fixture.paths, store: fixture.captures)
         let jobs = AnalysisStore(database: fixture.database)
         let pipeline = AnalysisPipeline(recogniser: recogniser, model: model, time: time)
         let runner = ImageAnalysisJobRunner(service: service, pipeline: pipeline, pictures: provider, fullPictures: provider, ocr: ocr,
-                                            jobs: jobs, settings: settings, time: time)
-        return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, jobs: jobs, settings: settings)
+                                            results: results, jobs: jobs, settings: settings, time: time)
+        return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, results: results, jobs: jobs, settings: settings)
     }
 
     private func job(_ rig: Rig, kind: String = "analyse", imageID: String? = nil, nilImage: Bool = false) throws -> AnalysisJobRecord {
@@ -73,7 +76,7 @@ import Testing
         _ = await rig.runner.run(try job(rig), attempt: 1)
         let outcome = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
         #expect(outcome == .success)
-        #expect(rig.recogniser.callCount == 2 && rig.model.callCount == 2)
+        #expect(rig.recogniser.callCount == 2 && rig.model.requests(whereSchemaHas: "screen_kind").count == 2)
         #expect(try rig.ocr.lines(imageID: rig.fixture.imageID).count == 2)
     }
 
@@ -113,7 +116,7 @@ import Testing
         let outcome = await rig.runner.run(queued, attempt: 2)
         #expect(outcome == .success)
         let recorded = try runs(rig)
-        #expect(recorded.count == 1)
+        #expect(recorded.map(\.step) == ["classify", "extract"])
         let run = try #require(recorded.first)
         #expect(run.step == "classify" && run.outcome == "success" && run.attempt == 2 && run.jobId == queued.id)
         #expect(run.imageId == rig.fixture.imageID && run.promptVersion == "classify-v1" && run.temperature == 0)
@@ -121,7 +124,7 @@ import Testing
         #expect(!run.requestJson.contains("base64"))
         // The stored analysis copy is 600 x 300, smaller than 1024: it is not enlarged.
         #expect(run.imageLongEdge == 600)
-        #expect(rig.model.requests.count == 1 && rig.model.requests[0].picture != nil)
+        #expect(rig.model.requests.count == 2 && rig.model.requests[0].picture != nil)
     }
 
     @Test func aFailedCallIsRecordedAsFailedAndMapsToTheOutcome() async throws {
@@ -140,8 +143,9 @@ import Testing
         _ = await rig.runner.run(try job(rig), attempt: 1)
         let outcome = await rig.runner.run(try job(rig), attempt: 1)
         #expect(outcome == .success)
-        #expect(rig.model.callCount == 1)
-        #expect(try runs(rig).count == 1)
+        #expect(rig.model.requests(whereSchemaHas: "screen_kind").count == 1)
+        #expect(rig.model.requests(whereSchemaHas: "findings").count == 2)
+        #expect(try runs(rig).map(\.step) == ["classify", "extract", "extract"])
     }
 
     @Test func anUnreachableServerMidCallIsServerUnavailableAndNothingIsRecorded() async throws {
@@ -157,5 +161,51 @@ import Testing
         let outcome = await rig.runner.run(try job(rig), attempt: 1)
         #expect(outcome == .serverUnavailable)
         #expect(rig.recogniser.callCount == 0 && rig.model.callCount == 0)
+    }
+
+    // MARK: Extract and store
+
+    @Test func theFindingsAreStoredWithTheExtractionRun() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome == .success)
+        let extract = try #require(try runs(rig).first { $0.step == "extract" })
+        #expect(extract.promptVersion == "extract-calendar_week-v1" && extract.imageLongEdge == 600)
+        let stored = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
+        #expect(stored.kind == .calendarWeek && stored.findingCount == 1 && stored.extractRunID == extract.id && stored.model == "qwen3.8:27b-mlx")
+        let findings = try rig.results.findings(imageID: rig.fixture.imageID)
+        #expect(findings.map(\.title) == ["Team sync"] && findings[0].citedLines == [1, 2] && findings[0].unresolved == ["start": "10:00"])
+    }
+
+    @Test func aSecondRunOfThePictureLeavesOneSetOfFindings() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
+        #expect(try rig.results.findings(imageID: rig.fixture.imageID).count == 1)
+        let count = try await rig.fixture.database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM findings") }
+        #expect(count == 1)
+    }
+
+    @Test func aFailedExtractionKeepsTheClassificationAndStoresNoAnalysis() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"task","title":"x"}]}"#)
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome == .transient("invalid answer"))
+        #expect(try runs(rig).map(\.step) == ["classify", "extract"])
+        #expect(try runs(rig).map(\.outcome) == ["success", "failed"])
+        #expect(try rig.results.analysis(imageID: rig.fixture.imageID) == nil)
+        // The retry asks only for the findings.
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[]}"#)
+        let retry = await rig.runner.run(try job(rig), attempt: 2)
+        #expect(retry == .success)
+        #expect(rig.model.requests(whereSchemaHas: "screen_kind").count == 1 && rig.model.requests(whereSchemaHas: "findings").count == 2)
+    }
+
+    @Test func aBadCitationIsDiscardedAndRecorded() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"task","title":"Good","cited_lines":[1]},{"kind":"task","title":"Invented","cited_lines":[99]}]}"#)
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let stored = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
+        #expect(stored.findingCount == 1 && stored.discarded.map(\.title) == ["Invented"])
     }
 }

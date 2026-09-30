@@ -17,19 +17,21 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
     private let pictures: any AnalysisPictureProviding
     private let fullPictures: any FullPictureProviding
     private let ocr: OCRStore
+    private let results: AnalysisResultStore
     private let jobs: any AnalysisJobStoring
     private let settings: OllamaSettings
     private let time: any TimeSource
     private let recogniserName: String
 
     public init(service: OllamaService, pipeline: AnalysisPipeline, pictures: any AnalysisPictureProviding,
-                fullPictures: any FullPictureProviding, ocr: OCRStore, jobs: any AnalysisJobStoring, settings: OllamaSettings,
-                time: any TimeSource, recogniserName: String = VisionTextRecogniser.descriptor) {
+                fullPictures: any FullPictureProviding, ocr: OCRStore, results: AnalysisResultStore, jobs: any AnalysisJobStoring,
+                settings: OllamaSettings, time: any TimeSource, recogniserName: String = VisionTextRecogniser.descriptor) {
         self.service = service
         self.pipeline = pipeline
         self.pictures = pictures
         self.fullPictures = fullPictures
         self.ocr = ocr
+        self.results = results
         self.jobs = jobs
         self.settings = settings
         self.time = time
@@ -67,35 +69,55 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
            let stored = run.rawAnswer.flatMap({ ClassificationResult.parse(storedAnswer: $0) }) {
             reuse.classification = stored
         }
-        let input = PipelineInput(image: full, classificationJPEG: classificationJPEG, classificationSize: size, reuse: reuse)
+        let analysisJPEG: Data
+        do { analysisJPEG = try PictureConverter.jpegData(from: analysisCopy.data) } catch { return Self.gone }
+        let input = PipelineInput(image: full, classificationJPEG: classificationJPEG, classificationSize: size, analysisJPEG: analysisJPEG,
+                                  analysisSize: (analysisCopy.width, analysisCopy.height), macTimezone: .current, reuse: reuse)
 
+        let analysis: AnalysisResult?
         let steps: [StepRecord]
         let outcome: JobOutcome
         do {
             let result = try await pipeline.analyse(input, settings: stepSettings)
+            analysis = result
             steps = result.steps
             outcome = .success
-            if let classify = result.steps.first(where: { $0.step == "classify" }) {
-                Self.logger.info("classify image=\(imageID, privacy: .public) kind=\(result.classification.kind.rawValue, privacy: .public) confidence=\(result.classification.confidence) ms=\(classify.durationMs)")
-            }
         } catch let failure as AnalysisFailure {
             if failure.error == .serverUnavailable { return .serverUnavailable }   // no attempt, no run
+            analysis = nil
             steps = failure.steps
             outcome = JobOutcome(failure.error)
         } catch {
             return .transient("analysis failed")
         }
 
+        var runIDs: [String: String] = [:]
         for step in steps {
+            let edge = step.step == "classify" ? max(size.width, size.height) : analysisCopy.longEdge
             let run = ModelRunRecord(jobId: job.id, imageId: imageID, attempt: attempt, model: step.model, think: step.think, temperature: 0,
-                                     imageLongEdge: max(size.width, size.height), promptVersion: step.promptVersion,
+                                     imageLongEdge: edge, promptVersion: step.promptVersion,
                                      schemaVersion: step.schemaVersion, startedAt: step.startedAt, durationMs: step.durationMs,
                                      outcome: step.failure == nil ? .success : .failed, failureReason: step.failure,
                                      requestJson: step.request, rawAnswer: step.rawAnswer, step: step.step)
             // The capture may have been deleted while the request ran: its runs go with it.
             do { try jobs.record(run: run) } catch { return Self.gone }
+            runIDs[step.step] = run.id
         }
-        return outcome
+        guard let analysis else { return outcome }
+
+        if let classify = steps.first(where: { $0.step == "classify" }) {
+            Self.logger.info("classify image=\(imageID, privacy: .public) kind=\(analysis.classification.kind.rawValue, privacy: .public) confidence=\(analysis.classification.confidence) ms=\(classify.durationMs)")
+        }
+        if let extract = steps.first(where: { $0.step == "extract" }) {
+            Self.logger.info("extract image=\(imageID, privacy: .public) kind=\(analysis.classification.kind.rawValue, privacy: .public) findings=\(analysis.findings.count) discarded=\(analysis.discards.count) ms=\(extract.durationMs)")
+        }
+        let unresolved = analysis.findings.reduce(0) { $0 + $1.unresolved.count }
+        let inferred = analysis.findings.reduce(0) { $0 + $1.provenance.values.filter { $0.origin == .inferred }.count }
+        Self.logger.info("resolve image=\(imageID, privacy: .public) unresolved=\(unresolved) inferred=\(inferred)")
+        do { try results.save(analysis, imageID: imageID, runID: runIDs["extract"], at: time.now()) }
+        catch { return .transient("could not store the analysis") }
+        Self.logger.info("analysis stored image=\(imageID, privacy: .public)")
+        return .success
     }
 
     private func readStep(imageID: String, image: CGImage, forced: Bool) async throws -> [RecognisedLine] {

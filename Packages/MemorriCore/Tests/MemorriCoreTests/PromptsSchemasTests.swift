@@ -29,15 +29,18 @@ import Testing
 
     @Test func everySchemaRejectsABadFinding() {
         let noCitation = #"{"findings":[{"kind":"task","title":"x"}]}"#
-        let emptyCitation = #"{"findings":[{"kind":"task","title":"x","cited_lines":[]}]}"#
         let emptyTitle = #"{"findings":[{"kind":"task","title":"","cited_lines":[1]}]}"#
         let unknownKind = #"{"findings":[{"kind":"meeting","title":"x","cited_lines":[1]}]}"#
         let noList = #"{"items":[]}"#
         for kind in ScreenKind.allCases {
-            for bad in [noCitation, emptyCitation, emptyTitle, unknownKind, noList] {
+            for bad in [noCitation, emptyTitle, unknownKind, noList] {
                 if case .success = validate(bad, kind) { Issue.record("\(kind) accepted \(bad)") }
             }
         }
+    }
+
+    @Test func aFindingThatCitesNothingIsLeftToTheCitationCheck() {
+        if case .failure(let error) = validate(#"{"findings":[{"kind":"task","title":"x","cited_lines":[]}]}"#, .document) { Issue.record("\(error)") }
     }
 
     @Test func extraFieldsBelongToTheKindsThatNeedThem() {
