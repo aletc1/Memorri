@@ -1,6 +1,6 @@
 # 16. Environment tags and context assignment
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-30
 - Related: spec 004 (FR-014 to FR-016, FR-026 to FR-030), Constitution II and IV, spec 005 (reconciliation)
 
@@ -13,7 +13,7 @@ The same meeting may appear in several captures and two similar items may differ
 3. Tags from three sources with provenance: the capture (display size, window titles and owning applications), the text lines (language, clock style, date order, accounts and domains, time zone labels) and the model's visual judgement in the classification call (application, platform look, remote session, theme, calendar name). Contexts are matched by transparent hint scores; a user choice is final.
 
 ## Decision
-Option 3. Each tag has a key, value, confidence and source; unknown is not stored; visual tags under 0.6 are marked low. Findings keep a copy of their picture's tags. Window titles are recorded at capture (up to 20 per display) and, like tags, stored only locally and deleted with the capture. Context matching scores window title and application hints 3, domain 2.5 and keyword 1, needs 2 points and a lead of 1, records ties and the runner-up, and never replaces a user choice. Differing tags never decide "different items" alone; spec 005 owns the comparison.
+Option 3. Each tag has a key, value, confidence and source; unknown is not stored; visual tags carry the classification confidence and count as low below 0.6. Findings keep a copy of their picture's tags. Window titles are recorded at capture (up to 20 per display) and, like tags, stored only locally and deleted with the capture. Context matching scores window title and application hints 3, domain 2.5 and keyword 1, needs 2 points and a lead of 1, records ties and the runner-up, and never replaces a user choice. Differing tags never decide "different items" alone; spec 005 owns the comparison.
 
 ## Consequences
 - Privacy: titles, account names and domains are sensitive data stored for the life of the capture (7 days by default) and never logged or sent.

@@ -1,6 +1,6 @@
 # 15. The eval harness lives in the core package, with a synthetic golden set
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-30
 - Related: spec 004 (FR-019 to FR-024), Constitution VI, ADR 0002, ADR 0004
 

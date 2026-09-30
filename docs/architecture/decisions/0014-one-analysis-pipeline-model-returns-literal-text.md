@@ -1,6 +1,6 @@
 # 14. One analysis pipeline: the model returns literal text, code does the rest
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-30
 - Related: spec 004 (FR-005 to FR-013), ADR 0004, ADR 0005, ADR 0012, ADR 0013
 
