@@ -1,0 +1,20 @@
+{
+  "findings" : [
+
+  ],
+  "screenKind" : "other",
+  "tags" : [
+    {
+      "key" : "platform_look",
+      "value" : "macOS"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "capturedAt" : "2026-10-14T07:12:00Z",
+  "context" : {
+    "hints" : [
+      {
+        "kind" : "domain",
+        "value" : "customer-a.example"
+      }
+    ],
+    "name" : "Customer A",
+    "timezone" : "America/New_York"
+  },
+  "displaySize" : [
+    1600,
+    1000
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "Microsoft Outlook",
+      "bundleID" : "com.microsoft.Outlook",
+      "frame" : [
+        0,
+        0,
+        1600,
+        1000
+      ],
+      "title" : "Inbox - Customer A - Outlook"
+    }
+  ]
+}

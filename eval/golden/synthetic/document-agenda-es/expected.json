@@ -1,0 +1,90 @@
+{
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-20T09:00:00Z",
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-20T08:00:00Z",
+      "title" : "Inicio del proyecto"
+    },
+    {
+      "allDay" : false,
+      "end" : "2026-10-22T13:30:00Z",
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-22T12:00:00Z",
+      "title" : "Revisión de diseño"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        16,
+        9,
+        138,
+        18
+      ],
+      "text" : "Orden del día.docx"
+    },
+    {
+      "box" : [
+        330,
+        120,
+        209,
+        41
+      ],
+      "text" : "Orden del día"
+    },
+    {
+      "box" : [
+        330,
+        200,
+        333,
+        23
+      ],
+      "text" : "20 oct - Inicio del proyecto 10:00-11:00"
+    },
+    {
+      "box" : [
+        330,
+        238,
+        339,
+        23
+      ],
+      "text" : "22 oct - Revisión de diseño 14:00-15:30"
+    },
+    {
+      "box" : [
+        330,
+        276,
+        300,
+        23
+      ],
+      "text" : "Todos deben leer el resumen antes."
+    }
+  ],
+  "screenKind" : "document",
+  "tags" : [
+    {
+      "key" : "platform_look",
+      "value" : "macOS"
+    },
+    {
+      "key" : "language",
+      "value" : "es"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    },
+    {
+      "key" : "clock_style",
+      "value" : "24h"
+    }
+  ]
+}

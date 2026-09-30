@@ -1,0 +1,33 @@
+{
+  "capturedAt" : "2026-10-14T15:00:00Z",
+  "context" : {
+    "hints" : [
+      {
+        "kind" : "domain",
+        "value" : "customer-a.example"
+      }
+    ],
+    "name" : "Customer A",
+    "timezone" : "America/New_York"
+  },
+  "displaySize" : [
+    1600,
+    1000
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "Citrix Viewer",
+      "bundleID" : "com.citrix.XenAppViewer",
+      "frame" : [
+        0,
+        0,
+        1600,
+        1000
+      ],
+      "title" : "Citrix Workspace - Customer A"
+    }
+  ]
+}

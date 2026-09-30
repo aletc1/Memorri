@@ -1,0 +1,195 @@
+{
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-15T09:00:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-15T08:00:00Z",
+      "title" : "Meeting"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        16,
+        10,
+        136,
+        21
+      ],
+      "text" : "Microsoft Teams"
+    },
+    {
+      "box" : [
+        620,
+        12,
+        45,
+        17
+      ],
+      "text" : "Search"
+    },
+    {
+      "box" : [
+        68,
+        70,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        68,
+        134,
+        91,
+        19
+      ],
+      "text" : "Design team"
+    },
+    {
+      "box" : [
+        68,
+        198,
+        82,
+        19
+      ],
+      "text" : "Carlos Ruiz"
+    },
+    {
+      "box" : [
+        68,
+        262,
+        118,
+        19
+      ],
+      "text" : "Release channel"
+    },
+    {
+      "box" : [
+        360,
+        60,
+        145,
+        26
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        910,
+        120,
+        39,
+        17
+      ],
+      "text" : "Today"
+    },
+    {
+      "box" : [
+        416,
+        170,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        536,
+        172,
+        35,
+        17
+      ],
+      "text" : "11:48"
+    },
+    {
+      "box" : [
+        416,
+        198,
+        259,
+        22
+      ],
+      "text" : "Morning! Did you see the notes?"
+    },
+    {
+      "box" : [
+        416,
+        266,
+        73,
+        19
+      ],
+      "text" : "Ben Ortiz"
+    },
+    {
+      "box" : [
+        500,
+        268,
+        35,
+        17
+      ],
+      "text" : "11:48"
+    },
+    {
+      "box" : [
+        416,
+        294,
+        266,
+        22
+      ],
+      "text" : "Can we meet tomorrow at 10:00?"
+    },
+    {
+      "box" : [
+        416,
+        362,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        536,
+        364,
+        35,
+        17
+      ],
+      "text" : "11:48"
+    },
+    {
+      "box" : [
+        416,
+        390,
+        175,
+        22
+      ],
+      "text" : "Sounds good, thanks."
+    }
+  ],
+  "screenKind" : "chat",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Teams"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "Windows"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "dark"
+    },
+    {
+      "key" : "clock_style",
+      "value" : "24h"
+    }
+  ]
+}

@@ -1,0 +1,205 @@
+{
+  "context" : "Customer A",
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-14T13:30:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-14T13:00:00Z",
+      "title" : "Stand-up"
+    },
+    {
+      "allDay" : false,
+      "end" : "2026-10-14T19:00:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "place" : "Room 3",
+      "start" : "2026-10-14T17:00:00Z",
+      "title" : "Sprint planning"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        16,
+        8,
+        292,
+        18
+      ],
+      "text" : "Remote Desktop Connection - Customer A"
+    },
+    {
+      "box" : [
+        156,
+        47,
+        237,
+        18
+      ],
+      "text" : "https://calendar.example.com/view"
+    },
+    {
+      "box" : [
+        20,
+        90,
+        309,
+        26
+      ],
+      "text" : "Wednesday, October 14, 2026"
+    },
+    {
+      "box" : [
+        86,
+        140,
+        113,
+        19
+      ],
+      "text" : "Wednesday 14"
+    },
+    {
+      "box" : [
+        12,
+        170,
+        34,
+        17
+      ],
+      "text" : "8 AM"
+    },
+    {
+      "box" : [
+        12,
+        234,
+        34,
+        17
+      ],
+      "text" : "9 AM"
+    },
+    {
+      "box" : [
+        12,
+        298,
+        41,
+        17
+      ],
+      "text" : "10 AM"
+    },
+    {
+      "box" : [
+        12,
+        362,
+        38,
+        17
+      ],
+      "text" : "11 AM"
+    },
+    {
+      "box" : [
+        12,
+        426,
+        40,
+        17
+      ],
+      "text" : "12 PM"
+    },
+    {
+      "box" : [
+        12,
+        490,
+        31,
+        17
+      ],
+      "text" : "1 PM"
+    },
+    {
+      "box" : [
+        12,
+        554,
+        33,
+        17
+      ],
+      "text" : "2 PM"
+    },
+    {
+      "box" : [
+        12,
+        618,
+        34,
+        17
+      ],
+      "text" : "3 PM"
+    },
+    {
+      "box" : [
+        12,
+        682,
+        34,
+        17
+      ],
+      "text" : "4 PM"
+    },
+    {
+      "box" : [
+        90,
+        249,
+        128,
+        17
+      ],
+      "text" : "9:00 AM Stand-up"
+    },
+    {
+      "box" : [
+        90,
+        504,
+        165,
+        17
+      ],
+      "text" : "1:00 PM Sprint planning"
+    },
+    {
+      "box" : [
+        90,
+        524,
+        47,
+        16
+      ],
+      "text" : "Room 3"
+    }
+  ],
+  "screenKind" : "calendar_day",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Web calendar"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "Linux"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    },
+    {
+      "key" : "clock_style",
+      "value" : "12h"
+    },
+    {
+      "key" : "remote_session",
+      "value" : "Remote Desktop"
+    }
+  ]
+}

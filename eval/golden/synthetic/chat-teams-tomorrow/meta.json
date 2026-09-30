@@ -1,0 +1,23 @@
+{
+  "capturedAt" : "2026-10-14T09:50:00Z",
+  "displaySize" : [
+    1600,
+    1000
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "Microsoft Teams",
+      "bundleID" : "com.microsoft.teams2",
+      "frame" : [
+        0,
+        0,
+        1600,
+        1000
+      ],
+      "title" : "Chat | Microsoft Teams"
+    }
+  ]
+}

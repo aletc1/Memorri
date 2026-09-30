@@ -1,0 +1,287 @@
+{
+  "context" : "Customer A",
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-13T16:00:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "place" : "Phone",
+      "start" : "2026-10-13T15:00:00Z",
+      "title" : "Vendor call"
+    },
+    {
+      "allDay" : false,
+      "end" : "2026-10-15T19:00:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "place" : "Room 12",
+      "start" : "2026-10-15T17:00:00Z",
+      "title" : "Workshop"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        16,
+        8,
+        212,
+        18
+      ],
+      "text" : "Citrix Workspace - Customer A"
+    },
+    {
+      "box" : [
+        16,
+        43,
+        72,
+        23
+      ],
+      "text" : "Outlook"
+    },
+    {
+      "box" : [
+        130,
+        46,
+        41,
+        18
+      ],
+      "text" : "Home"
+    },
+    {
+      "box" : [
+        210,
+        46,
+        34,
+        18
+      ],
+      "text" : "View"
+    },
+    {
+      "box" : [
+        290,
+        46,
+        32,
+        18
+      ],
+      "text" : "Help"
+    },
+    {
+      "box" : [
+        20,
+        86,
+        226,
+        26
+      ],
+      "text" : "October 12 – 16, 2026"
+    },
+    {
+      "box" : [
+        86,
+        136,
+        56,
+        19
+      ],
+      "text" : "Mon 12"
+    },
+    {
+      "box" : [
+        387,
+        136,
+        51,
+        19
+      ],
+      "text" : "Tue 13"
+    },
+    {
+      "box" : [
+        689,
+        136,
+        57,
+        19
+      ],
+      "text" : "Wed 14"
+    },
+    {
+      "box" : [
+        990,
+        136,
+        52,
+        19
+      ],
+      "text" : "Thu 15"
+    },
+    {
+      "box" : [
+        1292,
+        136,
+        43,
+        19
+      ],
+      "text" : "Fri 16"
+    },
+    {
+      "box" : [
+        12,
+        166,
+        34,
+        17
+      ],
+      "text" : "8 AM"
+    },
+    {
+      "box" : [
+        12,
+        230,
+        34,
+        17
+      ],
+      "text" : "9 AM"
+    },
+    {
+      "box" : [
+        12,
+        294,
+        41,
+        17
+      ],
+      "text" : "10 AM"
+    },
+    {
+      "box" : [
+        12,
+        358,
+        38,
+        17
+      ],
+      "text" : "11 AM"
+    },
+    {
+      "box" : [
+        12,
+        422,
+        40,
+        17
+      ],
+      "text" : "12 PM"
+    },
+    {
+      "box" : [
+        12,
+        486,
+        31,
+        17
+      ],
+      "text" : "1 PM"
+    },
+    {
+      "box" : [
+        12,
+        550,
+        33,
+        17
+      ],
+      "text" : "2 PM"
+    },
+    {
+      "box" : [
+        12,
+        614,
+        34,
+        17
+      ],
+      "text" : "3 PM"
+    },
+    {
+      "box" : [
+        12,
+        678,
+        34,
+        17
+      ],
+      "text" : "4 PM"
+    },
+    {
+      "box" : [
+        12,
+        742,
+        34,
+        17
+      ],
+      "text" : "5 PM"
+    },
+    {
+      "box" : [
+        391,
+        372,
+        145,
+        17
+      ],
+      "text" : "11:00 AM Vendor call"
+    },
+    {
+      "box" : [
+        391,
+        392,
+        39,
+        16
+      ],
+      "text" : "Phone"
+    },
+    {
+      "box" : [
+        994,
+        500,
+        129,
+        17
+      ],
+      "text" : "1:00 PM Workshop"
+    },
+    {
+      "box" : [
+        994,
+        520,
+        52,
+        16
+      ],
+      "text" : "Room 12"
+    }
+  ],
+  "screenKind" : "calendar_week",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Outlook"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "Windows"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    },
+    {
+      "key" : "clock_style",
+      "value" : "12h"
+    },
+    {
+      "key" : "remote_session",
+      "value" : "Citrix"
+    }
+  ]
+}

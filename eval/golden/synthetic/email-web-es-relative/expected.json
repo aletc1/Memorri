@@ -1,0 +1,250 @@
+{
+  "findings" : [
+    {
+      "allDay" : true,
+      "due" : "2026-10-15T22:00:00Z",
+      "kind" : "task",
+      "people" : [
+
+      ],
+      "title" : "Informe"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        156,
+        13,
+        237,
+        18
+      ],
+      "text" : "https://calendar.example.com/view"
+    },
+    {
+      "box" : [
+        20,
+        54,
+        61,
+        19
+      ],
+      "text" : "Finance"
+    },
+    {
+      "box" : [
+        20,
+        78,
+        87,
+        18
+      ],
+      "text" : "Invoice 4471"
+    },
+    {
+      "box" : [
+        20,
+        102,
+        168,
+        17
+      ],
+      "text" : "Attached is the invoice for"
+    },
+    {
+      "box" : [
+        20,
+        146,
+        89,
+        19
+      ],
+      "text" : "Marta Vidal"
+    },
+    {
+      "box" : [
+        20,
+        170,
+        53,
+        18
+      ],
+      "text" : "Informe"
+    },
+    {
+      "box" : [
+        20,
+        194,
+        34,
+        17
+      ],
+      "text" : "Hola,"
+    },
+    {
+      "box" : [
+        20,
+        238,
+        67,
+        19
+      ],
+      "text" : "HR team"
+    },
+    {
+      "box" : [
+        20,
+        262,
+        109,
+        18
+      ],
+      "text" : "Benefits update"
+    },
+    {
+      "box" : [
+        20,
+        286,
+        180,
+        17
+      ],
+      "text" : "Open enrolment starts soon"
+    },
+    {
+      "box" : [
+        20,
+        330,
+        81,
+        19
+      ],
+      "text" : "IT support"
+    },
+    {
+      "box" : [
+        20,
+        354,
+        112,
+        18
+      ],
+      "text" : "Password expiry"
+    },
+    {
+      "box" : [
+        20,
+        378,
+        163,
+        17
+      ],
+      "text" : "Your password will expire"
+    },
+    {
+      "box" : [
+        20,
+        422,
+        86,
+        19
+      ],
+      "text" : "Newsletter"
+    },
+    {
+      "box" : [
+        20,
+        446,
+        97,
+        18
+      ],
+      "text" : "Weekly digest"
+    },
+    {
+      "box" : [
+        20,
+        470,
+        136,
+        17
+      ],
+      "text" : "Top stories this week"
+    },
+    {
+      "box" : [
+        500,
+        72,
+        102,
+        33
+      ],
+      "text" : "Informe"
+    },
+    {
+      "box" : [
+        500,
+        122,
+        128,
+        19
+      ],
+      "text" : "From: Marta Vidal"
+    },
+    {
+      "box" : [
+        500,
+        146,
+        59,
+        19
+      ],
+      "text" : "Para: yo"
+    },
+    {
+      "box" : [
+        500,
+        170,
+        346,
+        19
+      ],
+      "text" : "Fecha: miércoles, 14 de octubre de 2026, 09:12"
+    },
+    {
+      "box" : [
+        500,
+        234,
+        44,
+        23
+      ],
+      "text" : "Hola,"
+    },
+    {
+      "box" : [
+        500,
+        268,
+        297,
+        23
+      ],
+      "text" : "Necesito el informe para el viernes."
+    },
+    {
+      "box" : [
+        500,
+        302,
+        69,
+        23
+      ],
+      "text" : "Gracias,"
+    },
+    {
+      "box" : [
+        500,
+        336,
+        50,
+        23
+      ],
+      "text" : "Marta"
+    }
+  ],
+  "screenKind" : "email",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Web mail"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "macOS"
+    },
+    {
+      "key" : "language",
+      "value" : "es"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

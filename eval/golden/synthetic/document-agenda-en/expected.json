@@ -1,0 +1,90 @@
+{
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-20T09:00:00Z",
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-20T08:00:00Z",
+      "title" : "Kickoff"
+    },
+    {
+      "allDay" : false,
+      "end" : "2026-10-22T13:30:00Z",
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-22T12:00:00Z",
+      "title" : "Design review"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        16,
+        9,
+        151,
+        18
+      ],
+      "text" : "Project agenda.docx"
+    },
+    {
+      "box" : [
+        330,
+        120,
+        239,
+        41
+      ],
+      "text" : "Project agenda"
+    },
+    {
+      "box" : [
+        330,
+        200,
+        241,
+        23
+      ],
+      "text" : "Oct 20 - Kickoff 10:00-11:00"
+    },
+    {
+      "box" : [
+        330,
+        238,
+        303,
+        23
+      ],
+      "text" : "Oct 22 - Design review 14:00-15:30"
+    },
+    {
+      "box" : [
+        330,
+        276,
+        365,
+        23
+      ],
+      "text" : "Everyone should read the brief beforehand."
+    }
+  ],
+  "screenKind" : "document",
+  "tags" : [
+    {
+      "key" : "platform_look",
+      "value" : "macOS"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    },
+    {
+      "key" : "clock_style",
+      "value" : "24h"
+    }
+  ]
+}
