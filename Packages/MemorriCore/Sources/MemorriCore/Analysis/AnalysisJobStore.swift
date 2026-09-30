@@ -141,6 +141,8 @@ public protocol AnalysisJobStoring: Sendable {
     func record(run: ModelRunRecord) throws
     /// The newest attempt of a job, if it has one.
     func latestRun(jobID: String) throws -> ModelRunRecord?
+    /// The newest successful run of a step with this prompt version for a picture: a retry reuses it instead of asking again.
+    func latestSuccessfulRun(imageID: String, step: String, promptVersion: String) throws -> ModelRunRecord?
     func counts() throws -> JobCounts
     func recentFailures(limit: Int) throws -> [AnalysisJobRecord]
     /// Failed jobs back to `waiting` with fresh attempts; returns how many.
@@ -225,6 +227,15 @@ public struct AnalysisStore: AnalysisJobStoring {
         try database.pool.read { db in
             try ModelRunRecord.fetchOne(db, sql: "SELECT * FROM model_runs WHERE job_id = ? ORDER BY attempt DESC, started_at DESC LIMIT 1",
                                         arguments: [jobID])
+        }
+    }
+
+    public func latestSuccessfulRun(imageID: String, step: String, promptVersion: String) throws -> ModelRunRecord? {
+        try database.pool.read { db in
+            try ModelRunRecord.fetchOne(db, sql: """
+                SELECT * FROM model_runs WHERE image_id = ? AND step = ? AND prompt_version = ? AND outcome = 'success'
+                ORDER BY started_at DESC, attempt DESC LIMIT 1
+                """, arguments: [imageID, step, promptVersion])
         }
     }
 

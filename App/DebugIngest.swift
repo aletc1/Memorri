@@ -5,7 +5,8 @@ import os
 
 /// Debug builds only. `--ingest-picture <png>` (with optional `--ingest-windows <json>`) stores that picture as if it had
 /// been captured and queues its analysis, so a synthetic picture can go through the real pipeline without the screen.
-/// `<json>` is either a list of windows or a golden case's `meta.json`. Compiled out of Release builds.
+/// `<json>` is either a list of windows or a golden case's `meta.json`. `--ingest-case <folder>` (repeatable) stores the
+/// `screenshot.png` of a golden case with the windows of its `meta.json`. Compiled out of Release builds.
 enum DebugIngest {
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "extraction")
 
@@ -15,22 +16,34 @@ enum DebugIngest {
         return arguments[index + 1]
     }
 
+    private static func values(after flag: String) -> [String] {
+        let arguments = CommandLine.arguments
+        return arguments.indices.filter { arguments[$0] == flag && $0 + 1 < arguments.count }.map { arguments[$0 + 1] }
+    }
+
     static func runIfRequested(storage: StorageContext?, analysis: AnalysisQueue?, settingsStore: any SettingsStore) async {
-        guard let picturePath = value(after: "--ingest-picture") else { return }
+        var requests: [(picture: String, windows: String?)] = []
+        if let picture = value(after: "--ingest-picture") { requests.append((picture, value(after: "--ingest-windows"))) }
+        for folder in values(after: "--ingest-case") {
+            requests.append((folder + "/" + GoldenCase.pictureFile, folder + "/meta.json"))
+        }
+        guard !requests.isEmpty else { return }
         guard let context = storage, let store = context.store, let analysis else {
             logger.error("ingest refused: storage unavailable")
             return
         }
-        do {
-            let png = try Data(contentsOf: URL(fileURLWithPath: picturePath))
-            let windows = try value(after: "--ingest-windows").map(loadWindows) ?? []
-            let ingest = PictureIngest(paths: context.paths, files: context.files, store: store,
-                                       modelLongEdge: StorageSettings(store: settingsStore).modelLongEdge)
-            let imageID = try ingest.store(png: png, windows: windows)
-            try await analysis.enqueue(kind: ImageAnalysisJobRunner.analyseKind, imageID: imageID)
-            logger.info("ingested picture image=\(imageID, privacy: .public) windows=\(windows.count)")
-        } catch {
-            logger.error("ingest failed: \(String(describing: error), privacy: .public)")
+        let ingest = PictureIngest(paths: context.paths, files: context.files, store: store,
+                                   modelLongEdge: StorageSettings(store: settingsStore).modelLongEdge)
+        for request in requests {
+            do {
+                let png = try Data(contentsOf: URL(fileURLWithPath: request.picture))
+                let windows = try request.windows.map(loadWindows) ?? []
+                let imageID = try ingest.store(png: png, windows: windows)
+                try await analysis.enqueue(kind: ImageAnalysisJobRunner.analyseKind, imageID: imageID)
+                logger.info("ingested picture image=\(imageID, privacy: .public) windows=\(windows.count)")
+            } catch {
+                logger.error("ingest failed: \(String(describing: error), privacy: .public)")
+            }
         }
     }
 

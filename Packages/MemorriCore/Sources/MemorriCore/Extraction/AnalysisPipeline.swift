@@ -51,6 +51,12 @@ public struct AnalysisPipeline: Sendable {
         self.time = time
     }
 
+    /// The read step on its own, so the job can store the lines before any model call.
+    public func read(_ image: CGImage) async throws -> [RecognisedLine] {
+        do { return try await recogniser.recognise(image) }
+        catch { throw AnalysisFailure(error: .transient("text recognition failed"), steps: []) }
+    }
+
     public func analyse(_ input: PipelineInput, settings: ModelStepSettings) async throws -> AnalysisResult {
         var steps: [StepRecord] = []
 

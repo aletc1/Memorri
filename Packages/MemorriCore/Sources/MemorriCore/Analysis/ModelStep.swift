@@ -154,3 +154,17 @@ public enum ModelStep {
         }
     }
 }
+
+/// The model client for whatever address the settings hold at the moment of the call, so a change of address in
+/// Settings reaches the next call without rebuilding the pipeline.
+public struct ServiceModelChatting: ModelChatting {
+    private let service: OllamaService
+
+    public init(service: OllamaService) { self.service = service }
+
+    public func chat(_ request: ChatRequest) async throws -> ChatResponse {
+        try await service.client().chat(request)
+    }
+
+    public func requestJSON(for request: ChatRequest) -> String { OllamaClient.requestJSON(for: request) }
+}

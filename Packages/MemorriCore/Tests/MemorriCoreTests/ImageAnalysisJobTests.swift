@@ -7,8 +7,11 @@ import Testing
     private struct Rig {
         let fixture: PipelineFixture
         let recogniser: FakeTextRecogniser
+        let model: FakeModelChatting
         let runner: ImageAnalysisJobRunner
         let ocr: OCRStore
+        let jobs: AnalysisStore
+        let settings: OllamaSettings
     }
 
     private func sampleLines() -> [RecognisedLine] {
@@ -16,22 +19,42 @@ import Testing
          RecognisedLine(n: 2, text: "Room 4", box: PixelBox(x: 10, y: 50, width: 120, height: 18), confidence: 0.8)]
     }
 
-    private func makeRig(lines: [RecognisedLine]? = nil, failWith error: Error? = nil) throws -> Rig {
+    private func makeRig(lines: [RecognisedLine]? = nil, failWith error: Error? = nil, model modelName: String? = "qwen3.8:27b-mlx") throws -> Rig {
         let fixture = try makePipelineFixture()
         let recogniser = FakeTextRecogniser(lines: lines ?? sampleLines(), failWith: error)
+        let model = FakeModelChatting()
+        model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer)
+        let transport = FakeOllamaTransport()
+        transport.set("/api/version", .json(#"{"version":"0.34.4"}"#))
+        transport.set("/api/tags", .json(#"{"models":[{"name":"qwen3.8:27b-mlx","capabilities":["completion","vision","thinking"]}]}"#))
+        let settings = OllamaSettings(store: FakeSettingsStore())
+        settings.setModel(modelName)
+        let time = FakeTimeSource(1000)
+        let service = OllamaService(settings: settings, makeTransport: { _ in transport }, time: time)
         let ocr = OCRStore(database: fixture.database)
         let provider = StoredPictureProvider(paths: fixture.paths, store: fixture.captures)
-        let runner = ImageAnalysisJobRunner(pictures: provider, recogniser: recogniser, ocr: ocr, time: FakeTimeSource(1000))
-        return Rig(fixture: fixture, recogniser: recogniser, runner: runner, ocr: ocr)
+        let jobs = AnalysisStore(database: fixture.database)
+        let pipeline = AnalysisPipeline(recogniser: recogniser, model: model, time: time)
+        let runner = ImageAnalysisJobRunner(service: service, pipeline: pipeline, pictures: provider, fullPictures: provider, ocr: ocr,
+                                            jobs: jobs, settings: settings, time: time)
+        return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, jobs: jobs, settings: settings)
     }
 
-    private func job(_ rig: Rig, kind: String = "analyse", imageID: String? = nil) -> AnalysisJobRecord {
-        AnalysisJobRecord(kind: kind, imageId: imageID ?? rig.fixture.imageID, createdAt: Date())
+    private func job(_ rig: Rig, kind: String = "analyse", imageID: String? = nil, nilImage: Bool = false) throws -> AnalysisJobRecord {
+        let job = AnalysisJobRecord(kind: kind, imageId: nilImage ? nil : (imageID ?? rig.fixture.imageID), createdAt: Date())
+        try rig.jobs.enqueue(job)
+        return job
     }
+
+    private func runs(_ rig: Rig) throws -> [ModelRunRecord] {
+        try rig.fixture.database.pool.read { try ModelRunRecord.fetchAll($0, sql: "SELECT * FROM model_runs ORDER BY started_at, attempt") }
+    }
+
+    // MARK: Read
 
     @Test func anAnalyseJobReadsTheFullResolutionCopyAndStoresItsLines() async throws {
         let rig = try makeRig(); defer { rig.fixture.cleanUp() }
-        let outcome = await rig.runner.run(job(rig), attempt: 1)
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
         #expect(outcome == .success)
         #expect(rig.recogniser.imageSizes.map { [$0.0, $0.1] } == [[1200, 600]])
         #expect(try rig.ocr.lines(imageID: rig.fixture.imageID) == sampleLines())
@@ -39,24 +62,24 @@ import Testing
 
     @Test func aSecondRunDoesNotReadAgain() async throws {
         let rig = try makeRig(); defer { rig.fixture.cleanUp() }
-        _ = await rig.runner.run(job(rig), attempt: 1)
-        let outcome = await rig.runner.run(job(rig), attempt: 1)
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
         #expect(outcome == .success)
         #expect(rig.recogniser.callCount == 1)
     }
 
-    @Test func aForcedRunReadsAgainAndReplacesTheLines() async throws {
+    @Test func aForcedRunReadsAndAsksAgain() async throws {
         let rig = try makeRig(); defer { rig.fixture.cleanUp() }
-        _ = await rig.runner.run(job(rig), attempt: 1)
-        let outcome = await rig.runner.run(job(rig, kind: "analyse-force"), attempt: 1)
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let outcome = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
         #expect(outcome == .success)
-        #expect(rig.recogniser.callCount == 2)
+        #expect(rig.recogniser.callCount == 2 && rig.model.callCount == 2)
         #expect(try rig.ocr.lines(imageID: rig.fixture.imageID).count == 2)
     }
 
     @Test func aPictureWithNoTextSucceedsWithZeroLines() async throws {
         let rig = try makeRig(lines: []); defer { rig.fixture.cleanUp() }
-        let outcome = await rig.runner.run(job(rig), attempt: 1)
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
         #expect(outcome == .success)
         #expect(try rig.ocr.isRead(imageID: rig.fixture.imageID))
         #expect(try rig.ocr.lines(imageID: rig.fixture.imageID).isEmpty)
@@ -64,20 +87,75 @@ import Testing
 
     @Test func aMissingPictureIsPermanentAndWritesNothing() async throws {
         let rig = try makeRig(); defer { rig.fixture.cleanUp() }
-        let unknown = await rig.runner.run(job(rig, imageID: "unknown"), attempt: 1)
-        let noPicture = await rig.runner.run(AnalysisJobRecord(kind: "analyse", imageId: nil, createdAt: Date()), attempt: 1)
+        let unknown = await rig.runner.run(try job(rig, imageID: "unknown"), attempt: 1)
+        let noPicture = await rig.runner.run(try job(rig, nilImage: true), attempt: 1)
         try rig.fixture.captures.markMissing(imageID: rig.fixture.imageID)
-        let marked = await rig.runner.run(job(rig), attempt: 1)
+        let marked = await rig.runner.run(try job(rig), attempt: 1)
         #expect([unknown, noPicture, marked] == Array(repeating: JobOutcome.permanent("picture no longer stored"), count: 3))
-        #expect(rig.recogniser.callCount == 0)
+        #expect(rig.recogniser.callCount == 0 && rig.model.callCount == 0)
         let reads = try await rig.fixture.database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM ocr_reads") }
         #expect(reads == 0)
     }
 
     @Test func aRecogniserErrorIsTransientAndWritesNothing() async throws {
         let rig = try makeRig(failWith: CocoaError(.fileReadUnknown)); defer { rig.fixture.cleanUp() }
-        let outcome = await rig.runner.run(job(rig), attempt: 1)
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
         #expect(outcome == .transient("text recognition failed"))
         #expect(try rig.ocr.isRead(imageID: rig.fixture.imageID) == false)
+        #expect(rig.model.callCount == 0)
+    }
+
+    // MARK: Classify
+
+    @Test func theClassificationCallIsRecordedWithItsStepAndRawAnswer() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        let queued = try job(rig)
+        let outcome = await rig.runner.run(queued, attempt: 2)
+        #expect(outcome == .success)
+        let recorded = try runs(rig)
+        #expect(recorded.count == 1)
+        let run = try #require(recorded.first)
+        #expect(run.step == "classify" && run.outcome == "success" && run.attempt == 2 && run.jobId == queued.id)
+        #expect(run.imageId == rig.fixture.imageID && run.promptVersion == "classify-v1" && run.temperature == 0)
+        #expect(run.rawAnswer?.contains("calendar_week") == true)
+        #expect(!run.requestJson.contains("base64"))
+        // The stored analysis copy is 600 x 300, smaller than 1024: it is not enlarged.
+        #expect(run.imageLongEdge == 600)
+        #expect(rig.model.requests.count == 1 && rig.model.requests[0].picture != nil)
+    }
+
+    @Test func aFailedCallIsRecordedAsFailedAndMapsToTheOutcome() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        rig.model.answer(whenSchemaHas: "screen_kind", #"{"screen_kind":"spreadsheet"}"#)
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome == .transient("invalid answer"))
+        let run = try #require(try runs(rig).first)
+        #expect(run.outcome == "failed" && run.failureReason == "invalid answer" && run.rawAnswer != nil)
+        // The lines were already kept: the retry does not read again.
+        #expect(try rig.ocr.isRead(imageID: rig.fixture.imageID))
+    }
+
+    @Test func aRetryReusesTheStoredClassification() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome == .success)
+        #expect(rig.model.callCount == 1)
+        #expect(try runs(rig).count == 1)
+    }
+
+    @Test func anUnreachableServerMidCallIsServerUnavailableAndNothingIsRecorded() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        rig.model.failWith(OllamaClientError.unreachable)
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome == .serverUnavailable)
+        #expect(try runs(rig).isEmpty)
+    }
+
+    @Test func noChosenModelIsServerUnavailable() async throws {
+        let rig = try makeRig(model: nil); defer { rig.fixture.cleanUp() }
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome == .serverUnavailable)
+        #expect(rig.recogniser.callCount == 0 && rig.model.callCount == 0)
     }
 }

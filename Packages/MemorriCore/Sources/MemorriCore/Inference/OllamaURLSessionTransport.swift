@@ -74,11 +74,3 @@ extension OllamaService {
         OllamaService(settings: settings, makeTransport: { address in OllamaURLSessionTransport(address: address) })
     }
 }
-
-extension OllamaService {
-    /// A service that talks to the address in `settings` over the loopback-only transport. Tools outside the app
-    /// use this, so the one file allowed to use `URLSession` stays the only one that names it.
-    public static func loopback(settings: OllamaSettings) -> OllamaService {
-        OllamaService(settings: settings, makeTransport: { OllamaURLSessionTransport(address: $0) })
-    }
-}

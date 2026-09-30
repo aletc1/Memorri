@@ -31,7 +31,7 @@ func run(_ options: RunOptions) async -> Int32 {
     _ = settings.setAddress(options.address)
     settings.setModel(options.model ?? OllamaSettings.recommendedModel)
     settings.setThink(options.think)
-    let service = OllamaService.loopback(settings: settings)
+    let service = OllamaService.live(settings: settings)
     let evalSettings = EvalSettings(model: settings.model ?? OllamaSettings.recommendedModel, size: options.size, think: options.think.rawValue,
                                     promptVersions: [:], thresholds: .standard)
     let runner = EvalRunner(analyser: UnwiredAnalyser(), settings: evalSettings,

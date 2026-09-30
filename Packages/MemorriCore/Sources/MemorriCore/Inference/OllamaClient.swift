@@ -148,8 +148,10 @@ public struct OllamaClient: Sendable {
     }
 
     /// The request exactly as sent, with the picture replaced by its placeholder (run record).
-    public func requestJSON(for request: ChatRequest) -> String {
-        let data = (try? Self.encode(Self.body(for: request, picture: .string(request.picturePlaceholder)))) ?? Data()
+    public func requestJSON(for request: ChatRequest) -> String { Self.requestJSON(for: request) }
+
+    public static func requestJSON(for request: ChatRequest) -> String {
+        let data = (try? encode(body(for: request, picture: .string(request.picturePlaceholder)))) ?? Data()
         return String(decoding: data, as: UTF8.self)
     }
 
