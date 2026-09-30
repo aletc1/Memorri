@@ -15,7 +15,7 @@ One capture request that reached the capturing step.
 | `trigger` | TEXT, not null | `menu` or `shortcut` (CHECK constraint). |
 | `status` | TEXT, not null | `complete`, `partial` or `failed` (CHECK constraint). |
 | `failure_reason` | TEXT, nullable | Short reason when `status` is not `complete`, for example `Not enough free disk space`, `permission denied`, `1 of 3 displays could not be captured`. |
-| `display_count` | INTEGER, not null | Displays the capture attempted (distinct displays, mirror sets counted once). |
+| `display_count` | INTEGER, not null | Displays the capture attempted (distinct displays, mirror sets counted once). 0 when the attempt failed before any display was known (disk refusal, permission refusal, no display). |
 
 Rules:
 - A failed capture (for example permission refused, no disk space) is recorded as an event with no images (FR-003, FR-007).

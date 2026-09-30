@@ -69,7 +69,7 @@ specs/002-capture-and-storage/
 ### Source Code (repository root)
 
 ```text
-project.yml                          # adds GRDB 7.11.1 (exact) and ScreenCaptureKit usage
+project.yml                          # unchanged (GRDB 7.11.1 exact is added to the MemorriCore package only)
 App/
 ├── AppEnvironment.swift             # wires the pipeline, store, retention and settings (edit)
 ├── AppState.swift                   # adds the last capture result and a clock tick (edit)

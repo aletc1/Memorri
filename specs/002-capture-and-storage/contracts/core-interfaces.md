@@ -67,7 +67,7 @@ public enum LastCaptureResult: Sendable, Equatable {
 public actor CapturePipeline {
     public static let minimumFreeBytes: Int64 = 1_073_741_824          // FR-022
     public init(capturer: any DisplayCapturing, encoder: any ImageEncoding,
-                disk: any DiskSpaceChecking, files: CaptureFileStore, store: CaptureStore,
+                disk: any DiskSpaceChecking, files: CaptureFileStore, store: any CaptureStoring,
                 settings: StorageSettings, time: any TimeSource)
     /// nil when another capture is already running (FR-011).
     public func run(trigger: CaptureTrigger) async -> CaptureOutcome?
@@ -96,7 +96,11 @@ public final class StorageDatabase: Sendable {
 public struct CaptureEventRecord: Sendable, Equatable { /* columns of capture_events */ }
 public struct CaptureImageRecord: Sendable, Equatable { /* columns of capture_images */ }
 
-public struct CaptureStore: Sendable {
+public protocol CaptureStoring: Sendable {      // lets tests fake a failing store
+    func insert(event: CaptureEventRecord, images: [CaptureImageRecord]) throws
+}
+
+public struct CaptureStore: CaptureStoring {
     public init(database: StorageDatabase)
     public func insert(event: CaptureEventRecord, images: [CaptureImageRecord]) throws
     public func events(olderThan cutoff: Date?) throws -> [CaptureEventRecord]   // nil = all
@@ -146,7 +150,22 @@ public struct StorageSettings: Sendable {
 }
 
 public struct RetentionService: Sendable {
-    public func runIfDue(now: Date) throws -> Int          // at start and about daily; returns captures removed
+    public func apply(now: Date) throws -> Int             // remove captures older than the policy; returns count
+    public func runIfDue(now: Date) throws -> Int          // at start and about daily (24 h since lastRun); returns count
+    public func removalPreview(for policy: RetentionPolicy, now: Date) throws -> CleanupService.Preview   // FR-018
+}
+
+// MARK: Start-up
+
+public struct StorageContext: Sendable {
+    public let store: CaptureStore, files: CaptureFileStore, cleanup: CleanupService
+    public let notice: StartupNotice?                      // damaged file set aside (FR-019)
+    public let capturingDisabledReason: String?            // database from a newer version (FR-013)
+}
+public enum StartupNotice: Sendable, Equatable { case damagedDatabaseSetAside(fileName: String) }
+public enum StorageBootstrap {
+    /// Prepare paths, open the database, reconcile leftovers (FR-014).
+    public static func start(paths: AppPaths) throws -> StorageContext
 }
 
 // MARK: Extensions to spec 001
@@ -173,7 +192,9 @@ extension CaptureRequestService {
 - `run` returns `nil` and does nothing when another run is in progress.
 - With less than 1 GiB free, `run` takes no pictures and returns `.failed("Not enough free disk space")`; the event is recorded as failed.
 - Each distinct display gives exactly one full and one analysis picture; the analysis copy's longer side equals `min(longEdge, original)`, aspect ratio kept, never enlarged.
-- A `permissionDenied` failure stores no pictures, records a failed event, calls `captureDeniedByPermission()` and returns `.permissionDenied`.
+- A `permissionDenied` failure stores no pictures, records a failed event and returns `.permissionDenied`; `CaptureRequestService` then calls `captureDeniedByPermission()` (the pipeline has no `PermissionMonitor`) and opens onboarding. `complete` and `partial` outcomes make the service call `captureSucceeded()`.
+- `run` re-creates the data folders at its start, so a deleted folder does not break the next capture.
+- A failing encoder records a `failed` event (reason `could not save the pictures`); a failing store records nothing.
 - Some displays failing gives `.partial(captured:of:)`; the working displays' pictures are kept.
 - A failure while writing or while inserting leaves no directory in `staging/` or `captures/` and no record.
 - `reconcile` empties `staging/`, removes directories without a record, and marks records whose file is missing.
