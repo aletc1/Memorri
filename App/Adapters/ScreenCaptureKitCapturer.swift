@@ -29,7 +29,8 @@ struct ScreenCaptureKitCapturer: DisplayCapturing {
             for display in displays {
                 let name = names[display.displayID]
                 let box = DisplayBox(display: display)
-                group.addTask { await Self.capture(box.display, name: name) }
+                let windows = Self.windows(on: display, in: content)
+                group.addTask { await Self.capture(box.display, name: name, windows: windows) }
             }
             for await result in group {
                 switch result {
@@ -50,7 +51,7 @@ struct ScreenCaptureKitCapturer: DisplayCapturing {
     /// `SCDisplay` is a read-only description of a display; ScreenCaptureKit uses it from any thread.
     private struct DisplayBox: @unchecked Sendable { let display: SCDisplay }
 
-    private static func capture(_ display: SCDisplay, name: String?) async -> Result<CapturedDisplay, Error> {
+    private static func capture(_ display: SCDisplay, name: String?, windows: [WindowInfo]) async -> Result<CapturedDisplay, Error> {
         do {
             let filter = SCContentFilter(display: display, excludingWindows: [])
             let scale = Double(filter.pointPixelScale)
@@ -59,9 +60,28 @@ struct ScreenCaptureKitCapturer: DisplayCapturing {
             configuration.height = Int((Double(filter.contentRect.height) * scale).rounded())
             configuration.showsCursor = false
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
-            return .success(CapturedDisplay(displayID: display.displayID, name: name, image: image, scale: scale))
+            return .success(CapturedDisplay(displayID: display.displayID, name: name, image: image, scale: scale, windows: windows))
         } catch {
             return .failure(error)
+        }
+    }
+
+    /// Ordinary on-screen windows (layer 0) that overlap the display, frames converted from points on the desktop to pixels of
+    /// the display's picture. Memorri's own windows are left out. Selection and clipping happen when the capture is stored.
+    private static func windows(on display: SCDisplay, in content: SCShareableContent) -> [WindowInfo] {
+        let scale = Double(SCContentFilter(display: display, excludingWindows: []).pointPixelScale)
+        let origin = display.frame.origin
+        let ownBundle = Bundle.main.bundleIdentifier
+        return content.windows.compactMap { window in
+            guard window.isOnScreen, window.windowLayer == 0, window.frame.intersects(display.frame),
+                  window.owningApplication?.bundleIdentifier != ownBundle else { return nil }
+            let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let frame = PixelBox(x: Int(((window.frame.minX - origin.x) * scale).rounded()),
+                                 y: Int(((window.frame.minY - origin.y) * scale).rounded()),
+                                 width: Int((window.frame.width * scale).rounded()),
+                                 height: Int((window.frame.height * scale).rounded()))
+            return WindowInfo(appName: window.owningApplication?.applicationName, bundleID: window.owningApplication?.bundleIdentifier,
+                              title: (title?.isEmpty ?? true) ? nil : title, frame: frame)
         }
     }
 

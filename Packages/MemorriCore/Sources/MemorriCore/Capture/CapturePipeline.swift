@@ -102,6 +102,7 @@ public actor CapturePipeline {
 
         do {
             var images: [CaptureImageRecord] = []
+            var windows: [String: [WindowInfo]] = [:]
             let folder = CaptureFileStore.monthFolder(for: capturedAt)
             for item in encoded {
                 let imageID = UUID().uuidString
@@ -115,6 +116,7 @@ public actor CapturePipeline {
                     scale: item.display.scale, fullPath: "\(base)/\(fullName)", modelPath: "\(base)/\(modelName)",
                     modelWidth: item.model.width, modelHeight: item.model.height,
                     fullBytes: item.full.data.count, modelBytes: item.model.data.count, missing: false))
+                windows[imageID] = WindowSelection.select(item.display.windows, pictureWidth: item.full.width, pictureHeight: item.full.height)
             }
             committed = try files.commit(staging: staging, eventID: eventID, capturedAt: capturedAt)
 
@@ -124,7 +126,7 @@ public actor CapturePipeline {
                 status: partial ? "partial" : "complete",
                 failureReason: partial ? "\(result.failedDisplayCount) of \(attempted) displays could not be captured" : nil,
                 displayCount: attempted)
-            try store.insert(event: event, images: images)
+            try store.insert(event: event, images: images, windows: windows)
 
             let status = partial ? "partial" : "complete"
             Self.logger.notice("capture finished status=\(status, privacy: .public) displays=\(attempted) images=\(images.count) ms=\(Self.milliseconds(since: started))")

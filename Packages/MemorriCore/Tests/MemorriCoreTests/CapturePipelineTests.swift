@@ -226,4 +226,34 @@ import Testing
         _ = await broken.pipeline.run(trigger: .shortcut)
         #expect(enqueuer.calls.isEmpty)
     }
+
+    // MARK: Windows
+
+    @Test func eachDisplaysWindowsAreStoredWithItsPictureClippedAndLargestFirst() async throws {
+        func windows(_ tag: String) -> [WindowInfo] {
+            [WindowInfo(appName: tag, bundleID: nil, title: "small \(tag)", frame: PixelBox(x: 0, y: 0, width: 100, height: 100)),
+             WindowInfo(appName: tag, bundleID: nil, title: "wide \(tag)", frame: PixelBox(x: 0, y: 0, width: 9000, height: 500))]
+        }
+        let first = CapturedDisplay(displayID: 1, name: nil, image: makeTestImage(width: 3440, height: 1440), scale: 1, windows: windows("one"))
+        let second = CapturedDisplay(displayID: 2, name: nil, image: makeTestImage(width: 1000, height: 600), scale: 1, windows: windows("two"))
+        let rig = try Rig(capturer: FakeDisplayCapturer(displays: [first, second]))
+        defer { rig.temp.cleanUp() }
+        _ = await rig.pipeline.run(trigger: .shortcut)
+        let images = try rig.store.allImages()
+        let forFirst = try rig.store.windows(imageID: images.first { $0.displayId == 1 }!.id)
+        let forSecond = try rig.store.windows(imageID: images.first { $0.displayId == 2 }!.id)
+        #expect(forFirst.compactMap(\.title) == ["wide one", "small one"])
+        #expect(forFirst.first?.frame == PixelBox(x: 0, y: 0, width: 3440, height: 500))
+        #expect(forSecond.compactMap(\.title) == ["wide two", "small two"])
+        #expect(forSecond.first?.frame == PixelBox(x: 0, y: 0, width: 1000, height: 500))
+    }
+
+    @Test func atMostTwentyWindowsAreStoredPerDisplay() async throws {
+        let many = (1...30).map { WindowInfo(appName: "A", bundleID: nil, title: "w\($0)", frame: PixelBox(x: 0, y: 0, width: $0 * 20, height: 100)) }
+        let display = CapturedDisplay(displayID: 1, name: nil, image: makeTestImage(width: 3440, height: 1440), scale: 1, windows: many)
+        let rig = try Rig(capturer: FakeDisplayCapturer(displays: [display]))
+        defer { rig.temp.cleanUp() }
+        _ = await rig.pipeline.run(trigger: .shortcut)
+        #expect(try rig.store.windows(imageID: rig.store.allImages()[0].id).count == 20)
+    }
 }
