@@ -83,6 +83,31 @@ func run(_ options: RunOptions) async -> Int32 {
     }
 }
 
+func sweep(cases path: String, sizes: [Int]) async -> Int32 {
+    let settings = OllamaSettings(store: MemorySettingsStore())
+    settings.setModel(OllamaSettings.recommendedModel)
+    let service = OllamaService.live(settings: settings)
+    do {
+        let (cases, warnings) = try GoldenCase.loadAll(in: URL(fileURLWithPath: path))
+        for warning in warnings { FileHandle.standardError.write(Data((warning + "\n").utf8)) }
+        let contexts = PipelineCaseAnalyser.contexts(in: cases)
+        let sweep = SizeSweep(runner: { size in
+            let evalSettings = EvalSettings(model: settings.model ?? OllamaSettings.recommendedModel, size: size, think: settings.think.rawValue,
+                                            promptVersions: promptVersions(), thresholds: .standard)
+            return EvalRunner(analyser: CLIAnalyser(service: service, settings: settings, size: size, contexts: contexts), settings: evalSettings,
+                              isAppBusy: { (try? AppPaths.standard()).map(BusyCheck.isBusy(paths:)) ?? false },
+                              serverStatus: { await service.check() })
+        })
+        let result = try await sweep.run(cases: cases, sizes: sizes, progress: { print($0) })
+        print(result.text)
+        return EvalExit.finished
+    } catch let refusal as EvalRefusal {
+        fail(refusal.description, code: EvalExit.refusal)
+    } catch {
+        fail("\(error)", code: EvalExit.error)
+    }
+}
+
 do {
     switch try EvalCommand.parse(Array(CommandLine.arguments.dropFirst())) {
     case .help:
@@ -94,8 +119,8 @@ do {
         print(EvalReport.compare(try readReport(a), try readReport(b)).text)
     case .run(let options):
         exit(await run(options))
-    case .sweepSize:
-        fail("sweep-size is not implemented yet.", code: EvalExit.error)
+    case .sweepSize(let cases, let sizes):
+        exit(await sweep(cases: cases, sizes: sizes))
     }
 } catch let error as EvalUsageError {
     fail("\(error.description)\n\n\(EvalCommand.usage)", code: error.exitCode)
