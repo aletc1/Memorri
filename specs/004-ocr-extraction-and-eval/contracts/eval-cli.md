@@ -11,7 +11,7 @@ swift run --package-path Packages/MemorriCore memorri-eval <command> [options]
 | Command | What it does |
 |---|---|
 | `generate-synthetic [--out eval/golden/synthetic]` | Draws the synthetic cases (same files every time). |
-| `run [--cases eval/golden] [--out eval/out/<name>.json] [--size 2048] [--model <name>] [--think off\|low\|medium\|high] [--address http://localhost:11434] [--only <case>] [--replay <report.json>] [--allow-busy]` | Runs every case (or one), prints the report, saves the JSON. `--replay` re-scores the stored model answers without calling the model. |
+| `run [--cases eval/golden] [--out eval/out/<name>.json] [--size 2048] [--model <name>] [--think off\|low\|medium\|high] [--prompt-set v1] [--address http://localhost:11434] [--only <case>] [--replay <report.json>] [--allow-busy]` | Runs every case (or one), prints the report, saves the JSON. `--replay` re-scores the stored model answers without calling the model. |
 | `compare <a.json> <b.json>` | Prints the difference in every measure and the cases that changed. |
 | `sweep-size [--cases …] [--sizes 1024,1536,2048,3072]` | Runs the set at each size and prints measures and mean seconds per picture; recommends a default (research R18). |
 
@@ -51,7 +51,7 @@ eval/golden/<set>/<case>/
       "allDay": false, "people": [], "place": null,
       "inferred": ["end"] } ] }
 ```
-`tags` and `context` are optional. `inferred` lists the fields that the pipeline should flag as inferred. Times carry their offset.
+`tags`, `context` and `lines` are optional; `lines` is a list of `{ "text": "Team sync", "box": [x, y, w, h] }` for the text drawn (synthetic cases only) used to score reading. `inferred` lists the fields that the pipeline should flag as inferred. Times carry their offset.
 
 Only `synthetic/` cases are tracked; everything else under `eval/golden/` and everything under `eval/out/` is git-ignored (already so since spec 001).
 
@@ -60,6 +60,7 @@ Only `synthetic/` cases are tracked; everything else under `eval/golden/` and ev
 - One-to-one matching by best score. A found finding matches an expected one when: same kind; titles at least 80% similar after lowercasing and removing spaces and punctuation (normalised edit distance), or one contains the other; start (or due, for tasks and deadlines) within 5 minutes. Thresholds are printed and saved in every report.
 - Precision = matched / found. Recall = matched / expected. Field accuracy = equal fields / compared fields over matched findings: `start`, `end`, `allDay`, `due`, `remind`, `people` (as a set), `place` (normalised), and `inferred` flags (a field flagged when expected, not flagged when not).
 - Classification accuracy = cases whose kind equals `screenKind`. Tag accuracy per key = cases with that expected tag where the stored tag has the same value (case-insensitive), plus the count of wrong and missing tags. Context accuracy when `context` is expected.
+- OCR: exact-text rate of expected `lines`, and box-overlap rate (a stored line's box overlaps the drawn box by at least 50% of the smaller box).
 - Also printed: results by screen kind, by `origin`, and by confidence band (below 0.6, 0.6 to 0.85, above), the mean seconds per case, and for every case the list of missed findings, unexpected findings (with the closest expected one) and disagreements between the model's title and its cited lines' text.
 
 ## Report (JSON)

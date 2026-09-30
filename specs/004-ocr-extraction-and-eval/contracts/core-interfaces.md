@@ -78,6 +78,7 @@ public struct Finding: Sendable, Equatable {            // checked and resolved
     public let people: [String]; public let place, notes: String?
     public let citedLines: [Int]; public let confidence: Double
     public let provenance: [String: FieldProvenance]; public let unresolved: [String: String]
+    public let tags: [CaptureTag]          // copy of the picture's tags at this run
 }
 public enum CitationCheck {
     public struct Discard: Sendable, Equatable, Codable { public let title: String; public let reason: String; public let citedLines: [Int] }
@@ -99,7 +100,7 @@ public struct ResolutionContext: Sendable {
 }
 public struct ResolvedValue: Sendable, Equatable { public let date: Date?; public let allDay: Bool; public let provenance: FieldProvenance; public let unresolvedText: String? }
 public enum DateResolver {
-    /// Rules in order: explicit-date, header-column, relative-day, end-of-week, weekday-only, time-only, unresolved.
+    /// Rules in order: explicit-date, header-column, relative-day, end-of-week, weekday-only, time-only, deadline-reminder (remind only), unresolved.
     public static func resolve(text: String, field: String, draft: FindingDraft, in context: ResolutionContext) -> ResolvedValue
     public static func headers(in lines: [RecognisedLine], locales: [Locale], referenceYear: Int) -> [DateHeader]
 }
