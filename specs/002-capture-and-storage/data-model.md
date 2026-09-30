@@ -76,7 +76,7 @@ The event row is written only at step 6 (and for failures, in a transaction of i
 | Key | Type | Rules |
 |---|---|---|
 | `memorri.storage.modelLongEdge` | Int | 512 to 4096, default 2048. Out of range is rejected and the previous value kept. Applies to later captures only. |
-| `memorri.storage.retention` | String | `forever` or the number of days as text (1 to 3650). Default `30`. |
+| `memorri.storage.retention` | String | `forever` or the number of days as text (1 to 3650). Default `7`. |
 | `memorri.retention.lastRun` | Date | Last automatic retention run, used to run it about once a day. |
 
 ## In-memory types

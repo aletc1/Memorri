@@ -77,7 +77,7 @@ Open a second terminal: `/usr/bin/log stream --predicate 'subsystem == "com.alet
 
 ## Scenario 6: retention policy (User Story 5)
 
-1. Storage shows `For 30 days` by default.
+1. Storage shows `For 7 days` by default.
 2. Backdate 2 captures by 40 days as above, relaunch. They are gone at start; newer ones stay. Log: `retention removed=2`.
 3. Choose `Forever`, backdate again, relaunch: nothing removed.
 4. Choose `For 1 days` with older captures present: the dialog says how many will be removed now; confirming removes them at once.

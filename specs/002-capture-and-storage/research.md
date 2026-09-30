@@ -73,7 +73,7 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Spike** 
 
 ## R11. Settings rules
 
-- **Decision**: `StorageSettings` holds the analysis copy size (512 to 4096, default 2048, out-of-range input is rejected and the previous value kept, FR-005) and the retention policy (`forever` or `days(n)`, n from 1 to 3650, default `days(30)`). Shortening the policy reports how many captures it would remove before applying (FR-018). Stored in `UserDefaults` through the existing `SettingsStore`.
+- **Decision**: `StorageSettings` holds the analysis copy size (512 to 4096, default 2048, out-of-range input is rejected and the previous value kept, FR-005) and the retention policy (`forever` or `days(n)`, n from 1 to 3650, default `days(7)`). Shortening the policy reports how many captures it would remove before applying (FR-018). Stored in `UserDefaults` through the existing `SettingsStore`.
 
 ## R12. One capture at a time and how it connects to spec 001
 

@@ -30,7 +30,7 @@ Both follow the two existing switches in Settings → General.
 Top to bottom:
 
 1. **Summary**: `<N> captures`, `Pictures: <size>`, `Database: <size>`. Refreshed every time the section is opened.
-2. **Retention**: a picker `Keep captures`: `Forever` or `For <n> days` (default 30). Text below: "Captures are the raw screenshots. Appointments, tasks and reminders found in them are always kept."
+2. **Retention**: a picker `Keep captures`: `Forever` or `For <n> days` (default 7). Text below: "Captures are the raw screenshots. Appointments, tasks and reminders found in them are always kept."
 3. **Analysis copy size**: a number field `Longer side of the analysis copy (pixels)`, range 512 to 4096, default 2048, with the note "Applies to new captures." Out of range shows `Enter a value between 512 and 4096.` and keeps the previous value.
 4. **Clean up**: a field `Delete captures older than <n> days` with a button **Delete…**, and a button **Delete all captures…**.
 

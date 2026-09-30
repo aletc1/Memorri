@@ -137,7 +137,7 @@ public enum RetentionPolicy: Sendable, Equatable { case forever, days(Int) }
 public struct StorageSettings: Sendable {
     public static let modelLongEdgeRange = 512...4096
     public static let defaultModelLongEdge = 2048
-    public static let defaultRetention: RetentionPolicy = .days(30)
+    public static let defaultRetention: RetentionPolicy = .days(7)
     public init(store: any SettingsStore)
     public var modelLongEdge: Int { get }
     public func setModelLongEdge(_ value: Int) -> Bool     // false and unchanged when out of range (FR-005)

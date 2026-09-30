@@ -30,7 +30,7 @@ All logic (pipeline, encoding, storage, retention, settings rules) lives in `Mem
 
 **Constraints**: no network (FR-020); unsandboxed; data folder mode 0700 and excluded from backups; free-space floor 1 GB; one capture at a time; nothing half-written survives a crash or a failure.
 
-**Scale/Scope**: a few hundred captures a day at most; up to three displays per capture; retention default 30 days. Rough size to validate in spike S3: about 2 MB per display per capture, so a heavy day is well under 1 GB and 30 days is bounded by the retention policy.
+**Scale/Scope**: a few hundred captures a day at most; up to three displays per capture; retention default 7 days. Rough size to validate in spike S3: about 2 MB per display per capture, so a heavy day is well under 1 GB and the 7-day default bounds it further.
 
 ## Constitution Check
 

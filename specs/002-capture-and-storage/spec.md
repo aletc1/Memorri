@@ -17,6 +17,7 @@
 - Q: How much free disk space must Memorri leave, and should it refuse to capture when less is available? → A: It refuses to capture when less than 1 GB is free, and the menu line says "Not enough free disk space".
 - Q: Should the full-resolution picture be stored with a little quality loss or without any loss? → A: High quality with a small loss, for compact files. The quality level is one named value, so it can be raised later without changing how captures are stored.
 - Q: Should the mouse pointer appear in the captured pictures? → A: No. The pointer is never included in captured pictures.
+- Decision from the user (2026-09-30): the default retention is 7 days, to save disk space. It applies to the raw captures only.
 - Additional clarification from the user: automatic cleanup and every manual cleanup apply only to the raw captures (the raw ingestion). The appointments, tasks and reminders that Memorri later finds are kept, each with its cropped piece of the screenshot as evidence; cleaning up captures never removes them.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -106,7 +107,7 @@ The user sets a retention policy in Settings: keep captures forever, or delete t
 
 **Acceptance Scenarios**:
 
-1. **Given** the default settings, **When** the user opens Storage, **Then** the retention policy shows 30 days.
+1. **Given** the default settings, **When** the user opens Storage, **Then** the retention policy shows 7 days.
 2. **Given** a policy of N days, **When** the app starts, **Then** captures older than N days are removed.
 3. **Given** a policy of N days and the app running for days, **When** a day passes, **Then** expired captures are removed without any action.
 4. **Given** the policy is "keep forever", **When** the app starts, **Then** nothing is removed automatically.
@@ -164,7 +165,7 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 - **FR-014**: At start the app MUST reconcile records and files: a record whose picture file is missing is marked as such, and a picture file without a record is removed.
 - **FR-015**: Settings MUST have a Storage section (replacing the placeholder from spec 001) showing the number of captures and the space used by pictures and by records, refreshed whenever it is opened.
 - **FR-016**: Settings MUST offer "delete older than N days" and "delete all captures", each after a confirmation that states how many captures and how much space are affected, and each removing each affected capture's record and pictures together (no record is kept without its pictures); a capture in progress MUST NOT be removed.
-- **FR-017**: Settings MUST offer a retention policy, either "keep forever" or "delete older than N days", default 30 days, applied at start and once a day while the app runs. An expired capture is deleted completely, record and pictures together, like in every other cleanup.
+- **FR-017**: Settings MUST offer a retention policy, either "keep forever" or "delete older than N days", default 7 days, applied at start and once a day while the app runs. An expired capture is deleted completely, record and pictures together, like in every other cleanup.
 - **FR-018**: Shortening the retention policy MUST state how many captures it will remove before applying.
 - **FR-019**: A damaged database MUST NOT be deleted; it is set aside, the user is told, and capturing continues with a new one.
 - **FR-020**: The app MUST NOT send any data over the network.
@@ -176,7 +177,7 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 
 - **Capture event**: One capture request that reached the capturing step. Has a time, a trigger (menu or shortcut), a result (complete, partial or failed), a short failure reason when it did not fully succeed, and the pictures it produced. Later specs attach analysis to it.
 - **Capture image**: The pictures of one display within one capture event: which display it was, its size in pixels and scale, a full-resolution picture and an analysis copy, and their sizes on disk. A missing-file marker when a file has been lost.
-- **Storage settings**: The analysis copy size (512 to 4096, default 2048) and the retention policy (keep forever, or N days, default 30).
+- **Storage settings**: The analysis copy size (512 to 4096, default 2048) and the retention policy (keep forever, or N days, default 7).
 - **Last capture result**: What the top of the menu shows: complete, partial (how many displays out of how many) or failed (a short reason), and how long ago.
 - **Storage summary**: What Settings shows: number of captures, space used by pictures, space used by records.
 
@@ -201,7 +202,7 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 
 - Builds on spec 001: the capture request path, the feedback settings, the permission status tracking and the onboarding window already exist. "Capture" now does real work.
 - Analysis of the pictures (reading text, finding appointments) is out of scope here and arrives in specs 003 and 004. This spec only captures and keeps.
-- The default retention is 30 days. Screenshots of work sessions are sensitive, so automatic expiry is the safer default. The user can change it or keep everything.
+- The default retention is 7 days, chosen by the user to save disk space. Screenshots of work sessions are also sensitive, so short automatic expiry is the safer default. The user can lengthen it or keep everything. It applies only to raw captures.
 - The analysis copy size is a setting because the best value is settled later by measurement (spec 004).
 - Cleanup applies to raw captures only. A deleted capture leaves no trace, not even its record, but the appointments, tasks and reminders found in it are kept, each with its cropped piece of the screenshot as evidence. Later specs must therefore store each item's evidence crop, and the time it was seen, on the item itself and never depend on the capture still existing.
 - Protected content that the system shows as black is captured as shown; bypassing protection is not attempted.
