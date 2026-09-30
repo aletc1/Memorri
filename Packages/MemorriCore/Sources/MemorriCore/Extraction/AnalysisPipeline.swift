@@ -187,6 +187,34 @@ public struct AnalysisPipeline: Sendable {
                               pictureLongEdge: max(input.analysisSize.width, input.analysisSize.height), steps: steps)
     }
 
+    /// True when the end text is written in a cited line that is not just a clock label of the hour scale at the side.
+    static func endIsShown(_ text: String?, in cited: [Int], lines: [RecognisedLine]) -> Bool {
+        guard let wanted = text?.filter({ !$0.isWhitespace }).lowercased(), !wanted.isEmpty else { return false }
+        return cited.compactMap { n in lines.first { $0.n == n } }.contains { line in
+            guard !DateResolver.isClockLabel(line.text) else { return false }
+            return line.text.filter { !$0.isWhitespace }.lowercased().contains(wanted)
+        }
+    }
+
+    /// The cited line that is the block's own first line: not a clock label of the scale, not a date header (models often cite the
+    /// header too), and preferably the one that shows the start time, else the one with the title.
+    static func blockTitleLine(_ draft: FindingDraft, lines: [RecognisedLine], headers: [DateHeader]) -> RecognisedLine? {
+        let skipped = Set(headers.map(\.line))
+        let candidates = draft.citedLines.compactMap { n in lines.first { $0.n == n } }
+            .filter { !DateResolver.isClockLabel($0.text) && !skipped.contains($0.n) }
+        func compact(_ text: String?) -> String { (text ?? "").filter { !$0.isWhitespace }.lowercased() }
+        if let start = draft.startText.map(compact), !start.isEmpty, let line = candidates.first(where: { compact($0.text).contains(start) }) { return line }
+        let title = compact(draft.title)
+        if !title.isEmpty, let line = candidates.first(where: { compact($0.text).contains(title) }) { return line }
+        return candidates.min { $0.box.y < $1.box.y }
+    }
+
+    /// True when the end is missing, unresolved, or not after the start.
+    static func isNotAfter(_ end: ResolvedValue, _ start: ResolvedValue?) -> Bool {
+        guard let date = end.date, let begins = start?.date else { return false }
+        return date <= begins
+    }
+
     /// The languages dates are read in, with the one the picture is written in first (`language` tag), when it is among them.
     static func locales(_ locales: [Locale], preferring language: String?) -> [Locale] {
         guard let language, let index = locales.firstIndex(where: { $0.language.languageCode?.identifier == language }), index > 0 else { return locales }
@@ -226,10 +254,19 @@ public struct AnalysisPipeline: Sendable {
             return DateResolver.resolve(text: text, field: field, draft: draft, in: context)
         }
         var results: [String: ResolvedValue] = [:]
+        var endDropped = false
         switch draft.kind {
         case .appointment:
             results["start"] = resolve("start", draft.startText, draft.dateText)
-            results["end"] = resolve("end", draft.endText)
+            // An end is "read" only when the block's own text shows it (not the hour scale at the side) and it is after the start;
+            // otherwise it is dropped and the end is worked out below, flagged inferred.
+            let end = resolve("end", draft.endText)
+            if draft.endText != nil, !Self.endIsShown(draft.endText, in: draft.citedLines, lines: lines) || Self.isNotAfter(end, results["start"]) {
+                endDropped = true
+                results["end"] = DateResolver.resolve(text: "", field: "end", draft: draft, in: context)
+            } else {
+                results["end"] = end
+            }
             if draft.dueText != nil { results["due"] = resolve("due", draft.dueText) }
             results["remind"] = resolve("remind", draft.remindText)
         case .task, .deadline:
@@ -240,9 +277,9 @@ public struct AnalysisPipeline: Sendable {
             if draft.dueText != nil { results["due"] = resolve("due", draft.dueText) }
         }
         // An appointment with a start and no end gets one: from its block's height, else one hour, never past midnight.
-        if draft.kind == .appointment, draft.endText == nil, let start = results["start"], let begins = start.date, !start.allDay, draft.allDay != true {
+        if draft.kind == .appointment, draft.endText == nil || endDropped, let start = results["start"], let begins = start.date, !start.allDay, draft.allDay != true {
             var minutes = 60, reason = "default-60"
-            if let geometry, let title = draft.citedLines.compactMap({ n in lines.first { $0.n == n } }).min(by: { $0.box.y < $1.box.y }),
+            if let geometry, let title = Self.blockTitleLine(draft, lines: lines, headers: base.headers),
                let measured = BlockGeometry.duration(titleBox: title.box, lines: lines, image: geometry.image, columnWidth: geometry.columnWidth) {
                 minutes = measured; reason = "block-height"
             }

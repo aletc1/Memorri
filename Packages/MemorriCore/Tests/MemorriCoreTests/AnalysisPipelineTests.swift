@@ -187,7 +187,7 @@ import Testing
         }
         return [l(1, "October 12 – 16, 2026", x: 20, y: 20, w: 300), l(2, "Mon 12", x: 100, y: 100), l(3, "Tue 13", x: 400, y: 100), l(4, "Wed 14", x: 700, y: 100),
                 l(5, "Thu 15", x: 1000, y: 100), l(6, "Fri 16", x: 1300, y: 100),
-                l(7, "13:00 Design review", x: 690, y: 400, w: 200), l(8, "Board room", x: 690, y: 425, w: 100)]
+                l(7, "13:00 - 14:30 Design review", x: 690, y: 400, w: 260), l(8, "Board room", x: 690, y: 425, w: 100)]
     }
 
     @Test func weekViewHeadersGiveEachBlockItsDateWithTheRuleRecorded() async throws {
@@ -405,10 +405,12 @@ import Testing
 
     private func citedNumber(_ lines: [RecognisedLine], _ text: String) -> Int { lines.first { $0.text == text }!.n }
 
-    private func endFinding(hours: Double = 1.5, labels: Bool = true, kind: String = "calendar_week", end: String? = nil, extra: String = "") async throws -> Finding {
-        let picture = try weekPicture(hours: hours, labels: labels)
-        let number = citedNumber(picture.1, "13:00 Design review")
-        let answer = blockAnswer(end: end, extra: extra).replacingOccurrences(of: "[15]", with: "[\(number)]")
+    private func endFinding(hours: Double = 1.5, labels: Bool = true, kind: String = "calendar_week", end: String? = nil, extra: String = "",
+                            title: String = "Design review", alsoCite gutter: String? = nil) async throws -> Finding {
+        let picture = try weekPicture(hours: hours, title: title, labels: labels)
+        let number = citedNumber(picture.1, "13:00 \(title)")
+        let cited = gutter.map { "\(number), \(citedNumber(picture.1, $0))" } ?? "\(number)"
+        let answer = blockAnswer(end: end, extra: extra).replacingOccurrences(of: "[15]", with: "[\(cited)]")
         let (rig, input) = durationRig(picture: picture, kind: kind, findings: answer)
         return try #require(try await rig.pipeline.analyse(input, settings: settings).findings.first)
     }
@@ -432,8 +434,34 @@ import Testing
         #expect(email.end == start.addingTimeInterval(3600) && email.provenance["end"]?.reason == "default-60")
     }
 
+    @Test func anEndTakenFromTheHourScaleAtTheSideIsDroppedAndWorkedOutInstead() async throws {
+        // The model cites the 15:00 label of the scale and reads it as the end; the block itself shows no end.
+        let finding = try await endFinding(hours: 2, end: "15:00", alsoCite: "15:00")
+        let start = SyntheticTime.date(2026, 10, 14, 13, 0, zone: "Europe/Madrid")
+        #expect(finding.end == start.addingTimeInterval(7200), Comment(rawValue: "end \(String(describing: finding.end)) prov \(finding.provenance)"))
+        #expect(finding.provenance["end"] == FieldProvenance(origin: .inferred, rule: "block-height", reason: "block-height"))
+    }
+
+    @Test func anEndThatIsNotWrittenAnywhereInTheCitedLinesIsDropped() async throws {
+        let finding = try await endFinding(hours: 1, end: "14:15")
+        #expect(finding.provenance["end"]?.origin == .inferred)
+    }
+
+    @Test func anEndAtOrBeforeTheStartIsDropped() async throws {
+        let finding = try await endFinding(hours: 1, end: "13:00", title: "Design review until 13:00")
+        let start = SyntheticTime.date(2026, 10, 14, 13, 0, zone: "Europe/Madrid")
+        #expect(finding.end == start.addingTimeInterval(3600) && finding.provenance["end"]?.origin == .inferred)
+    }
+
+    @Test func aHeaderCitedAlongsideTheBlockIsNotTakenForTheBlock() async throws {
+        // The model cites the date header as well; its line is above the block and would measure nothing or the wrong thing.
+        let finding = try await endFinding(hours: 1, alsoCite: "Wed 14")
+        let start = SyntheticTime.date(2026, 10, 14, 13, 0, zone: "Europe/Madrid")
+        #expect(finding.end == start.addingTimeInterval(3600) && finding.provenance["end"]?.rule == "block-height")
+    }
+
     @Test func anExplicitEndIsReadAndNotFlagged() async throws {
-        let finding = try await endFinding(hours: 2, end: "14:15")
+        let finding = try await endFinding(hours: 2, end: "14:15", title: "Design review - 14:15")
         #expect(finding.end == SyntheticTime.date(2026, 10, 14, 14, 15, zone: "Europe/Madrid"))
         #expect(finding.provenance["end"]?.origin == .read)
         #expect(!finding.provenance.values.contains { $0.origin == .inferred })

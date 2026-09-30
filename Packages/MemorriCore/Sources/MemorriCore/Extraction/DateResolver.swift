@@ -162,6 +162,14 @@ public enum DateResolver {
         return Base(day: today, rule: "time-only", reason: nil)
     }
 
+    private static let clockLabel = try! NSRegularExpression(pattern: #"^\d{1,2}(?::\d{2})?\s?(?:[ap]\.?m\.?)?$"#, options: .caseInsensitive)
+
+    /// True for a line that is only a time, such as the labels of the hour scale (`15:00`, `3 PM`).
+    static func isClockLabel(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        return clockLabel.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
+    }
+
     private static func isBlank(_ text: String) -> Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     /// True when the text names a day of its own: a month, a weekday or a relative word. A bare number is only a cell's label.
@@ -178,7 +186,9 @@ public enum DateResolver {
             guard let y = header.date.year, let m = header.date.month, let d = header.date.day else { return nil }
             return Day(year: y, month: m, day: d)
         }
-        let first = draft.citedLines.first.flatMap { n in context.lines.first { $0.n == n } }
+        // The line that places the entry: the first cited line that is not just a clock label of the hour scale.
+        let cited = draft.citedLines.compactMap { n in context.lines.first { $0.n == n } }
+        let first = cited.first { !isClockLabel($0.text) } ?? cited.first
         if !context.cells.isEmpty {
             // The cell the line sits in decides the day; the model's pick is only used for a line that has no position.
             guard let line = first else {
