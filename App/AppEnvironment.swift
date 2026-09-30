@@ -24,6 +24,10 @@ final class AppEnvironment {
     let storage: StorageContext?
     /// The figures and clean-up shown in Settings; `nil` when the storage is unavailable.
     let storageServices: StorageServices?
+    /// The background queue for the model's jobs; `nil` when the storage is unavailable.
+    let analysis: AnalysisQueue?
+    /// Read access to the jobs and their runs for the settings block.
+    let analysisJobs: AnalysisStore?
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -44,6 +48,18 @@ final class AppEnvironment {
                 retention: RetentionService(cleanup: cleanup, settings: settings, store: settingsStore))
         } else {
             storageServices = nil
+        }
+        if let context = opened.storage, let database = context.database, let captures = context.store {
+            let jobs = AnalysisStore(database: database)
+            let runner = ModelTestJobRunner(
+                service: ollama, store: jobs, pictures: StoredPictureProvider(paths: context.paths, store: captures),
+                settings: ollamaSettings, time: SystemTimeSource())
+            analysis = AnalysisQueue(store: jobs, runner: runner, ready: { [ollama] in await ollama.check() },
+                                     settings: ollamaSettings)
+            analysisJobs = jobs
+        } else {
+            analysis = nil
+            analysisJobs = nil
         }
         captureService = CaptureRequestService(
             runner: opened.runner,
@@ -67,13 +83,35 @@ final class AppEnvironment {
         }
         startPermissionPolling()
         startClockTick()
-        Task { [ollama] in
-            // The recommended model is chosen without opening Settings (FR-006), then one check.
+        Task { [ollama, analysis] in
+            // The recommended model is chosen without opening Settings (FR-006), then one check,
+            // and only then does the queue start, so its first look at the server sees the choice.
             await ollama.applyDefaultModelIfNeeded()
             await ollama.check()
+            await analysis?.start()
         }
+        followAnalysisProgress()
         if let storage { StartupAlerts.showIfNeeded(for: storage) }
         startRetention()
+    }
+
+    /// Keeps the menu line and the settings block current.
+    private func followAnalysisProgress() {
+        guard let analysis else { return }
+        Task { [state] in
+            for await progress in await analysis.progressUpdates() {
+                state.analysis = progress
+            }
+        }
+    }
+
+    /// Queues the model test on the newest capture, or on the built-in sample when there is none.
+    /// Returns the job and whether the newest capture was used; `nil` when the queue is unavailable.
+    func enqueueModelTest() async -> (jobID: String, usedNewestCapture: Bool)? {
+        guard let analysis else { return nil }
+        let newest = (try? storage?.store?.newestImageID()) ?? nil
+        guard let id = try? await analysis.enqueueTest(imageID: newest) else { return nil }
+        return (id, newest != nil)
     }
 
     /// The retention policy is applied at start and then checked every hour; it runs about daily.

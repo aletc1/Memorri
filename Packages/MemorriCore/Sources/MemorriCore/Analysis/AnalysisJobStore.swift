@@ -134,6 +134,8 @@ public protocol AnalysisJobStoring: Sendable {
     func markWaiting(id: String, failedAttempts: Int, notBefore: Date?, now: Date) throws
     func markFailed(id: String, failedAttempts: Int, reason: String, now: Date) throws
     func record(run: ModelRunRecord) throws
+    /// The newest attempt of a job, if it has one.
+    func latestRun(jobID: String) throws -> ModelRunRecord?
     func counts() throws -> JobCounts
     func recentFailures(limit: Int) throws -> [AnalysisJobRecord]
     /// Failed jobs back to `waiting` with fresh attempts; returns how many.
@@ -212,6 +214,13 @@ public struct AnalysisStore: AnalysisJobStoring {
 
     public func record(run: ModelRunRecord) throws {
         try database.pool.write { try run.insert($0) }
+    }
+
+    public func latestRun(jobID: String) throws -> ModelRunRecord? {
+        try database.pool.read { db in
+            try ModelRunRecord.fetchOne(db, sql: "SELECT * FROM model_runs WHERE job_id = ? ORDER BY attempt DESC, started_at DESC LIMIT 1",
+                                        arguments: [jobID])
+        }
     }
 
     public func counts() throws -> JobCounts {

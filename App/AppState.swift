@@ -9,6 +9,9 @@ final class AppState {
     var isFlashing = false
     var isWarning = false
 
+    /// The model queue: counts, pause flag and why it is holding (spec 003).
+    var analysis = QueueProgress(counts: JobCounts(waiting: 0, running: 0, finished: 0, failed: 0), paused: false, holdingReason: nil)
+
     /// The result shown on the first menu line, and when it happened.
     var lastCapture: (result: LastCaptureResult, at: Date)?
     /// Moves forward every 30 seconds so the relative time on that line stays current.

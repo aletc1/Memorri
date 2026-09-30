@@ -106,10 +106,14 @@ public actor AnalysisQueue {
         await task.value
     }
 
-    public func enqueueTest(imageID: String?) throws {
-        try store.enqueue(AnalysisJobRecord(imageId: imageID, createdAt: time.now()))
+    /// Returns the id of the new job so the caller can follow it.
+    @discardableResult
+    public func enqueueTest(imageID: String?) throws -> String {
+        let job = AnalysisJobRecord(imageId: imageID, createdAt: time.now())
+        try store.enqueue(job)
         publish()
         Task { await wake.fire() }
+        return job.id
     }
 
     /// Wakes the loop: settings changed, resume, retry.
@@ -119,6 +123,9 @@ public actor AnalysisQueue {
 
     /// The running job finishes; nothing new starts while paused. The flag survives a restart.
     public func pause(_ paused: Bool) {
+        if settings.analysisPaused != paused {
+            if paused { Self.logger.info("queue paused") } else { Self.logger.info("queue resumed by user") }
+        }
         settings.setAnalysisPaused(paused)
         publish()
         Task { await wake.fire() }

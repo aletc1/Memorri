@@ -12,6 +12,10 @@ struct OllamaSettingsView: View {
     @State private var models: ModelList?
     @State private var modelsFailed = false
     @State private var chosenModel: String?
+    @State private var testNote: String?
+    @State private var testLine: String?
+    @State private var isTesting = false
+    @State private var failures: [AnalysisJobRecord] = []
 
     var body: some View {
         ScrollView {
@@ -30,6 +34,10 @@ struct OllamaSettingsView: View {
             connectionSection
             Divider()
             modelSection
+            Divider()
+            testSection
+            Divider()
+            queueSection
         }
     }
 
@@ -86,6 +94,85 @@ struct OllamaSettingsView: View {
             }
             if let chosen = chosenModel, case .modelMissing = status {
                 Text("The chosen model \(chosen) is no longer installed.").font(.callout).foregroundStyle(.orange)
+            }
+        }
+    }
+
+    // MARK: Test the model and the queue (user story 4)
+
+    private var testSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Test the model").font(.headline)
+            HStack {
+                Button("Test the model") { runTest() }
+                    .disabled(isTesting || environment.analysis == nil)
+                if isTesting { ProgressView().controlSize(.small) }
+            }
+            if let testNote { Text(testNote).font(.callout).foregroundStyle(.secondary) }
+            if let testLine {
+                Text(testLine).font(.callout).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var queueSection: some View {
+        let progress = environment.state.analysis
+        let counts = progress.counts
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Analysis queue").font(.headline)
+            Text("Waiting \(counts.waiting) · Running \(counts.running) · Finished \(counts.finished) · Failed \(counts.failed)")
+            if let reason = progress.holdingReason {
+                Text("Waiting: \(reason)").font(.callout).foregroundStyle(.orange)
+            }
+            ForEach(failures, id: \.id) { job in
+                Text("\(job.updatedAt.formatted(date: .omitted, time: .shortened)) \(job.failureReason ?? "failed")")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Retry failed") { Task { try? await environment.analysis?.retryFailed(); loadFailures() } }
+                    .disabled(counts.failed == 0)
+                Button("Clear finished") { Task { try? await environment.analysis?.clearFinished(); loadFailures() } }
+                    .disabled(counts.finished + counts.failed == 0)
+                Button(progress.paused ? "Resume analysis" : "Pause analysis") {
+                    Task { await environment.analysis?.pause(!progress.paused) }
+                }
+            }
+        }
+        .onChange(of: counts) { loadFailures() }
+        .onAppear { loadFailures() }
+    }
+
+    private func loadFailures() {
+        failures = (try? environment.analysisJobs?.recentFailures(limit: 5)) ?? []
+    }
+
+    /// Queues the test and follows its job until it finishes or fails.
+    private func runTest() {
+        isTesting = true
+        testLine = nil
+        Task {
+            defer { isTesting = false }
+            guard let queued = await environment.enqueueModelTest() else {
+                testLine = "Failed: the capture storage is not available"
+                return
+            }
+            testNote = queued.usedNewestCapture ? "Using the newest capture." : "Using the built-in sample picture."
+            while !Task.isCancelled {
+                if let job = try? environment.analysisJobs?.job(id: queued.jobID) {
+                    let run = try? environment.analysisJobs?.latestRun(jobID: queued.jobID)
+                    if let line = ModelTestResultLine.text(job: job, run: run) { testLine = line; return }
+                    if let reason = environment.state.analysis.holdingReason {
+                        testLine = "Waiting: \(reason)"
+                    } else if environment.state.analysis.paused {
+                        testLine = "Waiting: analysis is paused"
+                    } else {
+                        testLine = nil
+                    }
+                } else {
+                    testLine = "Failed: the test was cleared"
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(400))
             }
         }
     }
