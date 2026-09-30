@@ -8,6 +8,16 @@
 
 **Input**: User description: "Capture every display separately with ScreenCaptureKit on hotkey, store full-resolution HEIC images plus a downscaled copy for the model (configurable long edge, default 2048). Create the GRDB database, migrations, and the raw capture_events and capture_images tables. Settings shows storage used, offers cleanup by age or everything, and a retention policy. Excluded from Time Machine. The real capture call is the source of truth for the Screen Recording permission: a failed capture changes the tracked status and opens the onboarding window (see docs/postmortems/2026-09-29-permission-and-launch-assumptions.md)."
 
+## Clarifications
+
+### Session 2026-09-30
+
+- Q: When old captures are deleted, should Memorri also delete the capture's record or keep it and delete only the pictures? → A: Delete the record together with its pictures, in every kind of cleanup (age-based, automatic retention and "delete everything").
+- Q: Where should Memorri show a failed or partial capture message? → A: As a status line at the top of the menu showing the last capture result, plus a distinct warning flash and sound on a problem. No alert window and no notification.
+- Q: How much free disk space must Memorri leave, and should it refuse to capture when less is available? → A: It refuses to capture when less than 1 GB is free, and the menu line says "Not enough free disk space".
+- Q: Should the full-resolution picture be stored with a little quality loss or without any loss? → A: High quality with a small loss, for compact files. The quality level is one named value, so it can be raised later without changing how captures are stored.
+- Q: Should the mouse pointer appear in the captured pictures? → A: No. The pointer is never included in captured pictures.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Capture every display with one action (Priority: P1)
@@ -26,6 +36,7 @@ The user presses the capture shortcut, or chooses Capture now, while working, fo
 4. **Given** a capture is already running, **When** the user requests another, **Then** the second request is ignored and the running capture is not disturbed.
 5. **Given** a display is larger than the analysis size, **When** the capture is stored, **Then** the analysis copy is reduced so its longer side equals the configured size, and the full-resolution picture is untouched.
 6. **Given** a display is smaller than the analysis size, **When** the capture is stored, **Then** the analysis copy is not enlarged.
+7. **Given** the mouse pointer is over a display, **When** the user captures, **Then** the stored pictures do not show the pointer.
 
 ---
 
@@ -41,8 +52,8 @@ If macOS refuses the capture because Screen Recording is missing or was switched
 
 1. **Given** the permission was revoked while the app runs, **When** the user captures, **Then** the attempt fails, the status becomes "not granted" within 2 seconds, the onboarding window opens, and no success feedback plays.
 2. **Given** a capture failed for lack of permission, **When** the user looks at the stored data, **Then** no pictures from that attempt remain, and the attempt is recorded as failed.
-3. **Given** the permission is granted and one of two displays cannot be captured, **When** the user captures, **Then** the working display's pictures are kept, the attempt is recorded as partial, and the user is told that one display could not be captured.
-4. **Given** a capture fails for another reason (for example no disk space), **When** the user captures, **Then** the user sees a short message saying what went wrong, nothing half-saved remains, and the permission status is not changed.
+3. **Given** the permission is granted and one of two displays cannot be captured, **When** the user captures, **Then** the working display's pictures are kept, the attempt is recorded as partial, the warning flash and sound play, and the menu shows "Last capture: 1 of 2 displays captured".
+4. **Given** a capture fails for another reason (for example no disk space), **When** the user captures, **Then** the warning flash and sound play, the menu shows a short line saying what went wrong, nothing half-saved remains, and the permission status is not changed.
 5. **Given** a capture succeeded, **When** the permission status was wrongly shown as "not granted" or "restart required", **Then** the status becomes "granted".
 
 ---
@@ -123,7 +134,7 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 - A display is connected or disconnected during a capture: the displays present when the capture started are captured; one that disappears counts as a failed display (partial capture).
 - Two displays show the same content (mirrored): each distinct display is captured once, so a mirror pair gives one capture, not two.
 - There is no display available (for example the lid is closed with nothing attached): the request fails with a short message and nothing is stored.
-- The disk is full or nearly full: the capture fails with a clear message and leaves nothing half-saved; existing captures are untouched.
+- The disk is full or nearly full: with less than 1 GB free the app refuses to capture (no pictures are taken) and the menu line says "Not enough free disk space"; if the disk fills during a capture anyway, the capture fails the same way, leaves nothing half-saved, and existing captures are untouched.
 - A very large display (for example 8K): capturing still completes without the app becoming unresponsive, and the menu and Settings stay usable.
 - The screen is locked, or content is protected by the system or an application and appears black: it is captured as shown, and the app does not try to get around protection.
 - The permission is revoked while a capture is running: the capture fails as in User Story 2 and leaves nothing half-saved.
@@ -136,32 +147,35 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 
 ### Functional Requirements
 
-- **FR-001**: A capture request MUST take one separate picture of each connected display (one per distinct display; mirrored displays count once), each at the display's full native resolution.
+- **FR-001**: A capture request MUST take one separate picture of each connected display (one per distinct display; mirrored displays count once), each at the display's full native resolution, without the mouse pointer.
 - **FR-002**: Capture now and the global shortcut MUST both start the same capture through the capture request path from spec 001.
 - **FR-003**: Each capture request that reaches the capturing step MUST be recorded as one capture event with its time, its trigger (menu or shortcut), its result (complete, partial or failed) and the pictures it produced.
-- **FR-004**: For each display the app MUST store a full-resolution picture in a space-efficient format and a smaller analysis copy whose longer side equals the configured size, never enlarging a picture that is already smaller.
+- **FR-004**: For each display the app MUST store a full-resolution picture in a space-efficient format at high quality with a small loss (one named quality level that can be raised later) and a smaller analysis copy whose longer side equals the configured size, never enlarging a picture that is already smaller. Text in the stored full-resolution picture MUST stay as readable as on screen.
 - **FR-005**: The analysis copy size MUST be settable in Settings within 512 to 4096 pixels, default 2048, and MUST apply only to later captures.
-- **FR-006**: The success feedback (icon flash and sound, as configured in spec 001) MUST play only after at least one display's pictures have been stored.
+- **FR-006**: The success feedback (icon flash and sound, as configured in spec 001) MUST play only after all displays present at the start were stored. A partial or failed capture plays a distinct warning flash and sound instead, which follow the same two switches in Settings.
 - **FR-007**: When macOS refuses a capture because Screen Recording is missing or revoked, the app MUST set the permission status to "not granted", open the onboarding window, play no success feedback, keep no pictures from that attempt, and record the event as failed.
-- **FR-008**: When some displays are captured and others fail, the app MUST keep the successful pictures, record the event as partial, and tell the user how many displays could not be captured.
-- **FR-009**: When a capture fails for any other reason, the app MUST show a short message saying what went wrong, leave nothing half-saved, and leave the permission status unchanged.
+- **FR-008**: When some displays are captured and others fail, the app MUST keep the successful pictures, record the event as partial, play the warning flash and sound, and show in the menu how many displays were captured out of how many.
+- **FR-009**: When a capture fails for any other reason, the app MUST play the warning flash and sound, show a short line in the menu saying what went wrong, leave nothing half-saved, and leave the permission status unchanged.
 - **FR-010**: A successful capture MUST set the permission status to "granted".
 - **FR-011**: A capture request made while another capture is running MUST be ignored.
 - **FR-012**: All records and pictures MUST be kept in one folder under the user's Application Support area, readable only by the current user, and excluded from system backups.
 - **FR-013**: Storage MUST be created on first use, MUST upgrade without data loss when a newer app version changes its shape, and MUST NOT be modified by an older app version that finds data from a newer one (the app says so instead).
 - **FR-014**: At start the app MUST reconcile records and files: a record whose picture file is missing is marked as such, and a picture file without a record is removed.
 - **FR-015**: Settings MUST have a Storage section (replacing the placeholder from spec 001) showing the number of captures and the space used by pictures and by records, refreshed whenever it is opened.
-- **FR-016**: Settings MUST offer "delete older than N days" and "delete everything", each after a confirmation that states how many captures and how much space are affected, and each removing records and pictures together; a capture in progress MUST NOT be removed.
-- **FR-017**: Settings MUST offer a retention policy, either "keep forever" or "delete older than N days", default 30 days, applied at start and once a day while the app runs.
+- **FR-016**: Settings MUST offer "delete older than N days" and "delete everything", each after a confirmation that states how many captures and how much space are affected, and each removing each affected capture's record and pictures together (no record is kept without its pictures); a capture in progress MUST NOT be removed.
+- **FR-017**: Settings MUST offer a retention policy, either "keep forever" or "delete older than N days", default 30 days, applied at start and once a day while the app runs. An expired capture is deleted completely, record and pictures together, like in every other cleanup.
 - **FR-018**: Shortening the retention policy MUST state how many captures it will remove before applying.
 - **FR-019**: A damaged database MUST NOT be deleted; it is set aside, the user is told, and capturing continues with a new one.
 - **FR-020**: The app MUST NOT send any data over the network.
+- **FR-021**: The top of the menu MUST show the result of the last capture (complete, partial with how many displays, or failed with the short reason) and how long ago it happened, until the next capture replaces it. It MUST NOT use macOS notifications or alert windows. A capture that failed for lack of permission shows the onboarding window as in FR-007 instead of an error line.
+- **FR-022**: Before capturing, the app MUST check the free space on the disk that holds the data folder and refuse to capture when less than 1 GB is free, reporting "Not enough free disk space" as in FR-009 and FR-021.
 
 ### Key Entities
 
 - **Capture event**: One capture request that reached the capturing step. Has a time, a trigger (menu or shortcut), a result (complete, partial or failed), a short failure reason when it did not fully succeed, and the pictures it produced. Later specs attach analysis to it.
 - **Capture image**: The pictures of one display within one capture event: which display it was, its size in pixels and scale, a full-resolution picture and an analysis copy, and their sizes on disk. A missing-file marker when a file has been lost.
 - **Storage settings**: The analysis copy size (512 to 4096, default 2048) and the retention policy (keep forever, or N days, default 30).
+- **Last capture result**: What the top of the menu shows: complete, partial (how many displays out of how many) or failed (a short reason), and how long ago.
 - **Storage summary**: What Settings shows: number of captures, space used by pictures, space used by records.
 
 ## Success Criteria *(mandatory)*
@@ -177,6 +191,9 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 - **SC-007**: After "delete older than N days", 100% of captures older than N days are gone with their files and 100% of newer ones are untouched; after "delete everything", no capture records or files remain.
 - **SC-008**: The data folder is reported by the system as excluded from backups, and another user account cannot read it.
 - **SC-009**: The menu and Settings remain usable (respond within 1 second) while a capture of the largest connected displays is in progress.
+- **SC-010**: After every capture, whether complete, partial or failed, the top of the menu shows the matching result within 1 second, and the warning flash and sound play for every partial or failed one.
+- **SC-011**: With less than 1 GB of free disk space, every capture attempt is refused and stores nothing, in 100% of 5 trials.
+- **SC-012**: No stored picture shows the mouse pointer, in 20 consecutive captures with the pointer over a display.
 
 ## Assumptions
 
@@ -184,9 +201,11 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 - Analysis of the pictures (reading text, finding appointments) is out of scope here and arrives in specs 003 and 004. This spec only captures and keeps.
 - The default retention is 30 days. Screenshots of work sessions are sensitive, so automatic expiry is the safer default. The user can change it or keep everything.
 - The analysis copy size is a setting because the best value is settled later by measurement (spec 004).
+- A deleted capture leaves no trace, not even its record. Later specs that find appointments and tasks must therefore keep each item's own evidence (the cropped part of the picture) separate from the capture, so an item keeps its evidence after the capture has expired.
 - Protected content that the system shows as black is captured as shown; bypassing protection is not attempted.
 - The Memorri windows are captured like any other window if they are on screen.
 - Captures are not encrypted by the app. Protection relies on the private folder and disk encryption of the Mac (FileVault); encrypting at rest may come later.
 - Pictures are stored per display; combining displays into one picture is not done, to keep full resolution.
+- Full-resolution pictures are stored with a small loss that does not affect reading, to keep files compact. Spec 004 measures reading accuracy against stored pictures, and the quality can be raised if it ever costs accuracy.
 - The Storage section replaces the "Storage" placeholder shown in Settings since spec 001.
 - Testing with multiple displays and revocation is manual on a real Mac, using the automation available on the developer machine where possible.
