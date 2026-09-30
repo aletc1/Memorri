@@ -81,3 +81,20 @@ How to see that the feature works end to end. Most steps run from a terminal on 
 ## No network and no leftovers
 
 `lsof -i -a -p $(pgrep -x Memorri)` and the same for `memorri-eval` during a run show only localhost. The source scan passes. `git status` shows only synthetic golden cases; no screenshot, capture or model answer from a real session is committed.
+
+
+## Recorded results
+
+### First real run (2026-09-30, task T072): reading, kinds and findings found, dates not yet resolved
+
+`memorri-eval run` on the 27 synthetic cases, `qwen3.8:27b-mlx`, think off, size 2048, dates kept as written and ends empty (the resolver and the durations came later):
+
+| Measure | Value |
+|---|---|
+| Classification accuracy | 27 of 27 (100%) |
+| Reading: exact / box overlap | 91.7% / 89.7% of the drawn lines |
+| Findings precision / recall | 0.02 / 0.02 (a finding only matches when its start or due date is right, and every date was still unresolved; the report lists "nearest found" with the same title for almost every miss, so the titles were found) |
+| Mean time per case | 21.8 s (classification about 6 s, extraction 14 to 20 s, reading well under 1 s) |
+| Tags, context | not built yet (0) |
+
+Checks through the app (Debug switch, isolated home): the week case and the email case were analysed, every finding cited existing lines (`select count(*) from findings where cited_lines_json = '[]'` was 0, SC-004), and the model runs were stored (`classify`, `extract`). With the fake server, `extract-bad-citation` discards the finding that cites line 9999 and keeps the rest, and `extract-empty` gives an analysed result with no findings.
