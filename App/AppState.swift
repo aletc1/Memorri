@@ -6,4 +6,5 @@ import Observation
 final class AppState {
     var permissionStatus: ScreenRecordingStatus = .notGranted
     var isFlashing = false
+    var isWarning = false
 }

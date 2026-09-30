@@ -119,4 +119,13 @@ import Testing
         #expect(request?.permissionAtRequest == .granted)
         #expect(request?.timestamp == Date(timeIntervalSinceReferenceDate: 0))
     }
+
+    @Test func feedbackHasASeparateWarningPair() async {
+        let feedback = FakeFeedback()
+        let player: any FeedbackPlaying = feedback
+        await player.flashWarning()
+        await player.playWarningSound()
+        #expect(feedback.warningFlashCount == 1 && feedback.warningSoundCount == 1)
+        #expect(feedback.flashCount == 0 && feedback.soundCount == 0)
+    }
 }

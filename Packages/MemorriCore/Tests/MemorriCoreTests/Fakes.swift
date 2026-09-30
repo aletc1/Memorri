@@ -73,16 +73,22 @@ final class FakeFeedback: FeedbackPlaying, @unchecked Sendable {
     private let lock = NSLock()
     private var flashes = 0
     private var sounds = 0
+    private var warningFlashes = 0
+    private var warningSounds = 0
 
     var flashCount: Int { lock.lock(); defer { lock.unlock() }; return flashes }
     var soundCount: Int { lock.lock(); defer { lock.unlock() }; return sounds }
+    var warningFlashCount: Int { lock.lock(); defer { lock.unlock() }; return warningFlashes }
+    var warningSoundCount: Int { lock.lock(); defer { lock.unlock() }; return warningSounds }
 
-    func flashIcon() async { bump(flash: true) }
-    func playSound() async { bump(flash: false) }
+    func flashIcon() async { bump(\.flashes) }
+    func playSound() async { bump(\.sounds) }
+    func flashWarning() async { bump(\.warningFlashes) }
+    func playWarningSound() async { bump(\.warningSounds) }
 
-    private func bump(flash: Bool) {
+    private func bump(_ counter: ReferenceWritableKeyPath<FakeFeedback, Int>) {
         lock.lock(); defer { lock.unlock() }
-        if flash { flashes += 1 } else { sounds += 1 }
+        self[keyPath: counter] += 1
     }
 }
 
@@ -146,4 +152,58 @@ func makeImageRecord(eventID: String, id: String = UUID().uuidString, displayID:
                        fullPath: "captures/2027-01/\(eventID)/\(id)-full.heic",
                        modelPath: "captures/2027-01/\(eventID)/\(id)-model.heic",
                        modelWidth: 2048, modelHeight: 857, fullBytes: 1000, modelBytes: 500, missing: false)
+}
+
+// MARK: Capture pipeline fakes
+
+import CoreGraphics
+
+/// Display capturer that returns a scripted result, optionally after a delay.
+final class FakeDisplayCapturer: DisplayCapturing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var result: Result<DisplayCaptureResult, CaptureFailure>
+    private var calls = 0
+    let delay: Duration
+
+    init(displays: [CapturedDisplay] = [], failedDisplayCount: Int = 0, delay: Duration = .zero) {
+        result = .success(DisplayCaptureResult(displays: displays, failedDisplayCount: failedDisplayCount))
+        self.delay = delay
+    }
+
+    init(failure: CaptureFailure) {
+        result = .failure(failure)
+        delay = .zero
+    }
+
+    var callCount: Int { lock.lock(); defer { lock.unlock() }; return calls }
+
+    private func recordCall() -> Result<DisplayCaptureResult, CaptureFailure> {
+        lock.lock(); defer { lock.unlock() }
+        calls += 1
+        return result
+    }
+
+    func captureAllDisplays() async throws -> DisplayCaptureResult {
+        let current = recordCall()
+        if delay > .zero { try? await Task.sleep(for: delay) }
+        return try current.get()
+    }
+}
+
+func makeDisplay(id: UInt32 = 1, width: Int = 3440, height: Int = 1440) -> CapturedDisplay {
+    CapturedDisplay(displayID: id, name: "Display \(id)", image: makeTestImage(width: width, height: height), scale: 1)
+}
+
+struct FakeDiskSpace: DiskSpaceChecking {
+    var free: Int64 = 50 * 1_073_741_824
+    func freeBytes(at url: URL) throws -> Int64 { free }
+}
+
+struct FailingEncoder: ImageEncoding {
+    func encodeFullResolution(_ image: CGImage) throws -> EncodedPicture { throw ImageEncodingError.cannotEncode }
+    func encodeAnalysisCopy(_ image: CGImage, longEdge: Int) throws -> EncodedPicture { throw ImageEncodingError.cannotEncode }
+}
+
+struct FailingStore: CaptureStoring {
+    func insert(event: CaptureEventRecord, images: [CaptureImageRecord]) throws { throw CocoaError(.fileWriteUnknown) }
 }

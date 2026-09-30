@@ -36,6 +36,9 @@ public struct SystemTimeSource: TimeSource {
 public protocol FeedbackPlaying: Sendable {
     func flashIcon() async
     func playSound() async
+    /// Distinct look and sound for a partial or failed capture (FR-006, FR-008, FR-009).
+    func flashWarning() async
+    func playWarningSound() async
 }
 
 /// Single entry point for "capture now", from the menu or the global shortcut.
