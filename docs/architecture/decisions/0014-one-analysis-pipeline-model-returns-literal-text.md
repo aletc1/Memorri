@@ -17,6 +17,6 @@ Option 3, behind one entry point, `AnalysisPipeline`, called by the queue job an
 
 ## Consequences
 - Date, duration, tag and context rules are unit-tested tables; a wrong date is a code bug with a failing test, not a prompt lottery.
-- Two model calls per picture; spike S2 measures the second call's cost and sets the message order.
+- Two model calls per picture. Spike S2 measured that the second call does not reuse the picture work (about 20 s for each call at 2048 pixels for a new picture), so the classification call is sent at 1024 pixels (about 6 s, same accuracy on the drawn set) and the extraction call at the configured size; about 26 s per picture in total.
 - Prompts and schemas are versioned per kind; any change must pass the eval gate.
 - The model cannot invent a box or an evidence crop: crops come from cited lines.

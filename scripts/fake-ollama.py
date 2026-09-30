@@ -11,6 +11,16 @@ Modes for POST /api/chat:
   flaky    HTTP 500 on odd calls, a valid answer on even calls
   hang     every endpoint (including /api/version) never answers within a minute
 
+Spec 004 adds answers chosen by the request's "format" schema (the properties it asks for):
+  schema with "screen_kind"  -> a valid classification (calendar_week, confidence 0.9)
+  schema with "findings"     -> valid findings that cite lines 1 and 2
+  any other schema           -> the test answer above
+and these modes (all other modes still apply to every call):
+  extract                  same as ok: valid classification and findings
+  extract-bad-citation     one finding cites line 9999, which does not exist
+  extract-empty            findings is an empty list
+  classify-unsure          classification is "other" with confidence 0.2
+
 Options: --no-vision (only a text model is listed), --no-capabilities (models carry no
 "capabilities" key, so the app must ask /api/show), --thinking (the vision model also lists
 "thinking"). Standard library only. Listens on 127.0.0.1 only.
@@ -39,6 +49,36 @@ def models():
             entry["capabilities"] = caps
         out.append(entry)
     return out
+
+
+def classification(unsure=False):
+    return json.dumps({"screen_kind": "other" if unsure else "calendar_week",
+                       "kind_confidence": 0.2 if unsure else 0.9,
+                       "application": "Fake Calendar", "platform_look": "macos",
+                       "remote_session": {"is_remote": False, "client": ""},
+                       "theme": "light", "calendar_name": "Work"})
+
+
+def findings(mode):
+    items = [] if mode == "extract-empty" else [
+        {"kind": "appointment", "title": "Team sync", "cited_lines": [1, 2],
+         "start_text": "10:00", "end_text": "11:30", "all_day": False, "people": []},
+        {"kind": "task", "title": "Send the report", "cited_lines": [2],
+         "due_text": "Friday", "all_day": False, "people": ["Anna"]}]
+    if mode == "extract-bad-citation":
+        items.append({"kind": "appointment", "title": "Ghost meeting", "cited_lines": [9999],
+                      "start_text": "12:00", "all_day": False, "people": []})
+    return json.dumps({"findings": items})
+
+
+def answer_for(body, mode):
+    fmt = body.get("format")
+    props = fmt.get("properties", {}) if isinstance(fmt, dict) else {}
+    if "screen_kind" in props:
+        return classification(unsure=(mode == "classify-unsure"))
+    if "findings" in props:
+        return findings(mode)
+    return valid_answer()
 
 
 def valid_answer():
@@ -96,7 +136,7 @@ class Handler(BaseHTTPRequestHandler):
         if args.mode == "error" or (args.mode == "flaky" and call % 2 == 1):
             self.reply(500, {"error": "fake server error"})
             return
-        content = "this is definitely not json" if args.mode == "invalid" else valid_answer()
+        content = "this is definitely not json" if args.mode == "invalid" else answer_for(body, args.mode)
         self.reply(200, {"model": body.get("model"), "done": True, "done_reason": "stop",
                          "message": {"role": "assistant", "content": content},
                          "total_duration": 1_000_000_000, "load_duration": 1_000_000,
@@ -107,7 +147,8 @@ def main():
     global args
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=11999)
-    parser.add_argument("--mode", choices=["ok", "invalid", "slow", "error", "flaky", "hang"], default="ok")
+    parser.add_argument("--mode", choices=["ok", "invalid", "slow", "error", "flaky", "hang", "extract", "extract-bad-citation",
+                                              "extract-empty", "classify-unsure"], default="ok")
     parser.add_argument("--delay", type=float, default=5.0)
     parser.add_argument("--no-vision", action="store_true")
     parser.add_argument("--no-capabilities", action="store_true")

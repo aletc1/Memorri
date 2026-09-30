@@ -149,7 +149,8 @@ public struct ContextStore: Sendable {
 
 public struct PipelineInput: Sendable {
     public let image: CGImage                    // full resolution
-    public let analysisJPEG: Data                // the copy sent to the model, already converted
+    public let analysisJPEG: Data                // the copy sent for extraction, already converted
+    public let classificationJPEG: Data          // the same picture at 1024 pixels, for the classification call (spike S2)
     public let analysisSize: (width: Int, height: Int)
     public let captureTime: Date
     public let displaySize: (Int, Int); public let scale: Double
