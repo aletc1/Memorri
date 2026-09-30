@@ -14,6 +14,7 @@
 
 - Q: Should Memorri record the titles of the windows visible on each display when it captures, so contexts can be matched on them? → A: Yes. The titles of windows visible on each display are stored with its picture and deleted with it, in every kind of cleanup.
 - Q: What should `memorri-eval` do if the app's analysis queue has a job running? → A: Refuse to start and say to pause analysis first; an explicit option overrides the refusal.
+- Q: Should analysis of new captures be on by default? → A: Yes. Every stored capture is queued; a Settings switch and the Pause control turn it off.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -197,7 +198,7 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **FR-014a**: At capture time, the titles of the windows visible on each display MUST be recorded with that display's picture, stored locally, and deleted together with the capture in every kind of cleanup. They are used only for context matching and MUST NOT be sent anywhere.
 - **FR-015**: Each capture's pictures MUST be assigned to the best-matching context automatically, from the text read and the window titles captured with the pictures, and the matched hints and the runner-up MUST be recorded. No match means unassigned.
 - **FR-016**: The user MUST be able to change the context of a capture. A user choice MUST be kept across reanalysis and MUST be marked as the user's.
-- **FR-017**: Captures MUST be queued for analysis automatically after they are stored, in the same queue as spec 003 (one job at a time, retries, pause, menu progress), unless the user has turned automatic analysis off. The menu line MUST keep the texts from spec 003 and count these jobs.
+- **FR-017**: Captures MUST be queued for analysis automatically after they are stored, in the same queue as spec 003 (one job at a time, retries, pause, menu progress), unless the user has turned automatic analysis off in Settings. Automatic analysis MUST default to on, regardless of the power source. The menu line MUST keep the texts from spec 003 and count these jobs.
 - **FR-018**: Settings MUST show recent captures with their analysis state (waiting, analysing, analysed, failed with reason), screen kind, context, and number of findings, and offer **Reanalyse** for a capture. This is a checking aid; the full Items window is spec 006.
 - **FR-019**: A command-line tool `memorri-eval` MUST run the same reading, classification and extraction code as the app over a folder of golden cases and print precision, recall and field accuracy overall and per case, per screen kind, and classification accuracy, with lists of missed and unexpected findings.
 - **FR-019a**: `memorri-eval` MUST refuse to start while the app's analysis queue has a job running, telling the user to pause analysis first, because both would load the same model at once. An explicit option MUST allow the run anyway, and the report MUST then say it was run that way.
