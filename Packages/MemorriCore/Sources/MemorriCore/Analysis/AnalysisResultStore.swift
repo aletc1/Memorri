@@ -76,38 +76,45 @@ public struct AnalysisResultStore: Sendable {
     }
 
     public func analysis(imageID: String) throws -> StoredAnalysis? {
-        try database.pool.read { db in
-            guard let row = try Row.fetchOne(db, sql: "SELECT * FROM image_analysis WHERE image_id = ?", arguments: [imageID]),
-                  let kind = ScreenKind(rawValue: row["screen_kind"]) else { return nil }
-            return StoredAnalysis(imageID: imageID, kind: kind, kindConfidence: row["kind_confidence"], classifyVersion: row["classify_version"],
-                                  promptVersion: row["prompt_version"], schemaVersion: row["schema_version"], model: row["model"],
-                                  pictureLongEdge: row["picture_long_edge"], timezone: row["timezone"], timezoneSource: row["timezone_source"],
-                                  findingCount: row["finding_count"], lineCapApplied: (row["line_cap_applied"] as Int) != 0,
-                                  discarded: Self.decode(row["discarded_json"], as: [CitationCheck.Discard].self) ?? [],
-                                  extractRunID: row["extract_run_id"], analysedAt: row["analysed_at"])
-        }
+        try database.pool.read { try Self.analysis($0, imageID: imageID) }
     }
 
     public func findings(imageID: String) throws -> [Finding] {
-        try database.pool.read { db in
-            try Row.fetchAll(db, sql: "SELECT * FROM findings WHERE image_id = ? ORDER BY start_at, due_at, created_at, rowid", arguments: [imageID]).compactMap { row in
-                guard let kind = FindingKind(rawValue: row["kind"]) else { return nil }
-                return Finding(id: row["id"], kind: kind, title: row["title"], allDay: (row["all_day"] as Int) != 0, start: row["start_at"],
-                               end: row["end_at"], due: row["due_at"], remind: row["remind_at"], timezone: row["timezone"],
-                               people: Self.decode(row["people_json"], as: [String].self) ?? [], place: row["place"], notes: row["notes"],
-                               citedLines: Self.decode(row["cited_lines_json"], as: [Int].self) ?? [], confidence: row["confidence"],
-                               provenance: Self.decode(row["provenance_json"], as: [String: FieldProvenance].self) ?? [:],
-                               unresolved: Self.decode(row["unresolved_json"], as: [String: String].self) ?? [:],
-                               tags: Self.decode(row["tags_json"], as: [CaptureTag].self) ?? [])
-            }
-        }
+        try database.pool.read { try Self.findings($0, imageID: imageID) }
     }
 
     public func tags(imageID: String) throws -> [CaptureTag] {
-        try database.pool.read { db in
-            try Row.fetchAll(db, sql: "SELECT * FROM capture_tags WHERE image_id = ? ORDER BY key, value", arguments: [imageID]).map {
-                CaptureTag(key: $0["key"], value: $0["value"], confidence: $0["confidence"], source: $0["source"])
-            }
+        try database.pool.read { try Self.tags($0, imageID: imageID) }
+    }
+
+    // The same reads inside an open connection, for callers that already hold one (GRDB does not nest).
+    static func analysis(_ db: Database, imageID: String) throws -> StoredAnalysis? {
+        guard let row = try Row.fetchOne(db, sql: "SELECT * FROM image_analysis WHERE image_id = ?", arguments: [imageID]),
+              let kind = ScreenKind(rawValue: row["screen_kind"]) else { return nil }
+        return StoredAnalysis(imageID: imageID, kind: kind, kindConfidence: row["kind_confidence"], classifyVersion: row["classify_version"],
+                              promptVersion: row["prompt_version"], schemaVersion: row["schema_version"], model: row["model"],
+                              pictureLongEdge: row["picture_long_edge"], timezone: row["timezone"], timezoneSource: row["timezone_source"],
+                              findingCount: row["finding_count"], lineCapApplied: (row["line_cap_applied"] as Int) != 0,
+                              discarded: Self.decode(row["discarded_json"], as: [CitationCheck.Discard].self) ?? [],
+                              extractRunID: row["extract_run_id"], analysedAt: row["analysed_at"])
+    }
+
+    static func findings(_ db: Database, imageID: String) throws -> [Finding] {
+        try Row.fetchAll(db, sql: "SELECT * FROM findings WHERE image_id = ? ORDER BY start_at, due_at, created_at, rowid", arguments: [imageID]).compactMap { row in
+            guard let kind = FindingKind(rawValue: row["kind"]) else { return nil }
+            return Finding(id: row["id"], kind: kind, title: row["title"], allDay: (row["all_day"] as Int) != 0, start: row["start_at"],
+                           end: row["end_at"], due: row["due_at"], remind: row["remind_at"], timezone: row["timezone"],
+                           people: Self.decode(row["people_json"], as: [String].self) ?? [], place: row["place"], notes: row["notes"],
+                           citedLines: Self.decode(row["cited_lines_json"], as: [Int].self) ?? [], confidence: row["confidence"],
+                           provenance: Self.decode(row["provenance_json"], as: [String: FieldProvenance].self) ?? [:],
+                           unresolved: Self.decode(row["unresolved_json"], as: [String: String].self) ?? [:],
+                           tags: Self.decode(row["tags_json"], as: [CaptureTag].self) ?? [])
+        }
+    }
+
+    static func tags(_ db: Database, imageID: String) throws -> [CaptureTag] {
+        try Row.fetchAll(db, sql: "SELECT * FROM capture_tags WHERE image_id = ? ORDER BY key, value", arguments: [imageID]).map {
+            CaptureTag(key: $0["key"], value: $0["value"], confidence: $0["confidence"], source: $0["source"])
         }
     }
 
