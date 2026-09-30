@@ -64,12 +64,16 @@ public enum LastCaptureResult: Sendable, Equatable {
 
 // MARK: Pipeline
 
-public actor CapturePipeline {
+public protocol CaptureRunning: Sendable {
+    /// nil when another capture is already running (FR-011).
+    func run(trigger: CaptureTrigger) async -> CaptureOutcome?
+}
+
+public actor CapturePipeline: CaptureRunning {
     public static let minimumFreeBytes: Int64 = 1_073_741_824          // FR-022
     public init(capturer: any DisplayCapturing, encoder: any ImageEncoding,
                 disk: any DiskSpaceChecking, files: CaptureFileStore, store: any CaptureStoring,
-                settings: StorageSettings, time: any TimeSource)
-    /// nil when another capture is already running (FR-011).
+                paths: AppPaths, settings: StorageSettings, time: any TimeSource = SystemTimeSource())
     public func run(trigger: CaptureTrigger) async -> CaptureOutcome?
 }
 
@@ -118,7 +122,8 @@ public struct CaptureFileStore: Sendable {
     public func discard(staging: URL)
     public func removeCaptureDirectory(eventID: String, capturedAt: Date)
     /// Start-up sweep: empties staging, removes directories without a record, flags records whose file is gone.
-    public func reconcile(with store: CaptureStore) throws
+    @discardableResult
+    public func reconcile(with store: CaptureStore) throws -> ReconcileReport
 }
 
 public struct StorageSummary: Sendable, Equatable {
@@ -126,17 +131,24 @@ public struct StorageSummary: Sendable, Equatable {
     public let pictureBytes: Int64
     public let databaseBytes: Int64
 }
+public struct ReconcileReport: Sendable, Equatable { public let stagingRemoved, orphansRemoved, markedMissing: Int }
+
 public struct StorageStats: Sendable {
+    public init(paths: AppPaths, store: CaptureStore)
     public func summary() throws -> StorageSummary         // reads the files themselves (SC-006)
 }
 
 public struct CleanupService: Sendable {
     public struct Preview: Sendable, Equatable { public let captureCount: Int; public let bytes: Int64 }
-    public func preview(olderThanDays days: Int?) throws -> Preview        // nil = all captures
-    public func delete(olderThanDays days: Int?) throws -> Int             // returns captures deleted
+    public init(paths: AppPaths, store: CaptureStore, files: CaptureFileStore, time: any TimeSource = SystemTimeSource())
+    public func preview(olderThanDays days: Int?, now: Date? = nil) throws -> Preview   // nil = all captures
+    public func delete(olderThanDays days: Int?, now: Date? = nil) throws -> Int        // returns captures deleted
 }
 
-public enum RetentionPolicy: Sendable, Equatable { case forever, days(Int) }
+public enum RetentionPolicy: Sendable, Equatable {
+    case forever, days(Int)
+    public func isShorter(than other: RetentionPolicy) -> Bool     // FR-018
+}
 
 public struct StorageSettings: Sendable {
     public static let modelLongEdgeRange = 512...4096
@@ -150,17 +162,22 @@ public struct StorageSettings: Sendable {
 }
 
 public struct RetentionService: Sendable {
+    public init(cleanup: CleanupService, settings: StorageSettings, store: any SettingsStore)
     public func apply(now: Date) throws -> Int             // remove captures older than the policy; returns count
-    public func runIfDue(now: Date) throws -> Int          // at start and about daily (24 h since lastRun); returns count
+    public func runNow(now: Date) throws -> Int            // apply and remember the time; used at start and after a change
+    public func runIfDue(now: Date) throws -> Int          // runNow unless it ran in the last 24 h
     public func removalPreview(for policy: RetentionPolicy, now: Date) throws -> CleanupService.Preview   // FR-018
 }
 
 // MARK: Start-up
 
 public struct StorageContext: Sendable {
-    public let store: CaptureStore, files: CaptureFileStore, cleanup: CleanupService
+    public let paths: AppPaths
+    public let store: CaptureStore?                        // nil when the database cannot be used
+    public let files: CaptureFileStore
     public let notice: StartupNotice?                      // damaged file set aside (FR-019)
     public let capturingDisabledReason: String?            // database from a newer version (FR-013)
+    public let reconcile: ReconcileReport?
 }
 public enum StartupNotice: Sendable, Equatable { case damagedDatabaseSetAside(fileName: String) }
 public enum StorageBootstrap {
@@ -183,7 +200,22 @@ public protocol FeedbackPlaying {     // adds the warning pair (FR-006, FR-008, 
 }
 
 extension CaptureRequestService {
-    /// init gains the pipeline; `request` returns the outcome and plays feedback from it.
+    /// init gains `runner: any CaptureRunning` and `onOutcome`; `request` returns the
+    /// `CaptureOutcome?` (nil when dropped as a double press or ignored because one is running),
+    /// plays feedback from it and reports the permission to `PermissionMonitor`.
+}
+
+// MARK: Additions made while building
+
+public protocol SettingsStore: Sendable {      // gains int, string and date accessors
+    func int(forKey: String) -> Int?;    func setInt(_: Int, forKey: String)
+    func string(forKey: String) -> String?; func setString(_: String, forKey: String)
+    func date(forKey: String) -> Date?;  func setDate(_: Date, forKey: String)
+}
+
+public enum LastCaptureLine {                  // exact menu texts, independent of the system language
+    public static func text(for result: LastCaptureResult?, age seconds: TimeInterval) -> String
+    public static func age(_ seconds: TimeInterval) -> String
 }
 ```
 

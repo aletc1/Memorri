@@ -56,6 +56,22 @@ swift test --package-path Packages/MemorriCore      # the unit tests
 - To open the project in Xcode instead, run `xcodegen generate` and open `Memorri.xcodeproj`.
 - Quick reset for testing the first launch: `tccutil reset ScreenCapture com.aletc1.memorri; defaults delete com.aletc1.memorri`.
 
+### Where the app keeps its data
+
+Captures and the database live in `~/Library/Application Support/Memorri/` (mode 0700, excluded from Time Machine):
+
+```text
+memorri.sqlite (+ -wal, -shm)        records (tables capture_events and capture_images)
+captures/<yyyy-MM>/<eventID>/        full-resolution and analysis pictures (HEIC)
+staging/                             captures being written; emptied at every start
+```
+
+- Inspect the records: `sqlite3 "$HOME/Library/Application Support/Memorri/memorri.sqlite" "select status, display_count from capture_events order by captured_at desc limit 5;"`. Look at pictures only on a prepared test screen, because they show your real screen.
+- Reset everything: quit Memorri, then `rm -rf "$HOME/Library/Application Support/Memorri"` and `defaults delete com.aletc1.memorri`.
+- A database that could not be read is renamed `memorri.sqlite.damaged-<date>` in the same folder and never deleted.
+- Debug builds accept `--simulate-free-bytes <n>` (for example `open -n Memorri.app --args --simulate-free-bytes 500000000`) to test the refusal when less than 1 GB is free.
+- A running process does see a revoked Screen Recording permission through a real capture (ScreenCaptureKit error -3801). `CGPreflightScreenCaptureAccess()` keeps answering `true`, so do not use it after launch. Probes started from a shell are attributed to the terminal; start the app through LaunchServices (`open -n -W --stdout <file> Memorri.app --args …`).
+
 ## 2. How Spec Kit works here
 
 A **spec** is a written description of one feature. You write it before the code. Each spec goes through the same steps, and each step is a slash command typed into Claude Code:
