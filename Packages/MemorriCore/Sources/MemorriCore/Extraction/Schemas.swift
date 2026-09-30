@@ -25,7 +25,8 @@ public enum ExtractionSchemas {
         "calendar_name": string,
     ], required: ["screen_kind", "kind_confidence", "application", "platform_look", "remote_session", "theme", "calendar_name"])
 
-    public static func schemaVersion(for kind: ScreenKind) -> String { "schema-\(kind.rawValue)-v1" }
+    /// Month views gained `column_line` (the day label of the cell), so their schema is at version 2.
+    public static func schemaVersion(for kind: ScreenKind) -> String { "schema-\(kind.rawValue)-\(kind == .calendarMonth ? "v2" : "v1")" }
 
     /// `{ "findings": [ ... ] }`. Every finding has a kind, a non-empty title and a list of cited line numbers (the citation check drops findings that cite none); dates
     /// and times are literal texts (the resolver turns them into instants). Week and day views add the column header
@@ -42,10 +43,10 @@ public enum ExtractionSchemas {
             "place": string, "notes": string,
         ]
         switch kind {
-        case .calendarWeek, .calendarDay: properties["column_line"] = integer
+        case .calendarWeek, .calendarDay, .calendarMonth: properties["column_line"] = integer
         case .email: properties["sent_text"] = string
         case .chat: properties["message_time_text"] = string
-        case .calendarMonth, .document, .other: break
+        case .document, .other: break
         }
         let finding: JSONValue = .object(["type": .string("object"), "properties": .object(properties),
                                           "required": .array([.string("kind"), .string("title"), .string("cited_lines")])])

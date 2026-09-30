@@ -15,7 +15,7 @@ public enum ExtractionPrompts {
             + "Use empty strings for what you cannot tell."
     }
 
-    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v1" }
+    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v2" }
 
     private static func description(of kind: ScreenKind) -> String {
         switch kind {
@@ -32,16 +32,20 @@ public enum ExtractionPrompts {
     private static func hint(for kind: ScreenKind) -> String {
         switch kind {
         case .calendarWeek, .calendarDay:
-            return " Each block sits under a date header. Give the number of that header line in column_line. "
+            return " Everything in a calendar view is an appointment. Each block sits under a date header. "
+                + "Give the number of that header line in column_line. "
                 + "Put the start time shown on the block in start_text and its end time, if shown, in end_text."
         case .calendarMonth:
-            return " Each entry sits in the cell of a day. Put the day number or name of that cell in date_text "
-                + "and the time shown on the entry, if any, in start_text."
+            return " Everything in a calendar view is an appointment. Each entry sits in the cell of a day. "
+                + "Give the number of the line that shows that cell's day number in column_line, "
+                + "and put the time shown on the entry, if any, in start_text."
         case .email:
-            return " Put the date and time the message was sent (from its header) in sent_text, because words like "
+            return " Take items from the open message, not from the list of other messages beside it. "
+                + "Put the date and time the message was sent (from its header) in sent_text, because words like "
                 + "\"tomorrow\" or \"Friday\" are relative to it."
         case .chat:
-            return " Put the time shown next to the message that mentions the item in message_time_text, because words "
+            return " Write the title in the language of the messages. "
+                + "Put the time shown next to the message that mentions the item in message_time_text, because words "
                 + "like \"tomorrow\" are relative to when the message was sent."
         case .document, .other:
             return ""
@@ -63,12 +67,16 @@ public enum ExtractionPrompts {
             "L\(line.n) (\(Int((Double(line.box.x) / width * 100).rounded(.down)))%,\(Int((Double(line.box.y) / height * 100).rounded(.down)))%) \(line.text)"
         }.joined(separator: "\n")
         let prompt = "This screenshot shows a \(description(of: kind)). Below are the text lines read from it, numbered L<n>. "
-            + "List every appointment, task, reminder and deadline the screen shows. Use only what is on screen. "
+            + "List the appointments, tasks, reminders and deadlines the screen shows. Use only what is on screen and do not invent anything. "
+            + "Only list something that has a date or a time, or that says a person needs or has to do something; "
+            + "leave out headlines, newsletters and text about other things. "
             + "For each one give the numbers of the lines that show it in cited_lines. "
+            + "The title is a short name for it made of words from those lines: no line numbers, no labels like (L5) and no dates. "
             + "Copy dates and times exactly as written into start_text, end_text, date_text, due_text and remind_text. "
-            + "A sentence like \"X needs Y by Friday\" is a task for X: put X in people. "
-            + "A deadline is something due by a date: put the date in due_text, and a reminder time only if the text gives one. "
-            + "Do not invent anything." + hint(for: kind) + "\n\nLines:\n" + list
+            + "A sentence like \"Maria needs the budget figures by Friday 23 October\" is a task: title \"Budget figures\", "
+            + "people [\"Maria\"], due_text \"Friday 23 October\". "
+            + "A deadline is something due by a date: put the date in due_text, and a reminder time only if the text gives one."
+            + hint(for: kind) + "\n\nLines:\n" + list
         return (prompt, capped)
     }
 }

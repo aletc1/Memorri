@@ -182,10 +182,31 @@ public struct EvalReport: Sendable, Equatable, Codable {
         if let context = overall.contextAccuracy { lines.append("context    accuracy \(f(context))") }
         if ranWhileAppBusy { lines.append("note       ran while the app was busy") }
         for c in cases {
-            for m in c.missed { lines.append("missed     \(c.name): \"\(m.expected.title)\" (nearest found: \(m.nearestFoundTitle ?? "none"))") }
-            for u in c.score.unexpected { lines.append("unexpected \(c.name): \"\(u.found.title)\" (nearest expected: \(u.closestExpectedTitle ?? "none"))") }
+            for m in c.missed {
+                let e = m.expected
+                lines.append("missed     \(c.name): \"\(e.title)\"\(Self.dates(e.start, e.end, e.due, e.remind, allDay: e.allDay ?? false, inferred: e.inferred ?? [])) (nearest found: \(m.nearestFoundTitle ?? "none"))")
+            }
+            for u in c.score.unexpected {
+                let f = u.found
+                lines.append("unexpected \(c.name): \"\(f.title)\"\(Self.dates(f.start, f.end, f.due, f.remind, allDay: f.allDay, inferred: f.inferred)) (nearest expected: \(u.closestExpectedTitle ?? "none"))")
+            }
             for d in c.score.disagreements { lines.append("disagrees  \(c.name): \"\(d.title)\" is not in the text it cites") }
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// The dates of a finding in UTC, for reading the list of misses: ` [start 2026-10-14 12:30, end 2026-10-14 13:00 inferred]`.
+    static func dates(_ start: Date?, _ end: Date?, _ due: Date?, _ remind: Date?, allDay: Bool, inferred: [String]) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        var parts: [String] = []
+        for (name, value) in [("start", start), ("end", end), ("due", due), ("remind", remind)] {
+            guard let value else { continue }
+            parts.append("\(name) \(formatter.string(from: value))\(inferred.contains(name) ? " inferred" : "")")
+        }
+        if allDay { parts.append("all day") }
+        return parts.isEmpty ? "" : " [" + parts.joined(separator: ", ") + " UTC]"
     }
 }

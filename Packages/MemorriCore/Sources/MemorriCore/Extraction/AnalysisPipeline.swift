@@ -33,6 +33,8 @@ public struct PipelineInput: @unchecked Sendable {
     public let windows: [WindowInfo]
     /// What the user chose for this picture (a decision with source `user`); it is used as it is and never replaced.
     public let userChoice: ContextDecision?
+    /// The display's scale factor (2 on a Retina display), when known.
+    public let displayScale: Double?
 
     /// The Mac's languages, then English and Spanish.
     public static func defaultLocales() -> [Locale] {
@@ -42,11 +44,11 @@ public struct PipelineInput: @unchecked Sendable {
     public init(image: CGImage, classificationJPEG: Data, classificationSize: (width: Int, height: Int), analysisJPEG: Data? = nil,
                 analysisSize: (width: Int, height: Int)? = nil, macTimezone: TimeZone = .current, captureTime: Date = Date(),
                 locales: [Locale] = PipelineInput.defaultLocales(), reuse: Reuse = Reuse(), contexts: [ContextRecord] = [],
-                windows: [WindowInfo] = [], userChoice: ContextDecision? = nil) {
+                windows: [WindowInfo] = [], userChoice: ContextDecision? = nil, displayScale: Double? = nil) {
         self.image = image; self.classificationJPEG = classificationJPEG; self.classificationSize = classificationSize
         self.analysisJPEG = analysisJPEG ?? classificationJPEG; self.analysisSize = analysisSize ?? classificationSize
         self.macTimezone = macTimezone; self.captureTime = captureTime; self.locales = locales; self.reuse = reuse
-        self.contexts = contexts; self.windows = windows; self.userChoice = userChoice
+        self.contexts = contexts; self.windows = windows; self.userChoice = userChoice; self.displayScale = displayScale
     }
 }
 
@@ -163,21 +165,32 @@ public struct AnalysisPipeline: Sendable {
         }
         let checked = CitationCheck.apply(drafts, lineCount: lines.count)
         discards += checked.discarded
-        // The context decides the time zone the dates are read in, so it is settled before they are resolved.
+        // What the picture's surroundings say: tags from the capture, the text and the first call. They feed the context choice,
+        // and the context decides the time zone the dates are read in, so both are settled before the dates are resolved.
+        let tags = TagExtractor.tags(width: input.image.width, height: input.image.height, scale: input.displayScale, windows: input.windows,
+                                     lines: lines, classification: resolved)
         let decision = input.userChoice.flatMap { $0.source == .user ? $0 : nil }
-            ?? ContextMatcher.decide(contexts: input.contexts, windows: input.windows, tags: [], lines: lines)
+            ?? ContextMatcher.decide(contexts: input.contexts, windows: input.windows, tags: tags, lines: lines)
         let (zone, zoneSource) = Self.zone(for: input.contexts.first { $0.id == decision.contextID }, mac: input.macTimezone)
+        let locales = Self.locales(input.locales, preferring: tags.first { $0.key == "language" }?.value)
         let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
-        let headers = calendarKind ? DateResolver.headers(in: lines, locales: input.locales, reference: input.captureTime, timezone: zone) : []
-        let order = DateParser.dateOrder(ofUnambiguous: lines.map(\.text))
+        let headers = calendarKind ? DateResolver.headers(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
+        let cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
+        let order = tags.first { $0.key == "date_order" }.flatMap { DateOrder(rawValue: $0.value) }
         let base = ResolutionContext(captureTime: input.captureTime, timezone: zone, headers: headers, lines: lines, dateOrder: order,
-                                     locales: input.locales)
+                                     locales: locales, cells: cells)
         let geometry = calendarKind ? Geometry(image: input.image, columnWidth: Self.columnWidth(headers: headers, imageWidth: input.image.width,
                                                                                                   kind: resolved.kind)) : nil
-        let findings = checked.kept.map { Self.assemble($0, lines: lines, context: base, geometry: geometry) }
-        return AnalysisResult(lines: lines, classification: resolved, findings: findings, discards: discards, decision: decision,
+        let findings = checked.kept.map { Self.assemble($0, lines: lines, context: base, geometry: geometry, tags: tags) }
+        return AnalysisResult(lines: lines, classification: resolved, tags: tags, findings: findings, discards: discards, decision: decision,
                               timezone: zone, timezoneSource: zoneSource, lineCapApplied: capped, model: settings.model,
                               pictureLongEdge: max(input.analysisSize.width, input.analysisSize.height), steps: steps)
+    }
+
+    /// The languages dates are read in, with the one the picture is written in first (`language` tag), when it is among them.
+    static func locales(_ locales: [Locale], preferring language: String?) -> [Locale] {
+        guard let language, let index = locales.firstIndex(where: { $0.language.languageCode?.identifier == language }), index > 0 else { return locales }
+        return [locales[index]] + locales.enumerated().filter { $0.offset != index }.map(\.element)
     }
 
     /// The zone a context gives its dates: its own, else the Mac's. A stored zone that no longer exists is reported, not hidden.
@@ -201,11 +214,12 @@ public struct AnalysisPipeline: Sendable {
     }
 
     /// Turns a checked draft into a finding. Each date text is resolved by `DateResolver`; what it cannot settle stays as written.
-    static func assemble(_ draft: FindingDraft, lines: [RecognisedLine], context base: ResolutionContext, geometry: Geometry? = nil) -> Finding {
+    static func assemble(_ draft: FindingDraft, lines: [RecognisedLine], context base: ResolutionContext, geometry: Geometry? = nil,
+                         tags: [CaptureTag] = []) -> Finding {
         // An email's own date is the reference for the words in it.
         let context = ResolutionContext(captureTime: base.captureTime, timezone: base.timezone, headers: base.headers, lines: base.lines,
                                         dateOrder: base.dateOrder, locales: base.locales,
-                                        sentReference: DateResolver.sentReference(for: draft, in: base))
+                                        sentReference: DateResolver.sentReference(for: draft, in: base), cells: base.cells)
         func resolve(_ field: String, _ texts: String?...) -> ResolvedValue {
             let text = texts.lazy.compactMap { $0 }.first ?? ""
             return DateResolver.resolve(text: text, field: field, draft: draft, in: context)
@@ -250,6 +264,6 @@ public struct AnalysisPipeline: Sendable {
                        due: results["due"]?.date, remind: results["remind"]?.date, timezone: context.timezone.identifier,
                        people: draft.people, place: draft.place, notes: draft.notes, citedLines: draft.citedLines,
                        confidence: Finding.confidence(citing: draft.citedLines, in: lines, anyInferred: anyInferred),
-                       provenance: provenance, unresolved: unresolved)
+                       provenance: provenance, unresolved: unresolved, tags: tags)
     }
 }

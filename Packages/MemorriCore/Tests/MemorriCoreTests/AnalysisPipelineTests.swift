@@ -122,7 +122,7 @@ import Testing
         #expect(request.schema == ExtractionSchemas.extractSchema(for: .calendarWeek))
         #expect(request.picture == Data("analysis-bytes".utf8))
         let step = try #require(result.steps.last)
-        #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v1" && step.schemaVersion == "schema-calendar_week-v1")
+        #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v2" && step.schemaVersion == "schema-calendar_week-v1")
         #expect(result.findings.count == 1 && result.findings[0].title == "Team sync" && result.findings[0].citedLines == [1])
         #expect(result.findings[0].kind == .appointment && result.findings[0].confidence == 0.5)   // the end is guessed, so at most 0.5
         #expect(result.model == "m" && result.pictureLongEdge == 2048 && !result.lineCapApplied)
@@ -309,6 +309,62 @@ import Testing
         let choice = ContextDecision(contextID: "gone", source: .user, score: 0)
         let result = try await contextInput(contexts: [], windows: [], userChoice: choice)
         #expect(result.decision.source == .user && result.timezone == TimeZone(identifier: "UTC")! && result.timezoneSource == "mac")
+    }
+
+    // MARK: Tags
+
+    @Test func theTagsComeFromTheCaptureTheTextAndTheFirstCall() async throws {
+        let lines = [RecognisedLine(n: 1, text: "Wednesday 14", box: PixelBox(x: 10, y: 10, width: 120, height: 18), confidence: 0.9),
+                     RecognisedLine(n: 2, text: "09:00 Budget meeting", box: PixelBox(x: 10, y: 60, width: 200, height: 18), confidence: 0.9),
+                     RecognisedLine(n: 3, text: "13:30 Review", box: PixelBox(x: 10, y: 90, width: 200, height: 18), confidence: 0.9)]
+        let (rig, base) = dateInput(lines: lines)
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[]}"#)
+        let input = PipelineInput(image: base.image, classificationJPEG: base.classificationJPEG, classificationSize: base.classificationSize,
+                                  analysisJPEG: base.analysisJPEG, analysisSize: base.analysisSize, macTimezone: madrid, captureTime: captureTime,
+                                  locales: base.locales, windows: [window("Inbox - Customer A - Outlook")], displayScale: 2)
+        let tags = try await rig.pipeline.analyse(input, settings: settings).tags
+        func value(_ key: String) -> String? { tags.first { $0.key == key }?.value }
+        #expect(value("display_size") == "1600x1000" && value("display_scale") == "2x" && value("window_app") == "Outlook")
+        #expect(value("clock_style") == "24h" && value("application") == "Outlook" && value("platform_look") == "windows" && value("theme") == "light")
+        #expect(tags.first { $0.key == "application" }?.source == "visual" && tags.first { $0.key == "clock_style" }?.source == "code")
+    }
+
+    @Test func everyFindingCarriesTheTagsOfItsPicture() async throws {
+        let plain = [RecognisedLine(n: 1, text: "Send the report by tomorrow", box: PixelBox(x: 10, y: 10, width: 300, height: 18), confidence: 0.9)]
+        let (rig, input) = dateInput(lines: plain)
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"task","title":"A","cited_lines":[1],"due_text":"tomorrow"},{"kind":"task","title":"B","cited_lines":[1]}]}"#)
+        let result = try await rig.pipeline.analyse(input, settings: settings)
+        #expect(!result.tags.isEmpty && result.findings.count == 2)
+        #expect(result.findings.allSatisfy { $0.tags == result.tags })
+    }
+
+    @Test func theLanguageOfThePictureDecidesWhatAnAmbiguousAbbreviationMeans() async throws {
+        // "mar 13" is Tuesday 13 in Spanish and the 13th of March in English; the text around it is Spanish.
+        let lines = [RecognisedLine(n: 1, text: "La reunión de presupuesto trimestral es el martes por la tarde", box: PixelBox(x: 10, y: 10, width: 600, height: 18), confidence: 0.9),
+                     RecognisedLine(n: 2, text: "Por favor confirma si puedes asistir a la reunión con el equipo", box: PixelBox(x: 10, y: 40, width: 600, height: 18), confidence: 0.9),
+                     RecognisedLine(n: 3, text: "mar 13 10:00 Revisión", box: PixelBox(x: 10, y: 70, width: 300, height: 18), confidence: 0.9)]
+        let (rig, input) = dateInput(lines: lines)
+        rig.model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer.replacingOccurrences(of: "calendar_week", with: "document"))
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Revisión","cited_lines":[3],"start_text":"10:00","date_text":"mar 13"}]}"#)
+        let result = try await rig.pipeline.analyse(input, settings: settings)
+        #expect(result.tags.first { $0.key == "language" }?.value == "es")
+        #expect(result.findings.first?.start == SyntheticTime.date(2026, 10, 13, 10, 0, zone: "Europe/Madrid"))
+    }
+
+    @Test func aMonthViewReadsEachEntrysDateFromItsCell() async throws {
+        var lines: [RecognisedLine] = [RecognisedLine(n: 1, text: "October 2026", box: PixelBox(x: 20, y: 10, width: 200, height: 24), confidence: 0.9)]
+        for (i, number) in (Array(28...30) + Array(1...31) + [1, 2]).enumerated() {
+            lines.append(RecognisedLine(n: i + 2, text: "\(number)", box: PixelBox(x: (i % 7) * 200 + 10, y: 60 + (i / 7) * 150, width: 22, height: 18), confidence: 0.9))
+        }
+        lines.append(RecognisedLine(n: 38, text: "09:00 Budget meeting", box: PixelBox(x: 10, y: 60 + 150 + 30, width: 160, height: 18), confidence: 0.9))   // Monday 5
+        lines.append(RecognisedLine(n: 39, text: "Training", box: PixelBox(x: 410, y: 60 + 3 * 150 + 30, width: 160, height: 18), confidence: 0.9))       // Wednesday 21
+        let (rig, input) = dateInput(lines: lines)
+        rig.model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer.replacingOccurrences(of: "calendar_week", with: "calendar_month"))
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Budget meeting","cited_lines":[38],"start_text":"09:00"},{"kind":"appointment","title":"Training","cited_lines":[39],"all_day":true}]}"#)
+        let result = try await rig.pipeline.analyse(input, settings: settings)
+        #expect(result.findings[0].start == SyntheticTime.date(2026, 10, 5, 9, 0, zone: "Europe/Madrid"))
+        #expect(result.findings[0].provenance["start"] == FieldProvenance(origin: .read, rule: "month-cell"))
+        #expect(result.findings[1].start == SyntheticTime.date(2026, 10, 21, zone: "Europe/Madrid") && result.findings[1].allDay)
     }
 
     // MARK: Durations

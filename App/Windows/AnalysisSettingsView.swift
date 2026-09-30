@@ -107,6 +107,14 @@ private struct CaptureRow: View {
             .compactMap { key in row.tags.first { $0.key == key }?.value }
     }
 
+    /// Who the picture seems to belong to: shown only inside the findings, never in the list row.
+    private var accountLine: String? {
+        let accounts = row.tags.filter { $0.key == "account" }.map(\.value), domains = row.tags.filter { $0.key == "domain" }.map(\.value)
+        let parts = [accounts.isEmpty ? nil : "Account: " + accounts.joined(separator: ", "),
+                     domains.isEmpty ? nil : "Domain: " + domains.joined(separator: ", ")].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: "  ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -147,6 +155,7 @@ private struct CaptureRow: View {
                 DisclosureGroup("Findings", isExpanded: $showFindings) {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(row.findings, id: \.id) { Text(FindingLine.text(for: $0)).font(.callout).textSelection(.enabled) }
+                        if let accountLine { Text(accountLine).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }

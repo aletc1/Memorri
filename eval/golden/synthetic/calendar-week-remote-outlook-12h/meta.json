@@ -5,6 +5,10 @@
       {
         "kind" : "domain",
         "value" : "customer-a.example"
+      },
+      {
+        "kind" : "window_title",
+        "value" : "Customer A"
       }
     ],
     "name" : "Customer A",

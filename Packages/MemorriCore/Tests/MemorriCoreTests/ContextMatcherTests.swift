@@ -97,4 +97,22 @@ import Testing
         #expect(decision.score == 9.5)
         #expect(Set(decision.matched.map(\.hintKind)) == ["window_title", "app", "domain", "keyword"])
     }
+
+    @Test func aRemoteClientTagMatchesAnAppHint() {
+        let a = context("A", [hint(.app, "Citrix")])
+        #expect(decide([a], tags: [tag("remote_client", "Citrix Viewer")]).contextID == "A")
+        #expect(decide([a], tags: [tag("remote_session", "Citrix")]).contextID == "A")
+    }
+
+    @Test func anAccountOrDomainTagMatchesADomainHint() {
+        let a = context("A", [hint(.domain, "customer-a.example")])
+        #expect(decide([a], tags: [tag("account", "ana@customer-a.example")]).contextID == "A")
+        #expect(decide([a], tags: [tag("domain", "portal.customer-a.example")]).contextID == "A")
+        #expect(decide([a], tags: [tag("domain", "other.example")]).source == .none)
+    }
+
+    @Test func titleKeywordTagsCountForKeywordHints() {
+        let a = context("A", [hint(.keyword, "budget"), hint(.app, "Outlook")])
+        #expect(decide([a], windows: [window(app: "Outlook")], tags: [tag("window_title_keywords", "budget")]).score == 4)
+    }
 }

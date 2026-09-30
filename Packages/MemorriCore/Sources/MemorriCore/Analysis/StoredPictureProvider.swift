@@ -9,13 +9,16 @@ public struct StoredPicture: Sendable, Equatable {
     public let height: Int
     /// When the capture was taken (nil when the provider cannot say).
     public let capturedAt: Date?
+    /// The display's scale factor when the capture was taken (nil when the provider cannot say).
+    public let scale: Double?
     public var longEdge: Int { max(width, height) }
 
-    public init(data: Data, width: Int, height: Int, capturedAt: Date? = nil) {
+    public init(data: Data, width: Int, height: Int, capturedAt: Date? = nil, scale: Double? = nil) {
         self.data = data
         self.width = width
         self.height = height
         self.capturedAt = capturedAt
+        self.scale = scale
     }
 }
 
@@ -44,7 +47,7 @@ public struct StoredPictureProvider: AnalysisPictureProviding, FullPictureProvid
         let url = paths.root.appendingPathComponent(record.modelPath)
         guard let data = try? Data(contentsOf: url) else { return nil }
         return StoredPicture(data: data, width: record.modelWidth, height: record.modelHeight,
-                             capturedAt: try? store.capturedAt(eventID: record.eventId))
+                             capturedAt: try? store.capturedAt(eventID: record.eventId), scale: record.scale)
     }
 
     public func fullPicture(imageID: String) throws -> CGImage? {

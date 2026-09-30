@@ -15,8 +15,8 @@ import Testing
 
     @Test func everyKindHasVersionedPromptAndSchema() {
         for kind in ScreenKind.allCases {
-            #expect(ExtractionPrompts.version(for: kind) == "extract-\(kind.rawValue)-v1")
-            #expect(ExtractionSchemas.schemaVersion(for: kind) == "schema-\(kind.rawValue)-v1")
+            #expect(ExtractionPrompts.version(for: kind) == "extract-\(kind.rawValue)-v2")
+            #expect(ExtractionSchemas.schemaVersion(for: kind) == "schema-\(kind.rawValue)-\(kind == .calendarMonth ? "v2" : "v1")")
         }
     }
 
@@ -50,7 +50,7 @@ import Testing
                   case .object(let props)? = items["properties"] else { return [] }
             return Set(props.keys)
         }
-        for kind in [ScreenKind.calendarWeek, .calendarDay] { #expect(properties(kind).contains("column_line")) }
+        for kind in [ScreenKind.calendarWeek, .calendarDay, .calendarMonth] { #expect(properties(kind).contains("column_line")) }
         #expect(properties(.email).contains("sent_text"))
         #expect(properties(.chat).contains("message_time_text"))
         #expect(!properties(.document).contains("column_line") && !properties(.document).contains("sent_text"))
@@ -70,7 +70,8 @@ import Testing
             #expect(lower.contains("only what is on screen"), Comment(rawValue: "\(kind)"))
             #expect(lower.contains("cited_lines"))
             #expect(lower.contains("exactly as written"))
-            #expect(prompt.contains("needs") && lower.contains("task for x"))
+            #expect(prompt.contains("Maria needs the budget figures by Friday 23 October") && lower.contains("is a task"))
+            #expect(lower.contains("no line numbers") && lower.contains("leave out headlines"))
             #expect(prompt.contains("L1 (10%,10%) Mon 12") && prompt.contains("L2 (10%,10%) Team sync"))
             #expect(!capped)
         }
@@ -78,8 +79,9 @@ import Testing
 
     @Test func kindSpecificHintsAreOnlyInTheirPrompts() {
         func prompt(_ kind: ScreenKind) -> String { ExtractionPrompts.extractPrompt(kind: kind, lines: [line(1)], pictureSize: (100, 100)).prompt.lowercased() }
-        #expect(prompt(.calendarWeek).contains("column_line") && prompt(.calendarDay).contains("column_line"))
-        #expect(prompt(.email).contains("sent_text"))
+        #expect(prompt(.calendarWeek).contains("column_line") && prompt(.calendarDay).contains("column_line") && prompt(.calendarMonth).contains("column_line"))
+        #expect(prompt(.email).contains("sent_text") && prompt(.email).contains("open message"))
+        #expect(prompt(.calendarWeek).contains("is an appointment") && prompt(.calendarMonth).contains("day number"))
         #expect(prompt(.chat).contains("message_time_text"))
         #expect(!prompt(.document).contains("column_line") && !prompt(.other).contains("sent_text"))
     }

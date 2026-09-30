@@ -40,7 +40,7 @@ struct SyntheticDrawing {
 
 enum SyntheticChrome {
     static let customerA = GoldenContext(name: "Customer A", timezone: "America/New_York",
-                                         hints: [GoldenHint(kind: "domain", value: "customer-a.example")])
+                                         hints: [GoldenHint(kind: "domain", value: "customer-a.example"), GoldenHint(kind: "window_title", value: "Customer A")])
 
     /// Draws the window frame the look asks for and hands the rest of the picture to `draw`.
     static func make(_ setup: SyntheticSetup, chrome: Bool = true, draw: (SyntheticCanvas, CGRect) -> SyntheticDrawing) throws -> SyntheticCase {

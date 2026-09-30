@@ -50,7 +50,7 @@ import Testing
 
         let stored = try #require(try store.analysis(imageID: fixture.imageID))
         #expect(stored.kind == .calendarWeek && stored.kindConfidence == 0.9 && stored.model == "qwen3.8:27b-mlx")
-        #expect(stored.classifyVersion == "classify-v1" && stored.promptVersion == "extract-calendar_week-v1" && stored.schemaVersion == "schema-calendar_week-v1")
+        #expect(stored.classifyVersion == "classify-v1" && stored.promptVersion == "extract-calendar_week-v2" && stored.schemaVersion == "schema-calendar_week-v1")
         #expect(stored.pictureLongEdge == 2048 && stored.timezone == "Europe/Madrid" && stored.timezoneSource == "mac")
         #expect(stored.findingCount == 2 && stored.lineCapApplied && stored.analysedAt == at)
         #expect(stored.discarded == [CitationCheck.Discard(title: "Bad", reason: "cites no line", citedLines: [])])
@@ -160,5 +160,16 @@ import Testing
         try store.save(result(findings: [finding()], decision: ContextDecision(contextID: nil, source: .none, score: 0)), imageID: fixture.imageID, runID: nil, at: at)
         try fixture.captures.deleteEvents(ids: [fixture.event.id])
         for table in ["image_analysis", "findings", "capture_tags", "image_context"] { #expect(try count(fixture, table) == 0, Comment(rawValue: table)) }
+    }
+
+    @Test func reanalysisReplacesTheTagsAndEachFindingKeepsACopyOfThem() throws {
+        let fixture = try makePipelineFixture(); defer { fixture.cleanUp() }
+        let store = AnalysisResultStore(database: fixture.database)
+        try store.save(result(findings: [finding()]), imageID: fixture.imageID, runID: nil, at: at)
+        let second = AnalysisResult(lines: [], classification: classification(), tags: [CaptureTag(key: "clock_style", value: "24h", confidence: 1, source: "code")],
+                                    findings: [finding()], timezone: .current, model: "m")
+        try store.save(second, imageID: fixture.imageID, runID: nil, at: at.addingTimeInterval(60))
+        #expect(try store.tags(imageID: fixture.imageID).map(\.key) == ["clock_style"])
+        #expect(try count(fixture, "capture_tags") == 1)
     }
 }

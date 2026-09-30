@@ -77,7 +77,7 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         let input = PipelineInput(image: full, classificationJPEG: copies.classificationJPEG, classificationSize: size,
                                   analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: .current,
                                   captureTime: analysisCopy.capturedAt ?? time.now(), reuse: reuse, contexts: knownContexts,
-                                  windows: (try? windows?.windows(imageID: imageID)) ?? [], userChoice: choice)
+                                  windows: (try? windows?.windows(imageID: imageID)) ?? [], userChoice: choice, displayScale: analysisCopy.scale)
 
         let analysis: AnalysisResult?
         let steps: [StepRecord]
