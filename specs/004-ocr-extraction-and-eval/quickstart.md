@@ -29,7 +29,7 @@ How to see that the feature works end to end. Most steps run from a terminal on 
 | `memorri-eval generate-synthetic`, then again, then `git status`. | About 26 cases under `eval/golden/synthetic/`; the second run changes nothing (same bytes). |
 | `memorri-eval run` with the app's queue busy (`open` a slow fake job first). | Refused with the pause message; nothing scored; exit 2. With `--allow-busy` it runs and the report says so. |
 | `memorri-eval run --out eval/out/a.json`. | Precision, recall, field accuracy, classification and tag accuracy overall, per kind and per case; missed and unexpected listed (SC-001, SC-002). |
-| Edit one expected finding (time + 10 min), `run --replay eval/out/a.json --out eval/out/b.json`, `compare a b`. | That case's field accuracy falls; the changed case is named; no model call was made (SC-009). |
+| Edit one expected finding's end time (+10 min; a start more than 5 minutes off no longer matches, so it would show as a miss instead), `run --replay eval/out/a.json --out eval/out/b.json`, `compare a b`. | That case's field accuracy falls; the changed case is named; no model call was made (SC-009). |
 | Stop Ollama, run again. | `Not reachable` status, nothing scored, exit 2. |
 
 ## Scenario 2: reading and classifying a picture (User Stories 2 and 4)
