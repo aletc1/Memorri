@@ -148,7 +148,28 @@ Memorri keeps a list of contexts (for example a customer's remote desktop or a w
 
 ---
 
-### User Story 8 - Choose the picture size from evidence (Priority: P3)
+### User Story 8 - Tag each capture with what its environment looks like (Priority: P2)
+
+For every picture Memorri also records a few facts about the environment it shows, as tags: the application (for example Outlook, Apple Mail, Teams, Slack, a web mail page), the operating system look (Windows, macOS, Linux), whether it is a remote or virtual desktop session and which client (for example Citrix, Remote Desktop, VMware, a browser-based session), the interface language, the date format and clock style (12 or 24 hour), light or dark theme, account or mailbox names and domains visible on screen, the calendar or folder name, time zone labels shown in the view, and the display's size and scale. Each tag has a value, a confidence and where it came from (a cited text line, a window title, or the look of the picture). Findings keep a copy of their picture's tags, so a later step can ask "did these two findings come from the same kind of place?".
+
+**Why this priority**: The same meeting can appear in several captures, and two similar-looking items can be different. Knowing that one came from Outlook on a Windows remote desktop with 24-hour time, and the other from Apple Mail on the Mac, gives spec 005 cheap, reliable evidence for deciding "same" or "different", and improves context detection (story 7) and date reading (a 12-hour clock changes how "10:00" is read). Tags are hints, never proof: differing tags alone never mean different items.
+
+**Independent Test**: Golden cases drawn as an Outlook week view on Windows with a remote desktop frame, an Apple Mail window on macOS, and a dark-theme chat each get the expected tags, and the eval report shows tag accuracy per tag.
+
+**Acceptance Scenarios**:
+
+1. **Given** a picture of a calendar in a known application, **When** it is analysed, **Then** an application tag with that name is stored with its confidence and source.
+2. **Given** a picture shown inside a remote or virtual desktop window, **When** it is analysed, **Then** a remote-session tag names the client when it can be told, or says "remote, client unknown".
+3. **Given** a 24-hour clock in a view, **When** analysed, **Then** the clock tag says 24-hour, and times are read accordingly (story 5).
+4. **Given** an account name, email domain or mailbox name is visible, **When** analysed, **Then** it is stored as a tag with its source line, and used as a context hint (story 7).
+5. **Given** a tag cannot be told, **When** analysed, **Then** it is absent or marked unknown, never guessed at high confidence.
+6. **Given** a finding is stored, **When** it is read back, **Then** it carries its picture's tags as they were at that run.
+7. **Given** a picture is reanalysed, **When** the new run ends, **Then** its tags are replaced by the new run's, and a tag the user set by hand (context choice) is kept.
+8. **Given** golden cases with expected tags, **When** eval runs, **Then** it reports accuracy per tag and lists wrong and missing tags.
+
+---
+
+### User Story 9 - Choose the picture size from evidence (Priority: P3)
 
 Using the golden set, the developer compares picture sizes (the longer side of the copy sent to the model) and records the best trade-off between accuracy and time. The default analysis size is changed if the evidence says so, and the decision is written down.
 
@@ -177,6 +198,9 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - The user pauses analysis during reading or extraction: the running step finishes; nothing new starts (spec 003).
 - Analysis takes long for a busy multi-display capture: the capture shows as queued or analysing in the menu; nothing blocks capturing.
 - A golden case has an expected item with a date that depends on the day it is run: cases carry their own capture time, so results do not change with the real date.
+- The same meeting is captured from two different applications (for example Outlook and a Teams calendar tab): tags differ, but that alone does not make them different items (FR-029).
+- Tags disagree inside one capture (two displays with different applications): each picture has its own tags; the capture has no single set.
+- A remote-desktop window shows a different platform look from the host Mac (Windows inside macOS): both are recorded, the remote one as the content's environment.
 - Privacy: golden cases from real sessions are never tracked or sent anywhere; eval talks only to the local server.
 
 ## Requirements *(mandatory)*
@@ -210,6 +234,11 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **FR-023**: Eval and the app MUST talk only to the local server (spec 003, FR-019). No picture, text or result may leave the Mac.
 - **FR-024**: The default analysis picture size MUST be decided from golden-set results at three or more sizes, recorded in an ADR, and applied as the default without overriding a size the user has chosen.
 - **FR-025**: The interface MUST stay responsive while reading and extraction run (menu and Settings respond within 1 second).
+- **FR-026**: For every analysed picture Memorri MUST record tags about its environment, each with a key, a value, a confidence, and a source (a cited line, a window title, or the look of the picture). The keys MUST include: application, operating system look, remote or virtual desktop session (with client when known), interface language, date format, clock style, theme, visible account or mailbox names and domains, calendar or folder name, time zone labels shown in the view, and the display's pixel size and scale (taken from the capture, not guessed).
+- **FR-027**: A tag that cannot be told MUST be absent or marked unknown. A tag judged from the look of the picture alone MUST carry a confidence, and low-confidence tags MUST be marked as such.
+- **FR-028**: Each finding MUST keep a copy of its picture's tags as they were for its run, so later steps can compare the environments of two findings. Tags MUST be removed with their capture in every kind of cleanup, because account names and domains can be sensitive, and MUST NOT be sent anywhere.
+- **FR-029**: Tags MUST be used as evidence for context detection (FR-015, for example a mailbox domain or a remote-session client matching a context's hints) and MUST inform date reading (clock style, date format, time zone labels). A difference in tags MUST NOT by itself mark two findings as different items; the comparison rule belongs to spec 005, which reads these tags.
+- **FR-030**: Settings MUST show a capture's tags in the recent-captures list (FR-018), and `memorri-eval` MUST score tags against expected tags in golden cases (optional per case), reporting accuracy per tag key and listing wrong and missing tags.
 
 ### Key Entities
 
@@ -217,6 +246,7 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **Screen classification**: the kind of screen a picture shows, with the version of the classifier instructions.
 - **Finding**: one appointment, task, reminder or deadline found in a picture, with its fields, each marked read or inferred, its cited line numbers, confidence and the run it came from.
 - **Analysis run**: one extraction attempt for a picture: model, prompt and structure versions, picture size, timing, outcome and raw answer (an extension of the run record from spec 003).
+- **Capture tag**: one fact about the environment a picture shows (application, operating system look, remote session client, language, date format, clock style, theme, visible account or domain, calendar name, time zone label, display size), with value, confidence and source. Findings keep a copy.
 - **Context**: a named source (customer, workspace or session) with a time zone and hints.
 - **Context assignment**: which context a capture's picture was given, whether automatic or by the user, the matched hints and the runner-up.
 - **Golden case**: a picture with its capture time, zone, optional context hint and expected findings, used by eval.
@@ -237,6 +267,7 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **SC-009**: `memorri-eval` on the synthetic set finishes with a report, and running it twice with the same settings gives the same matching of found to expected items (the same model answers are reused or the difference is reported).
 - **SC-010**: The picture-size report covers at least three sizes with all measures and time, and records the chosen default and the reason.
 - **SC-011**: No real screenshot, capture or model answer is committed, and `lsof` during a run shows connections only to the local machine.
+- **SC-012**: On the synthetic set, application, operating system look and clock style tags are correct in at least 90% of cases where the picture shows them; a tag that is wrong is never reported with high confidence more often than once in 20 cases; 100% of stored findings carry their picture's tags.
 
 ## Assumptions
 
@@ -250,4 +281,5 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - Synthetic golden cases are drawn by code (like the built-in sample picture in spec 003), so they contain nothing from real sessions; the user may add real local cases that stay untracked.
 - Targets in SC-001 and SC-002 are starting targets for the synthetic set; if the measured evidence shows they are unrealistic, the spec is amended with the reason rather than the set being weakened.
 - Findings are stored per picture and replaced on reanalysis; retention is that of the capture (default 7 days), as with raw answers in spec 003. Items a user keeps long term are created by later specs with their own evidence crops.
+- Tags are best-effort evidence derived on the Mac from the text read, the window titles and the picture itself; which of them the model sees and which code reads directly is decided in the plan. The key list can grow by adding keys, without a redesign. Tags give spec 005 (reconciliation) its environment evidence; this spec only records them.
 - Context hints are matched case-insensitively against text; there is no learning of hints in this spec.
