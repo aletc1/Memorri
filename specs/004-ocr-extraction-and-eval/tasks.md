@@ -240,7 +240,7 @@ description: "Task list for spec 004: read captures and find appointments and ta
 ### Phase Dependencies
 
 - **Phase 1 (Setup and spikes)**: T001 first (it draws the pictures the others reuse); T002, T003 and T005 are independent of each other; T004 needs T001 and the running server; T006 needs all four. Start the long runs (T004) in the background and continue with Phase 2.
-- **Phase 2 (Foundational)**: after T001 for the facts it sets; blocks every story. Test and implementation pairs go pair by pair; T003s edits `Fakes.swift`, so it is not parallel with other tasks that edit it.
+- **Phase 2 (Foundational)**: after T001 for the facts it sets; blocks every story. Test and implementation pairs go pair by pair; T014 edits `Fakes.swift`, so it is not parallel with other tasks that edit it.
 - **US1 (Phase 3)**: after Foundational. MVP: the harness works against a fake analyser.
 - **US2 (Phase 4)**: after Foundational; independent of US1 except the ingest helper is reused by the eval later.
 - **US4 (Phase 5)**: after US2 (needs the lines) and T006 (the threshold).
@@ -261,7 +261,7 @@ description: "Task list for spec 004: read captures and find appointments and ta
 - Phase 1: T002, T003 and T005 together after T001.
 - Phase 3: the test tasks for `GoldenCase`, `Matcher`, `Metrics`, `EvalReport` and `BusyCheck` are in distinct files.
 - Phase 4: T034, T036, T038 and T042.
-- Phase 6: T052, T054, T056 and T035entt.
+- Phase 6: T052, T054, T056 and T064.
 - Phase 7 and 8: T071 with T073; T077 can start during Phase 7.
 - Phase 9: T082, T084 and T086.
 - Phase 12: T104 and T105.
