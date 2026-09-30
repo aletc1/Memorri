@@ -61,7 +61,7 @@ swift test --package-path Packages/MemorriCore      # the unit tests
 Captures and the database live in `~/Library/Application Support/Memorri/` (mode 0700, excluded from Time Machine):
 
 ```text
-memorri.sqlite (+ -wal, -shm)        records (tables capture_events and capture_images)
+memorri.sqlite (+ -wal, -shm)        records (capture_events, capture_images, analysis_jobs, model_runs)
 captures/<yyyy-MM>/<eventID>/        full-resolution and analysis pictures (HEIC)
 staging/                             captures being written; emptied at every start
 ```
@@ -71,6 +71,17 @@ staging/                             captures being written; emptied at every st
 - A database that could not be read is renamed `memorri.sqlite.damaged-<date>` in the same folder and never deleted.
 - Debug builds accept `--simulate-free-bytes <n>` (for example `open -n Memorri.app --args --simulate-free-bytes 500000000`) to test the refusal when less than 1 GB is free.
 - A running process does see a revoked Screen Recording permission through a real capture (ScreenCaptureKit error -3801). `CGPreflightScreenCaptureAccess()` keeps answering `true`, so do not use it after launch. Probes started from a shell are attributed to the terminal; start the app through LaunchServices (`open -n -W --stdout <file> Memorri.app --args …`).
+
+### Ollama and the analysis queue
+
+The app talks to a local Ollama server (spec 003). It cannot read screenshots yet; it only tests the model and runs test jobs.
+
+- **Install**: `brew install ollama` (or the Ollama app), start it, then `ollama pull qwen3.8:27b-mlx`. The app chooses that model by itself on first use when it is installed. Settings → Ollama shows the connection status, the model picker (vision models only), thinking, the timeout, **Test the model** and the queue.
+- **Local only**: the address must be `localhost`, `127.0.0.1` or `::1`; anything else is rejected. `OllamaURLSessionTransport.swift` is the only file allowed to use URLSession, so captured content cannot leave the Mac by accident. `NoNetworkTests` fails if any other file names it, including in a comment. See ADR 0011.
+- **Fake server**: `python3 scripts/fake-ollama.py --port 11999 --mode ok|invalid|slow|error|flaky|hang [--delay 5] [--no-vision] [--no-capabilities] [--thinking]` stands in for Ollama when you need failure cases. Point Settings at `http://localhost:11999` (or `defaults write com.aletc1.memorri memorri.ollama.address http://localhost:11999` and relaunch; the model is `fake-vision:1b`). Reset with `http://localhost:11434`.
+- **Logs**: categories `ollama` (`check …`, `request …`) and `analysis` (`job started/finished/failed`, `queue holding/resumed/paused`, `recovered running=<n>`). Info lines need `--level info`: `/usr/bin/log stream --level info --predicate 'subsystem == "com.aletc1.memorri" AND category == "analysis"'`.
+- **Jobs and runs**: `sqlite3 "$HOME/Library/Application Support/Memorri/memorri.sqlite" "select state, attempts, failure_reason from analysis_jobs; select outcome, think, duration_ms from model_runs order by started_at desc limit 5;"`. Runs never hold picture data, and they are deleted with their capture.
+- **Try the app without touching your data**: launch the binary with `CFFIXED_USER_HOME=/tmp/some-home` for a separate data folder. Preferences (`defaults`) are still shared, so restore the address and model afterwards.
 
 ## 2. How Spec Kit works here
 

@@ -133,4 +133,19 @@ public struct CaptureStore: CaptureStoring {
     public func allImages() throws -> [CaptureImageRecord] {
         try database.pool.read { try CaptureImageRecord.fetchAll($0) }
     }
+
+    public func image(id: String) throws -> CaptureImageRecord? {
+        try database.pool.read { try CaptureImageRecord.fetchOne($0, key: id) }
+    }
+
+    /// The first display's picture of the newest capture that has pictures still stored, or nil.
+    public func newestImageID() throws -> String? {
+        try database.pool.read { db in
+            try String.fetchOne(db, sql: """
+                SELECT i.id FROM capture_images i JOIN capture_events e ON e.id = i.event_id
+                WHERE i.missing = 0
+                ORDER BY e.captured_at DESC, i.display_id ASC LIMIT 1
+                """)
+        }
+    }
 }

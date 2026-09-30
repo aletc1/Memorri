@@ -76,4 +76,41 @@ import Testing
         #expect(try store.events(olderThan: nil) == [event])
         #expect(try store.allImages() == [image])
     }
+
+    // MARK: lookups for the analysis queue (spec 003)
+
+    @Test func imageByIDReturnsTheRecordOrNil() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let store = try makeStore(temp)
+        let event = makeEventRecord()
+        let image = makeImageRecord(eventID: event.id)
+        try store.insert(event: event, images: [image])
+        #expect(try store.image(id: image.id) == image)
+        #expect(try store.image(id: "unknown") == nil)
+    }
+
+    @Test func newestImageIDIsFromTheNewestEventThatHasImages() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let store = try makeStore(temp)
+        #expect(try store.newestImageID() == nil)
+        let older = makeEventRecord(id: "older", at: Date(timeIntervalSince1970: 1_800_000_000))
+        let newer = makeEventRecord(id: "newer", at: Date(timeIntervalSince1970: 1_800_000_100))
+        let failedNewest = makeEventRecord(id: "failed", at: Date(timeIntervalSince1970: 1_800_000_200), status: "failed", displayCount: 0)
+        try store.insert(event: older, images: [makeImageRecord(eventID: "older", id: "img-older")])
+        try store.insert(event: newer, images: [makeImageRecord(eventID: "newer", id: "img-newer", displayID: 2),
+                                                makeImageRecord(eventID: "newer", id: "img-newer-first", displayID: 1)])
+        try store.insert(event: failedNewest, images: [])
+        #expect(try store.newestImageID() == "img-newer-first")      // first display of the newest event with pictures
+    }
+
+    @Test func newestImageIDSkipsPicturesMarkedMissing() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let store = try makeStore(temp)
+        let older = makeEventRecord(id: "older", at: Date(timeIntervalSince1970: 1_800_000_000))
+        let newer = makeEventRecord(id: "newer", at: Date(timeIntervalSince1970: 1_800_000_100))
+        try store.insert(event: older, images: [makeImageRecord(eventID: "older", id: "img-older")])
+        try store.insert(event: newer, images: [makeImageRecord(eventID: "newer", id: "img-newer")])
+        try store.markMissing(imageID: "img-newer")
+        #expect(try store.newestImageID() == "img-older")
+    }
 }
