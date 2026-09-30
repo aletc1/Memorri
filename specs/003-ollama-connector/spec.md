@@ -8,6 +8,12 @@
 
 **Input**: User description: "Settings for Ollama URL, vision model picker (from /api/tags with a capability check), think level, timeout and a health check. Include a spike proving qwen3.8:27b-mlx honours a JSON-schema format with images attached, and measure latency at several image sizes. Add a serial background queue with retries and progress shown in the menu (ADR 0005)."
 
+## Clarifications
+
+### Session 2026-09-30
+
+- Q: When cleanup removes a capture, should the model's raw answers for its pictures be removed too, or kept on their own? → A: Removed together with the capture, in every kind of cleanup (age-based, automatic retention and "delete all captures"). Run records from "Test the model" that have no capture are removed by **Clear finished**.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Connect to the local model server and see that it works (Priority: P1)
@@ -132,7 +138,7 @@ The user can set how much the model thinks (off, low, medium or high) and how lo
 - The model takes the whole timeout and produces nothing: the request is abandoned and retried within the attempt limit.
 - The user changes the server address or model while jobs are queued: waiting jobs use the new values when they run; the running job is not interrupted.
 - The chosen model is removed from the server while jobs are queued: the queue waits (no attempts used), the menu says the model is not installed, and it resumes when the model is available again or another is chosen.
-- A queued job refers to a picture that retention has already deleted: the job fails at once with "picture no longer stored"; results of earlier runs are kept.
+- A queued job refers to a picture that retention has already deleted: the job fails at once with "picture no longer stored"; the run records of that capture were deleted with it.
 - The Mac sleeps during a job: the request may time out; the job is retried normally after wake.
 - Very many jobs are queued: the menu shows counts, not a list; the queue stays ordered and persistent.
 - The app crashes during a job: same as quitting; the job returns to the queue without using an attempt.
@@ -153,7 +159,7 @@ The user can set how much the model thinks (off, low, medium or high) and how lo
 - **FR-008**: The think level MUST be one of off, low, medium, high, with the default set from the spike report, and MUST be available only when the chosen model reports thinking support.
 - **FR-009**: The timeout for one request MUST be settable from 10 to 1800 seconds, with the default set from the spike report. An out-of-range value MUST be rejected with the range shown and the previous value kept.
 - **FR-010**: Analysis requests MUST attach the stored analysis copy, ask for an answer that matches a required JSON shape, and use a temperature near zero. The answer MUST be checked against the shape; a mismatch is a failed attempt. The spike (FR-018) decides whether the server's own structured-output feature is used or the shape is given in the prompt and the answer is then checked and repaired (ADR 0005).
-- **FR-011**: Every model run MUST be recorded with: the job, a reference to the picture (not an embedded copy), the model, the think level, the size of the picture sent, a prompt version, a shape version, the time it started, how long it took, the attempt number, the outcome with a short reason, and the raw answer. Records of runs MUST be kept when captures are cleaned up, because they are derived from captures (FR-023 of spec 002).
+- **FR-011**: Every model run MUST be recorded with: the job, a reference to the picture (not an embedded copy), the model, the think level, the size of the picture sent, a prompt version, a shape version, the time it started, how long it took, the attempt number, the outcome with a short reason, and the raw answer. A run record that belongs to a capture's picture MUST be deleted together with that capture in every kind of cleanup (age-based, automatic retention and delete all), because the raw answer can contain text read from the screen. Anything derived later from the answers, such as items and their evidence crops, is not affected (spec 002, FR-023, ADR 0010). Run records with no capture (from the built-in sample) are removed by **Clear finished**.
 - **FR-012**: The queue MUST run one job at a time, oldest first, and MUST be kept on disk so no job is lost when the app quits, crashes or restarts. A job running at that moment MUST return to the queue without using an attempt.
 - **FR-013**: A job that fails for a temporary reason (timeout, lost connection, server error, invalid or non-matching answer) MUST be retried with growing waits, at most 3 attempts in total. A job that fails for a permanent reason (its picture is no longer stored, the request is rejected as invalid) MUST fail at once. A job out of attempts MUST be marked failed with a short reason.
 - **FR-014**: When the server is not reachable, or the chosen model is missing or unset, the queue MUST wait without using attempts or failing jobs, say why in the menu, and resume by itself within 35 seconds of the condition clearing.
@@ -170,7 +176,7 @@ The user can set how much the model thinks (off, low, medium or high) and how lo
 - **Server status**: the result of the last check (reachable with version, not reachable, timed out, no vision model, chosen model missing) and when it was taken.
 - **Model choice**: the model name and what it can do (reads images, supports thinking).
 - **Analysis job**: one unit of work for the model, created with a kind (in this spec, the test), the picture it needs, a state (waiting, running, finished, failed, paused with the queue), an attempt count and a short reason when failed.
-- **Model run record**: one attempt of a job, with the model, settings used, prompt and shape versions, timing, outcome and the raw answer.
+- **Model run record**: one attempt of a job, with the model, settings used, prompt and shape versions, timing, outcome and the raw answer. It lives and is deleted with the capture it came from.
 - **Queue progress**: what the menu line shows, derived from the counts of jobs and the server status.
 
 ## Success Criteria *(mandatory)*
@@ -198,6 +204,6 @@ The user can set how much the model thinks (off, low, medium or high) and how lo
 - The retry policy is 3 attempts in total with waits of about 10 seconds and then 60 seconds. The precise waits can be tuned after the spike without changing the requirements.
 - The queue is kept in the same local database as the captures and is migrated by the same mechanism (spec 002, ADR 0003).
 - The pictures sent to the model are the analysis copies stored by spec 002; the full-resolution pictures are kept for evidence and text recognition.
-- Raw answers from the model are kept like captures are kept under user control, but, being derived from captures, they are not removed by capture cleanup (spec 002, FR-023). A way to purge them can come with a later spec.
+- Raw answers from the model are part of the raw ingestion: they live and expire with the capture they came from (retention default 7 days), so no screen text outlives its capture. Items found later keep their own evidence (ADR 0010).
 - Settings values are stored in the same preferences as earlier specs. The Ollama section replaces the placeholder shown since spec 001.
 - Testing with the real server and model is done on the developer Mac using the terminal-driven automation available there; unit tests use a fake server.
