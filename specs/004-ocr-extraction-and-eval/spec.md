@@ -259,6 +259,7 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **SC-001**: On the tracked synthetic golden set, the shipped settings reach recall of at least 0.85 and precision of at least 0.85 for findings, and field accuracy of at least 0.90 on matched findings.
 - **SC-002**: Screen kind classification is correct for at least 90% of synthetic cases, with every supported kind present.
 - **SC-003**: At least 95% of the lines in a synthetic picture with known text are read with the exact text, and every stored box overlaps the true text box.
+  - *Measured 2026-09-30: 95% exact and 95% box overlap, counting a drawn string as read when the recogniser joined it into a longer line (91% without that); the misses left are single-digit cells of month grids and small icon labels.*
 - **SC-004**: 100% of stored findings cite at least one existing line; 0 findings with invalid citations are stored.
 - **SC-005**: Every relative-date and header-date case in the golden set resolves to the expected date in the expected zone (100% of those cases), including one captured near midnight in a zone different from the Mac's.
 - **SC-006**: Every finding with a guessed end time or date is flagged inferred with its reason (100%), and none of the read values is flagged.
@@ -268,6 +269,7 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **SC-010**: The picture-size report covers at least three sizes with all measures and time, and records the chosen default and the reason.
 - **SC-011**: No real screenshot, capture or model answer is committed, and `lsof` during a run shows connections only to the local machine.
 - **SC-012**: On the synthetic set, application, operating system look and clock style tags are correct in at least 90% of cases where the picture shows them; a tag that is wrong is never reported with high confidence more often than once in 20 cases; 100% of stored findings carry their picture's tags.
+  - *Measured 2026-09-30 (quickstart "Final run"): application 100%, operating system look 95% (6 chrome-less cases no longer expect it, because nothing in them shows it), clock style 100%, 100% of findings carry their picture's tags (9 of 9 in the app). **The second clause was narrowly missed:** 2 wrong tags with high confidence in 27 cases (about 1 in 14, against 1 in 20). Cause: the model gives one confidence for the whole classification, and every visual tag reuses it, so a wrong guess looks as sure as a right one. Remedy for a later spec: ask the model for a confidence per tag. The target is left as written.*
 
 ## Assumptions
 
