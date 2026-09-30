@@ -10,7 +10,7 @@ public enum TagExtractor {
                                             "parallels", "jump desktop"]
     private static let remoteClientBundlePrefixes = ["com.citrix.", "com.microsoft.rdc", "com.vmware.horizon", "com.parallels.", "com.p5sys.jump"]
     /// A language the recogniser is less sure of is not recorded: a wrong `language` would put the wrong names first when reading dates.
-    static let minimumLanguageConfidence = 0.85
+    static let minimumLanguageConfidence = 0.9
     static let maximumKeywords = 12
     static let maximumAddresses = 10
     private static let unknownAnswers: Set<String> = ["", "unknown", "none", "n/a", "na"]
@@ -72,6 +72,8 @@ public enum TagExtractor {
         let text = texts.joined(separator: "\n")
         guard text.filter(\.isLetter).count >= 12 else { return nil }
         let recogniser = NLLanguageRecognizer()
+        // The languages people read calendars in here; without the limit a short English text can come out as Portuguese.
+        recogniser.languageConstraints = [.english, .spanish, .french, .german, .italian, .portuguese, .dutch, .catalan]
         recogniser.processString(text)
         guard let best = recogniser.languageHypotheses(withMaximum: 1).first, best.value >= minimumLanguageConfidence else { return nil }
         return CaptureTag(key: "language", value: best.key.rawValue, confidence: best.value, source: "code")

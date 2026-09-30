@@ -88,44 +88,84 @@ public enum BlockGeometry {
 
     private static func distance(_ a: (Int, Int, Int), _ b: (Int, Int, Int)) -> Int { abs(a.0 - b.0) + abs(a.1 - b.1) + abs(a.2 - b.2) }
 
-    /// The vertical extent in pixels of the coloured block around a title, or nil when it is not clearly a block: the colour
-    /// just left of the title and just above it must agree, the block must be at least three title heights wide and no wider than a
-    /// column, and taller than the title. (Without these checks a start on a grid line once gave a 540-minute block.)
+    /// The most common colour inside the title's box: the text sits on its block's fill (or on the page), and glyphs are the minority.
+    private static func fillColour(around title: PixelBox, in pixels: Pixels) -> (Int, Int, Int) {
+        var votes: [[Int]: (count: Int, colour: (Int, Int, Int))] = [:]
+        for y in stride(from: title.y, to: title.y + title.height, by: 2) {
+            for x in stride(from: title.x, to: title.x + title.width, by: 2) {
+                let c = pixels.colour(x, y)
+                let key = [c.0 / 12, c.1 / 12, c.2 / 12]
+                votes[key] = ((votes[key]?.count ?? 0) + 1, votes[key]?.colour ?? c)
+            }
+        }
+        return votes.values.max { $0.count < $1.count }?.colour ?? pixels.colour(title.x, title.y)
+    }
+
+    /// The vertical extent in pixels of the block around a title, or nil when it is not clearly a block. A filled block: the
+    /// colour around the title differs from the page, the block is at least three title heights wide and no wider than a column,
+    /// and taller than the title (without the width checks a start on a grid line once gave a 540-minute block). An outlined
+    /// block, which has the page's own colour inside: a border line above and another below the title, each no longer than a column
+    /// (a longer line is a grid line).
     public static func blockHeight(around title: PixelBox, in image: CGImage, columnWidth: Int) -> Int? {
         guard let pixels = Pixels(image), title.height > 0 else { return nil }
         let w = pixels.width, h = pixels.height
         let seedY = title.y + title.height / 2
         guard seedY > 1, seedY < h - 2 else { return nil }
-        var x = max(2, title.x - 4)
         let background = pixels.colour(2, seedY)
-        var seed = pixels.colour(x, seedY)
-        let above = pixels.colour(title.x + title.width / 2, max(1, title.y - 4))
-        var tolerance = 95
-        let outlined = distance(seed, background) < 40
-        if outlined {
-            // An outlined block has the page's colour inside: look for its border to the left of the title.
-            guard let border = (1...60).first(where: { distance(pixels.colour(max(0, x - $0), seedY), background) > 120 }) else { return nil }
-            x = max(0, x - border)
-            seed = pixels.colour(x, seedY)
+        let fill = fillColour(around: title, in: pixels)
+        let result: Int?
+        if distance(fill, background) >= 40 {
+            result = filledHeight(title: title, pixels: pixels, fill: fill, background: background, columnWidth: columnWidth)
         } else {
-            if distance(seed, above) > 140 { return nil }
-            tolerance = min(95, max(24, distance(seed, background) / 2))
+            result = outlinedHeight(title: title, pixels: pixels, background: background, columnWidth: columnWidth)
         }
+        guard let height = result, height >= title.height, height < h, w > 0 else { return nil }
+        return height
+    }
 
+    private static func filledHeight(title: PixelBox, pixels: Pixels, fill: (Int, Int, Int), background: (Int, Int, Int), columnWidth: Int) -> Int? {
+        let w = pixels.width, h = pixels.height
+        let seedY = title.y + title.height / 2
+        let tolerance = min(95, max(24, distance(fill, background) / 2))
+        // A column just beside the text that is inside the block.
+        guard let x = [title.x - 3, title.x + title.width + 3, title.x + title.width + 12].first(where: { distance(pixels.colour($0, seedY), fill) < tolerance }) else { return nil }
         var up = seedY, down = seedY
-        while up > 1, distance(pixels.colour(x, up - 1), seed) < tolerance { up -= 1 }
-        while down < h - 2, distance(pixels.colour(x, down + 1), seed) < tolerance { down += 1 }
+        while up > 1, distance(pixels.colour(x, up - 1), fill) < tolerance { up -= 1 }
+        while down < h - 2, distance(pixels.colour(x, down + 1), fill) < tolerance { down += 1 }
+        // A row just inside the block's top edge is free of text.
+        let rowY = min(down, up + 2)
+        var left = x, right = x
+        while left > 1, distance(pixels.colour(left - 1, rowY), fill) < tolerance { left -= 1 }
+        while right < w - 2, distance(pixels.colour(right + 1, rowY), fill) < tolerance { right += 1 }
+        let width = right - left + 1
+        if width < title.height * 3 || width > columnWidth { return nil }
+        return down - up + 1
+    }
 
-        if !outlined {
-            let rowY = max(1, title.y - 4)
-            var left = x, right = x
-            while left > 1, distance(pixels.colour(left - 1, rowY), seed) < tolerance { left -= 1 }
-            while right < w - 2, distance(pixels.colour(right + 1, rowY), seed) < tolerance { right += 1 }
-            let width = right - left + 1
-            if width < title.height * 3 || width > columnWidth { return nil }
+    private static func outlinedHeight(title: PixelBox, pixels: Pixels, background: (Int, Int, Int), columnWidth: Int) -> Int? {
+        let h = pixels.height
+        let xs = Array(stride(from: title.x, through: title.x + title.width, by: 2))
+        func isLine(at y: Int) -> Bool {
+            let hits = xs.filter { distance(pixels.colour($0, y), background) > 60 }.count
+            return hits * 10 >= xs.count * 8
         }
-        let height = down - up + 1
-        return height < Int(Double(title.height) * 1.2) ? nil : height
+        func lineLength(at y: Int) -> Int {
+            let start = title.x + title.width / 2
+            var left = start, right = start
+            while left > 1, distance(pixels.colour(left - 1, y), background) > 60 { left -= 1 }
+            while right < pixels.width - 2, distance(pixels.colour(right + 1, y), background) > 60 { right += 1 }
+            return right - left + 1
+        }
+        let reach = min(h, title.height * 40)
+        var top: Int?, bottom: Int?
+        for y in stride(from: title.y - 1, through: max(1, title.y - reach), by: -1) where isLine(at: y) { top = y; break }
+        for y in (title.y + title.height)..<min(h - 1, title.y + title.height + reach) where isLine(at: y) { bottom = y; break }
+        guard let top, let bottom, bottom > top else { return nil }
+        for y in [top, bottom] {
+            let length = lineLength(at: y)
+            if length < title.height * 3 || length > Int(Double(columnWidth) * 1.05) { return nil }
+        }
+        return bottom - top + 1
     }
 
     // MARK: Duration

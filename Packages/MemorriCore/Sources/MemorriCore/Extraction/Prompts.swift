@@ -17,7 +17,7 @@ public enum ExtractionPrompts {
             + "Use empty strings for what you cannot tell."
     }
 
-    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v3" }
+    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v4" }
 
     private static func description(of kind: ScreenKind) -> String {
         switch kind {
@@ -36,7 +36,8 @@ public enum ExtractionPrompts {
         case .calendarWeek, .calendarDay:
             return " Everything in a calendar view is an appointment. Each block sits under a date header. "
                 + "Give the number of that header line in column_line. "
-                + "Put the start time shown on the block in start_text and its end time, if shown, in end_text."
+                + "Put the start time shown on the block in start_text, and its end time in end_text only if the block itself "
+                + "shows one (like 09:00 - 10:00): never take an end time from the hour scale at the side."
         case .calendarMonth:
             return " Everything in a calendar view is an appointment. Each entry sits in the cell of a day. "
                 + "Give the number of the line that shows that cell's day number in column_line, "
@@ -73,10 +74,12 @@ public enum ExtractionPrompts {
             + "Only list something that has a date or a time, or that says a person needs or has to do something; "
             + "leave out headlines, newsletters and text about other things. "
             + "For each one give the numbers of the lines that show it in cited_lines. "
-            + "The title is a short name for it made of words from those lines: no line numbers, no labels like (L5) and no dates. "
+            + "The title is a short name for it made of words from those lines: no line numbers, no labels like (L5), no dates and no times. "
             + "Keep the wording of the text: from \"Submit the grant proposal by 2026-11-06.\" the title is \"Submit the grant proposal\"; "
             + "from \"Please send me the report by tomorrow\" it is \"Send the report\". "
             + "Copy dates and times exactly as written into start_text, end_text, date_text, due_text and remind_text. "
+            + "Put the room or place, if the screen shows one for it, in place, and the other people it names in people "
+            + "(not the sender of a message, and not yourself). "
             + "A sentence like \"Maria needs the budget figures by Friday 23 October\" is a task: title \"Budget figures\", "
             + "people [\"Maria\"], due_text \"Friday 23 October\". "
             + "A deadline is something due by a date: put the date in due_text, and a reminder time only if the text gives one."

@@ -174,7 +174,7 @@ import Testing
         let outcome = await rig.runner.run(try job(rig), attempt: 1)
         #expect(outcome == .success)
         let extract = try #require(try runs(rig).first { $0.step == "extract" })
-        #expect(extract.promptVersion == "extract-calendar_week-v3" && extract.imageLongEdge == 600)
+        #expect(extract.promptVersion == "extract-calendar_week-v4" && extract.imageLongEdge == 600)
         let stored = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
         #expect(stored.kind == .calendarWeek && stored.findingCount == 1 && stored.extractRunID == extract.id && stored.model == "qwen3.8:27b-mlx")
         let findings = try rig.results.findings(imageID: rig.fixture.imageID)

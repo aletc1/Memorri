@@ -206,8 +206,9 @@ public struct AnalysisPipeline: Sendable {
         let columnWidth: Int
     }
 
-    /// The median spacing of the date headers, else a seventh of the picture for a week and the whole width for a day.
+    /// The median spacing of the date headers for a week, else a seventh of the picture; a day view has one column, the whole width.
     static func columnWidth(headers: [DateHeader], imageWidth: Int, kind: ScreenKind) -> Int {
+        if kind == .calendarDay { return imageWidth }
         let gaps = zip(headers, headers.dropFirst()).map { $1.midX - $0.midX }.sorted()
         if !gaps.isEmpty { return max(1, Int(gaps[gaps.count / 2])) }
         return kind == .calendarWeek ? imageWidth / 7 : imageWidth

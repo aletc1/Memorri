@@ -190,6 +190,7 @@ public struct EvalReport: Sendable, Equatable, Codable {
                 let f = u.found
                 lines.append("unexpected \(c.name): \"\(f.title)\"\(Self.dates(f.start, f.end, f.due, f.remind, allDay: f.allDay, inferred: f.inferred)) (nearest expected: \(u.closestExpectedTitle ?? "none"))")
             }
+            for problem in c.score.fieldProblems ?? [] { lines.append("field      \(c.name): \(problem)") }
             for problem in c.score.tagProblems ?? [] { lines.append("tag        \(c.name): \(problem)") }
             for d in c.score.disagreements { lines.append("disagrees  \(c.name): \"\(d.title)\" is not in the text it cites") }
         }

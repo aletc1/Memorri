@@ -129,6 +129,23 @@ import Testing
         #expect(BlockGeometry.duration(titleBox: titleBox(lines, "Right talk"), lines: lines, image: image, columnWidth: Int(columnWidth)) == 60)
     }
 
+    @Test func aTitleBoxThatHugsTheBlocksTopAndStartsLeftOfItStillFindsTheBlock() {
+        // The recogniser's box is tight to the text and can poke out of the block: here it starts two pixels left of the block and
+        // only two below its top edge, as it did on drawn calendar pictures.
+        let drawn = draw(.pastel, labels: labels24, blocks: [Block(column: 0, hour: 1, hours: 1, title: "10:00 Team sync", half: nil)])
+        let blockLeft = Int(left) + 6, blockTop = Int(top + hourHeight) + 2
+        let box = PixelBox(x: blockLeft - 2, y: blockTop + 2, width: 170, height: 27)
+        let height = BlockGeometry.blockHeight(around: box, in: drawn.image, columnWidth: Int(columnWidth))
+        #expect(height != nil && abs(height! - 76) <= 2, Comment(rawValue: "height \(String(describing: height))"))
+    }
+
+    @Test func aBlockAboutAsTallAsItsTitleIsStillABlock() {
+        let drawn = draw(.pastel, labels: labels24, blocks: [Block(column: 0, hour: 1, hours: 0.5, title: "10:00 Inbox zero", half: nil)])
+        let blockLeft = Int(left) + 6, blockTop = Int(top + hourHeight) + 2
+        let box = PixelBox(x: blockLeft + 10, y: blockTop + 1, width: 130, height: 27)            // the block is 36 pixels tall
+        #expect(BlockGeometry.blockHeight(around: box, in: drawn.image, columnWidth: Int(columnWidth)) != nil)
+    }
+
     @Test func aTitleWithNoBlockAroundItGivesNil() {
         let (image, lines) = draw(.solid, labels: labels24, blocks: [])
         let floating = PixelBox(x: 500, y: 300, width: 150, height: 22)

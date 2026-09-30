@@ -82,6 +82,8 @@ public struct CaseScore: Sendable, Equatable, Codable {
     public let seconds: Double
     /// Each wrong or missing tag in words (`theme: expected dark, found light (0.93)`), for reading what went wrong.
     public var tagProblems: [String]? = nil
+    /// Each field of a matched finding that differs, in words (`Design review: end expected 10-14 15:30Z, found 10-14 15:00Z`).
+    public var fieldProblems: [String]? = nil
 
     public struct FoundDetail: Sendable, Equatable, Codable { public let confidence: Double; public let matched: Bool }
 
@@ -142,9 +144,10 @@ public enum Metrics {
         let match = Matcher.match(expected: expected, found: result.findings, thresholds: thresholds)
 
         var compared = 0, equal = 0
+        var fieldProblems: [String] = []
         for pair in match.pairs {
-            let (c, e) = compareFields(expected[pair.expectedIndex], result.findings[pair.foundIndex])
-            compared += c; equal += e
+            let (c, e, problems) = compareFields(expected[pair.expectedIndex], result.findings[pair.foundIndex])
+            compared += c; equal += e; fieldProblems += problems
         }
 
         let matchedFound = Set(match.pairs.map(\.foundIndex))
@@ -171,7 +174,8 @@ public enum Metrics {
                          contextCorrect: contextCorrect, tagResults: tagResults, wrongHighConfidenceTags: wrongHigh,
                          ocrExact: ocr.exact, ocrExpected: ocr.expected, ocrOverlap: ocr.overlap, ocrBoxed: ocr.boxed,
                          missed: match.unmatchedExpected.map { expected[$0] }, unexpected: unexpected,
-                         disagreements: disagreements, foundDetails: details, seconds: result.seconds, tagProblems: tagProblems.isEmpty ? nil : tagProblems)
+                         disagreements: disagreements, foundDetails: details, seconds: result.seconds, tagProblems: tagProblems.isEmpty ? nil : tagProblems,
+                         fieldProblems: fieldProblems.isEmpty ? nil : fieldProblems)
     }
 
     public static func summarise(_ scores: [(GoldenCase, CaseScore)]) -> Summary {
@@ -204,20 +208,32 @@ public enum Metrics {
 
     /// Compared fields: a date field when either side has it (its value and its inferred flag), all-day when
     /// either side says so, people and place when either side has them.
-    private static func compareFields(_ want: ExpectedFinding, _ got: FoundFinding) -> (compared: Int, equal: Int) {
+    private static func compareFields(_ want: ExpectedFinding, _ got: FoundFinding) -> (compared: Int, equal: Int, problems: [String]) {
         var compared = 0, equal = 0
-        func note(_ same: Bool) { compared += 1; if same { equal += 1 } }
+        var problems: [String] = []
+        func note(_ same: Bool, _ field: String, _ wanted: @autoclosure () -> String, _ gotten: @autoclosure () -> String) {
+            compared += 1
+            if same { equal += 1 } else { problems.append("\(want.title): \(field) expected \(wanted()), found \(gotten())") }
+        }
+        func time(_ date: Date?) -> String {
+            guard let date else { return "none" }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "UTC")
+            formatter.dateFormat = "MM-dd HH:mm'Z'"
+            return formatter.string(from: date)
+        }
         let wantInferred = Set(want.inferred ?? []), gotInferred = Set(got.inferred)
         for (name, w, g) in [("start", want.start, got.start), ("end", want.end, got.end), ("due", want.due, got.due), ("remind", want.remind, got.remind)] where w != nil || g != nil {
-            note(w != nil && g != nil && abs(w!.timeIntervalSince(g!)) < 1)
-            note(wantInferred.contains(name) == gotInferred.contains(name))
+            note(w != nil && g != nil && abs(w!.timeIntervalSince(g!)) < 1, name, time(w), time(g))
+            note(wantInferred.contains(name) == gotInferred.contains(name), "\(name) flag", wantInferred.contains(name) ? "inferred" : "read", gotInferred.contains(name) ? "inferred" : "read")
         }
-        if want.allDay != nil || got.allDay { note((want.allDay ?? false) == got.allDay) }
+        if want.allDay != nil || got.allDay { note((want.allDay ?? false) == got.allDay, "all day", "\(want.allDay ?? false)", "\(got.allDay)") }
         let wantPeople = Set((want.people ?? []).map { $0.lowercased() }), gotPeople = Set(got.people.map { $0.lowercased() })
-        if !wantPeople.isEmpty || !gotPeople.isEmpty { note(wantPeople == gotPeople) }
+        if !wantPeople.isEmpty || !gotPeople.isEmpty { note(wantPeople == gotPeople, "people", wantPeople.sorted().joined(separator: "/"), gotPeople.sorted().joined(separator: "/")) }
         let wantPlace = Matcher.normalise(want.place ?? ""), gotPlace = Matcher.normalise(got.place ?? "")
-        if !wantPlace.isEmpty || !gotPlace.isEmpty { note(wantPlace == gotPlace) }
-        return (compared, equal)
+        if !wantPlace.isEmpty || !gotPlace.isEmpty { note(wantPlace == gotPlace, "place", want.place ?? "none", got.place ?? "none") }
+        return (compared, equal, problems)
     }
 
     /// Names of applications and sessions vary in how much they say (`Teams`, `Microsoft Teams`): one containing the other is the
