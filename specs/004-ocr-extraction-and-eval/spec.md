@@ -15,6 +15,7 @@
 - Q: Should Memorri record the titles of the windows visible on each display when it captures, so contexts can be matched on them? → A: Yes. The titles of windows visible on each display are stored with its picture and deleted with it, in every kind of cleanup.
 - Q: What should `memorri-eval` do if the app's analysis queue has a job running? → A: Refuse to start and say to pause analysis first; an explicit option overrides the refusal.
 - Q: Should analysis of new captures be on by default? → A: Yes. Every stored capture is queued; a Settings switch and the Pause control turn it off.
+- Q: How strict should matching a found item to an expected one be on the title? → A: Same kind, titles at least 80% similar after ignoring case, spaces and punctuation (or one contains the other), and start or due date within 5 minutes; both thresholds are printed in the report.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -202,7 +203,7 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **FR-018**: Settings MUST show recent captures with their analysis state (waiting, analysing, analysed, failed with reason), screen kind, context, and number of findings, and offer **Reanalyse** for a capture. This is a checking aid; the full Items window is spec 006.
 - **FR-019**: A command-line tool `memorri-eval` MUST run the same reading, classification and extraction code as the app over a folder of golden cases and print precision, recall and field accuracy overall and per case, per screen kind, and classification accuracy, with lists of missed and unexpected findings.
 - **FR-019a**: `memorri-eval` MUST refuse to start while the app's analysis queue has a job running, telling the user to pause analysis first, because both would load the same model at once. An explicit option MUST allow the run anyway, and the report MUST then say it was run that way.
-- **FR-020**: Golden cases MUST each contain a picture, a metadata file (capture time, time zone, optional context hint) and an expected-findings file. Matching a found item to an expected one MUST be defined and documented (same kind, title similarity above a stated threshold, and start or due date within a stated tolerance); field accuracy MUST be measured on matched items only.
+- **FR-020**: Golden cases MUST each contain a picture, a metadata file (capture time, time zone, optional context hint) and an expected-findings file. Matching a found item to an expected one MUST be defined and documented (same kind; titles at least 80% similar after ignoring case, spaces and punctuation, or one containing the other; and start or due date within 5 minutes; the thresholds are printed in every report); field accuracy MUST be measured on matched items only.
 - **FR-021**: `memorri-eval` MUST be able to record a run's results and compare two runs, and MUST accept the picture size, model and prompt version as options.
 - **FR-022**: Only synthetic golden cases MAY be tracked in the repository; cases with real content MUST stay untracked. The repository MUST include enough synthetic cases to cover every screen kind, relative dates, header dates, "X needs Y", missing durations and time zone differences.
 - **FR-023**: Eval and the app MUST talk only to the local server (spec 003, FR-019). No picture, text or result may leave the Mac.
