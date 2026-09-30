@@ -75,3 +75,21 @@ Week views in five styles with blocks of 30, 60, 90 and 120 minutes (plus overla
 - `ExtractionPrompts` and the job take a separate picture size for classification (1024) and extraction (the setting); `PictureConverter` gains `jpegData(from:longEdge:)` to make the 1024 copy from the stored analysis copy.
 - Research R1, R3, R7 and R9 and ADR 0014 are updated with these numbers.
 - SC-008 (under 3 minutes for one display): about 26 s for the two model calls plus about 1 s for reading is well inside it, and a three-display capture is three jobs of about 30 s.
+
+## Classification through the real pipeline (2026-09-30, task T053)
+
+One synthetic picture of each kind was ingested with the Debug switch (`--ingest-case`) into an isolated home and classified by `qwen3.8:27b-mlx` through the queue (classification call at 1024 pixels, think off):
+
+| Case | Kind found | Confidence | Seconds |
+|---|---|---|---|
+| calendar-month-web-24h | calendar_month | 1.0 | 5.9 |
+| calendar-week-web-12h | calendar_week | 1.0 | 5.9 |
+| calendar-day-outlook-24h | calendar_day | 0.9 | 5.6 |
+| email-apple-mail-invite | email | 1.0 | 5.4 |
+| chat-teams-tomorrow | chat | 1.0 | 5.5 |
+| document-agenda-en | document | 0.9 | 5.4 |
+| other-empty-window | other | 0.5 | 1.7 |
+
+- 7 of 7 correct; all seven jobs finished on the first attempt; every call is stored as a `model_runs` row with `step = classify`.
+- The first picture after launch also paid about 40 s for Vision's first recognition (spike S1); the model call itself took about 5.5 s, as measured in S2.
+- The empty window came back as `other` with confidence 0.5, exactly at the threshold: the rule "below 0.5 counts as other" gives the same kind either way.
