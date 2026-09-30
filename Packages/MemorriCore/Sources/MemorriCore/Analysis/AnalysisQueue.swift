@@ -74,6 +74,7 @@ public actor AnalysisQueue: AnalysisEnqueuing {
     private let policy: RetryPolicy
     private let time: any TimeSource
     private let sleeper: any QueueSleeping
+    private let results: AnalysisResultStore?
 
     private let wake = WakeSignal()
     private var loop: Task<Void, Never>?
@@ -84,7 +85,9 @@ public actor AnalysisQueue: AnalysisEnqueuing {
     public init(store: any AnalysisJobStoring, runner: any AnalysisJobRunning,
                 ready: @escaping @Sendable () async -> ServerStatus,
                 settings: OllamaSettings, policy: RetryPolicy = .standard,
-                time: any TimeSource = SystemTimeSource(), sleeper: any QueueSleeping = RealQueueSleeper()) {
+                time: any TimeSource = SystemTimeSource(), sleeper: any QueueSleeping = RealQueueSleeper(),
+                results: AnalysisResultStore? = nil) {
+        self.results = results
         self.store = store
         self.runner = runner
         self.ready = ready
@@ -170,6 +173,32 @@ public actor AnalysisQueue: AnalysisEnqueuing {
             publish()
             Task { await wake.fire() }
         }
+    }
+
+    /// One `analyse` job per stored picture that has no analysis and no pending job, oldest first. Returns how many.
+    @discardableResult
+    public func enqueueBacklog() -> Int {
+        guard let ids = try? results?.unanalysedImageIDs(), !ids.isEmpty else { return 0 }
+        var added = 0
+        for id in ids where (try? enqueueOrdered(kind: "analyse", imageID: id, offset: added)) != nil { added += 1 }
+        if added > 0 {
+            Self.logger.info("enqueued analyse=\(added) reason=backlog")
+            publish()
+            Task { await wake.fire() }
+        }
+        return added
+    }
+
+    /// Asks for a fresh analysis of one picture (it replaces the earlier one). Does nothing, and returns false, when the
+    /// picture already has a waiting or running analysis job.
+    @discardableResult
+    public func reanalyse(imageID: String) -> Bool {
+        guard (try? store.hasPendingAnalysis(imageID: imageID)) == false,
+              (try? enqueueOrdered(kind: "analyse-force", imageID: imageID, offset: 0)) != nil else { return false }
+        Self.logger.info("enqueued analyse=1 reason=reanalyse")
+        publish()
+        Task { await wake.fire() }
+        return true
     }
 
     private func enqueueOrdered(kind: String, imageID: String?, offset: Int) throws {

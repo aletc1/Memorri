@@ -27,7 +27,7 @@ import Testing
         let sleeper = FakeQueueSleeper()
         let settings = OllamaSettings(store: settingsStore)
         let queue = AnalysisQueue(store: store, runner: runner, ready: { gate.ask() }, settings: settings,
-                                  time: time, sleeper: sleeper)
+                                  time: time, sleeper: sleeper, results: AnalysisResultStore(database: database))
         return Rig(queue: queue, store: store, runner: runner, gate: gate, sleeper: sleeper, time: time,
                    settings: settings, settingsStore: settingsStore, temp: temp, database: database)
     }
@@ -289,5 +289,52 @@ import Testing
         #expect(try rig.store.counts().waiting == 3)
         let first = try #require(try rig.store.nextRunnable(now: Date(timeIntervalSinceReferenceDate: 1e9)))
         #expect(first.kind == "analyse" && first.imageId == "a")
+    }
+
+    // MARK: Backlog and reanalysis
+
+    private func addPicture(_ rig: Rig, id: String, at seconds: TimeInterval) throws {
+        let event = makeEventRecord(id: "e-\(id)", at: Date(timeIntervalSinceReferenceDate: seconds))
+        try CaptureStore(database: rig.database).insert(event: event, images: [makeImageRecord(eventID: event.id, id: id)])
+    }
+
+    @Test func enqueueBacklogAddsOneJobPerUnanalysedPictureOldestFirstAndOnlyOnce() async throws {
+        let rig = try makeRig(runner: FakeJobRunner(latch: FakeLatch())); defer { rig.temp.cleanUp() }
+        try addPicture(rig, id: "new", at: 300)
+        try addPicture(rig, id: "old", at: 100)
+        try addPicture(rig, id: "mid", at: 200)
+        let first = await rig.queue.enqueueBacklog()
+        #expect(first == 3)
+        let second = await rig.queue.enqueueBacklog()
+        #expect(second == 0)
+        #expect(try rig.store.counts().waiting == 3)
+        let next = try #require(try rig.store.nextRunnable(now: Date(timeIntervalSinceReferenceDate: 1e9)))
+        #expect(next.kind == "analyse" && next.imageId == "old")
+    }
+
+    @Test func aPictureWithAnAnalysisIsNotInTheBacklog() async throws {
+        let rig = try makeRig(runner: FakeJobRunner(latch: FakeLatch())); defer { rig.temp.cleanUp() }
+        try addPicture(rig, id: "done", at: 100)
+        try await rig.database.pool.write {
+            try $0.execute(sql: """
+                INSERT INTO image_analysis (image_id, screen_kind, kind_confidence, classify_version, prompt_version, schema_version, model,
+                    picture_long_edge, timezone, timezone_source, finding_count, analysed_at)
+                VALUES ('done', 'other', 1, 'c', 'p', 's', 'm', 1, 'UTC', 'mac', 0, ?)
+                """, arguments: [Date()])
+        }
+        let added = await rig.queue.enqueueBacklog()
+        #expect(added == 0)
+    }
+
+    @Test func reanalyseAddsAForcedJobAndNeverQueuesAWaitingPictureTwice() async throws {
+        let rig = try makeRig(runner: FakeJobRunner(latch: FakeLatch())); defer { rig.temp.cleanUp() }
+        try addPicture(rig, id: "a", at: 100)
+        let first = await rig.queue.reanalyse(imageID: "a")
+        let second = await rig.queue.reanalyse(imageID: "a")
+        #expect(first && !second)
+        #expect(try rig.store.counts().waiting == 1)
+        #expect(try rig.store.nextRunnable(now: Date(timeIntervalSinceReferenceDate: 1e9))?.kind == "analyse-force")
+        let backlog = await rig.queue.enqueueBacklog()
+        #expect(backlog == 0, "a picture with a waiting job is not in the backlog")
     }
 }
