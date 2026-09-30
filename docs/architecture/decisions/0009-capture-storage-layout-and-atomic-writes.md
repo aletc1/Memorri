@@ -1,6 +1,6 @@
 # 9. Capture storage: one private folder, one directory per capture, atomic writes
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-30
 - Related: spec 002, ADR 0003 (SQLite with GRDB), ADR 0004 (per-display capture)
 

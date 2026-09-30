@@ -1,6 +1,6 @@
 # 10. Only raw captures expire; items keep their own evidence
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-30
 - Related: spec 002 (FR-023), constitution principles II and V
 

@@ -94,7 +94,23 @@ With the real remote-desktop client full-screen, press the shortcut 10 times, a 
 
 | Client | Captures | Complete | Display shows the session | Result |
 |---|---|---|---|---|
-| | | | | |
+| (to be filled in by the user with the real remote-desktop client) | | | | |
+
+### Observed on the developer Mac (2026-09-30, scenarios 1 to 7, driven from the terminal)
+
+| Check | Result |
+|---|---|
+| SC-001 time to finish a capture of 3 displays | about 300 to 390 ms (log `ms=`) |
+| SC-002 20 consecutive captures | 20 of 20 complete, 3 images each, 144 files for 72 images, none missing |
+| SC-003 analysis copy sizes | 2048x857 from 3440x1440; 1024x429 after the setting changed; older captures unchanged |
+| SC-004 revoke while running, then capture | refused in 25 ms, onboarding opened, status not granted, nothing stored (run once; 5 trials not repeated) |
+| SC-005 three relaunches | 24 events and 72 images each time, none missing |
+| SC-006 figures against the disk | 560 KB shown, `du -sk` 560 |
+| SC-007 cleanup | only the older captures and their folders removed; delete all leaves zero events and zero files |
+| SC-008 private and excluded | `drwx------`, `tmutil isexcluded` reports `[Excluded]` |
+| SC-011 free-space refusal | 5 of 5 refused, no pictures |
+| SC-012 pointer never shown | not checked by eye (the pictures would show the screen); `showsCursor = false` is set |
+| FR-020 network | `lsof -i` shows 0 connections |
 
 ## No network and no leftovers
 
