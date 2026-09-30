@@ -8,8 +8,6 @@ import os
 public struct ImageAnalysisJobRunner: AnalysisJobRunning {
     public static let analyseKind = "analyse"
     public static let forceKind = "analyse-force"
-    /// The classification call is sent at this size whatever the analysis size is (spike S2).
-    static let classificationLongEdge = 1024
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "extraction")
 
     private let service: OllamaService
@@ -57,22 +55,19 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         catch let failure as AnalysisFailure { return JobOutcome(failure.error) }
         catch { return .transient("text recognition failed") }
 
-        // Classify (and whatever comes after it)
-        let classificationJPEG: Data
-        do { classificationJPEG = try PictureConverter.jpegData(from: analysisCopy.data, longEdge: Self.classificationLongEdge) }
+        // Classify and extract
+        let copies: PictureCopies
+        do { copies = try PictureCopies(analysisCopy: analysisCopy.data, width: analysisCopy.width, height: analysisCopy.height) }
         catch { return Self.gone }
-        let scale = min(1, Double(Self.classificationLongEdge) / Double(max(1, analysisCopy.longEdge)))
-        let size = (width: max(1, Int((Double(analysisCopy.width) * scale).rounded())), height: max(1, Int((Double(analysisCopy.height) * scale).rounded())))
+        let size = copies.classificationSize
 
         var reuse = PipelineInput.Reuse(lines: lines)
         if !forced, let run = try? jobs.latestSuccessfulRun(imageID: imageID, step: "classify", promptVersion: ExtractionPrompts.classifyVersion),
            let stored = run.rawAnswer.flatMap({ ClassificationResult.parse(storedAnswer: $0) }) {
             reuse.classification = stored
         }
-        let analysisJPEG: Data
-        do { analysisJPEG = try PictureConverter.jpegData(from: analysisCopy.data) } catch { return Self.gone }
-        let input = PipelineInput(image: full, classificationJPEG: classificationJPEG, classificationSize: size, analysisJPEG: analysisJPEG,
-                                  analysisSize: (analysisCopy.width, analysisCopy.height), macTimezone: .current, reuse: reuse)
+        let input = PipelineInput(image: full, classificationJPEG: copies.classificationJPEG, classificationSize: size,
+                                  analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: .current, reuse: reuse)
 
         let analysis: AnalysisResult?
         let steps: [StepRecord]

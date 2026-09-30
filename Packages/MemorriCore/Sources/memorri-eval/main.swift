@@ -11,10 +11,26 @@ func readReport(_ path: String) throws -> EvalReport {
     catch { fail("Cannot read the report \(path): \(error.localizedDescription)", code: EvalExit.error) }
 }
 
-/// Until the analysis pipeline exists (user story 3) a case cannot be analysed.
-struct UnwiredAnalyser: CaseAnalysing {
+/// The real analysis: the same pipeline the app runs, with the model choices from the command line.
+struct CLIAnalyser: CaseAnalysing {
+    let service: OllamaService
+    let settings: OllamaSettings
+    let size: Int
+
     func analyse(_ golden: GoldenCase, replaying steps: [EvalStepRecord]?) async throws -> CaseResult {
-        throw PipelineError.permanent("the analysis pipeline is not connected yet")
+        let stepSettings: ModelStepSettings
+        if steps != nil {
+            // Replaying never calls the model, so the server is not asked about it.
+            stepSettings = ModelStepSettings(model: settings.model ?? "", think: settings.think, timeout: 60, modelThinks: false)
+        } else {
+            switch await ModelStep.settings(service: service, settings: settings) {
+            case .success(let value): stepSettings = value
+            case .failure: throw EvalRefusal.serverUnavailable(ServerStatus.noModelChosen.message)
+            }
+        }
+        let analyser = PipelineCaseAnalyser(recogniser: VisionTextRecogniser(), model: ServiceModelChatting(service: service),
+                                            settings: stepSettings, size: size)
+        return try await analyser.analyse(golden, replaying: steps)
     }
 }
 
@@ -25,6 +41,13 @@ func defaultReportPath() -> String {
     return "eval/out/\(formatter.string(from: Date())).json"
 }
 
+/// The prompt and schema versions in use, saved with every report.
+func promptVersions() -> [String: String] {
+    var versions = ["classify": ExtractionPrompts.classifyVersion]
+    for kind in ScreenKind.allCases { versions["extract-\(kind.rawValue)"] = ExtractionPrompts.version(for: kind) }
+    return versions
+}
+
 func run(_ options: RunOptions) async -> Int32 {
     let store = MemorySettingsStore()
     let settings = OllamaSettings(store: store)
@@ -33,8 +56,8 @@ func run(_ options: RunOptions) async -> Int32 {
     settings.setThink(options.think)
     let service = OllamaService.live(settings: settings)
     let evalSettings = EvalSettings(model: settings.model ?? OllamaSettings.recommendedModel, size: options.size, think: options.think.rawValue,
-                                    promptVersions: [:], thresholds: .standard)
-    let runner = EvalRunner(analyser: UnwiredAnalyser(), settings: evalSettings,
+                                    promptVersions: promptVersions(), thresholds: .standard)
+    let runner = EvalRunner(analyser: CLIAnalyser(service: service, settings: settings, size: options.size), settings: evalSettings,
                             isAppBusy: { (try? AppPaths.standard()).map(BusyCheck.isBusy(paths:)) ?? false },
                             serverStatus: { await service.check() })
     do {
@@ -48,7 +71,7 @@ func run(_ options: RunOptions) async -> Int32 {
         try report.write(to: out)
         print("saved \(out.path)")
         if report.cases.allSatisfy({ $0.foundKind == "failed" }) {
-            fail("No case could be analysed: the analysis pipeline is not connected yet.", code: EvalExit.error)
+            fail("No case could be analysed (see the saved report for the model's answers).", code: EvalExit.error)
         }
         return options.isBelowMinimum(report.overall) ? EvalExit.belowMinimum : EvalExit.finished
     } catch let refusal as EvalRefusal {
