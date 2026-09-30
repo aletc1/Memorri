@@ -66,3 +66,11 @@ private final class RefuseRedirects: NSObject, URLSessionTaskDelegate, Sendable 
         completionHandler(nil)
     }
 }
+
+extension OllamaService {
+    /// The service the app uses: every request goes through the loopback-only transport. Living in
+    /// this file keeps the app itself free of any mention of the network classes.
+    public static func live(settings: OllamaSettings) -> OllamaService {
+        OllamaService(settings: settings, makeTransport: { address in OllamaURLSessionTransport(address: address) })
+    }
+}

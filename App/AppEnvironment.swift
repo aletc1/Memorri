@@ -29,8 +29,7 @@ final class AppEnvironment {
     init() {
         feedbackSettings = CaptureFeedbackSettings(store: settingsStore)
         ollamaSettings = OllamaSettings(store: settingsStore)
-        ollama = OllamaService(settings: ollamaSettings,
-                               makeTransport: { address in OllamaURLSessionTransport(address: address) })
+        ollama = OllamaService.live(settings: ollamaSettings)
         permission = PermissionMonitor(checker: screenRecording)
         feedback = FeedbackAdapter(state: state)
         let windows = self.windows
@@ -68,7 +67,11 @@ final class AppEnvironment {
         }
         startPermissionPolling()
         startClockTick()
-        Task { [ollama] in await ollama.check() }
+        Task { [ollama] in
+            // The recommended model is chosen without opening Settings (FR-006), then one check.
+            await ollama.applyDefaultModelIfNeeded()
+            await ollama.check()
+        }
         if let storage { StartupAlerts.showIfNeeded(for: storage) }
         startRetention()
     }

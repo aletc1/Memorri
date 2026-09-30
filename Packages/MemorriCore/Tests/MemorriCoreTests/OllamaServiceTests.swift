@@ -148,4 +148,83 @@ import Testing
         _ = await rig.service.check()
         #expect(rig.addresses.values == ["http://localhost:11434", "http://127.0.0.1:9000"])
     }
+
+    // MARK: model list and default choice (user story 2)
+
+    private let sixModels = """
+    {"models":[{"name":"qwen3.8:27b-mlx","capabilities":["completion","vision","tools","thinking"]},
+               {"name":"qwen3.6:35b-mlx","capabilities":["completion","vision","thinking","tools"]},
+               {"name":"qwen3-coder:30b","capabilities":["completion","tools"]},
+               {"name":"rerank-a","capabilities":["tools","thinking","completion"]},
+               {"name":"rerank-b","capabilities":["tools","thinking","completion"]},
+               {"name":"e5","capabilities":["embedding"]}]}
+    """
+
+    @Test func theListHasOnlyVisionModelsAndCountsTheHiddenOnes() async throws {
+        let rig = makeRig()
+        script(rig.transport, models: sixModels)
+        let list = try await rig.service.modelList()
+        #expect(list.usable.map(\.name) == ["qwen3.8:27b-mlx", "qwen3.6:35b-mlx"])
+        #expect(list.usable.allSatisfy { $0.readsImages })
+        #expect(list.hiddenCount == 4)
+        #expect(list.usable.first?.thinks == true)
+    }
+
+    @Test func aFailingServerMakesTheListThrow() async {
+        let rig = makeRig()
+        rig.transport.set("/api/tags", .fail(.unreachable))
+        do {
+            _ = try await rig.service.modelList()
+            Issue.record("expected the list to throw")
+        } catch {
+            #expect(error as? OllamaClientError == .unreachable)
+        }
+    }
+
+    @Test func modelsWithoutCapabilitiesAreResolvedThroughShow() async throws {
+        let rig = makeRig()
+        rig.transport.set("/api/tags", .json(#"{"models":[{"name":"old:1"},{"name":"text:1"}]}"#))
+        rig.transport.set("/api/show", .json(#"{"capabilities":["completion","vision"]}"#))
+        let list = try await rig.service.modelList()
+        #expect(list.usable.count == 2)                      // the scripted /api/show answers "vision" for both
+        #expect(rig.transport.requests(to: "/api/show").count == 2)
+    }
+
+    @Test func theRecommendedModelIsChosenWhenNothingIsChosenAndItIsInstalled() async {
+        let rig = makeRig(model: nil)
+        script(rig.transport, models: sixModels)
+        await rig.service.applyDefaultModelIfNeeded()
+        #expect(rig.settings.model == "qwen3.8:27b-mlx")
+    }
+
+    @Test func nothingIsChosenWhenTheRecommendedModelIsNotInstalled() async {
+        let rig = makeRig(model: nil)
+        script(rig.transport, models: #"{"models":[{"name":"qwen3.6:35b-mlx","capabilities":["completion","vision"]}]}"#)
+        await rig.service.applyDefaultModelIfNeeded()
+        #expect(rig.settings.model == nil)
+    }
+
+    @Test func anExistingChoiceIsNeverReplaced() async {
+        let rig = makeRig(model: "qwen3.6:35b-mlx")
+        script(rig.transport, models: sixModels)
+        await rig.service.applyDefaultModelIfNeeded()
+        #expect(rig.settings.model == "qwen3.6:35b-mlx")
+        #expect(rig.transport.requests.isEmpty)              // nothing to do, so the server is not even asked
+    }
+
+    @Test func aFailingServerLeavesTheChoiceEmpty() async {
+        let rig = makeRig(model: nil)
+        rig.transport.set("/api/tags", .fail(.unreachable))
+        await rig.service.applyDefaultModelIfNeeded()
+        #expect(rig.settings.model == nil)
+    }
+
+    @Test func aChosenModelThatDisappearsKeepsItsNameAndTheStatusSaysMissing() async {
+        let rig = makeRig(model: "qwen3.8:27b-mlx")
+        script(rig.transport)
+        #expect(await rig.service.check() == .reachable(version: "0.34.4"))
+        script(rig.transport, models: #"{"models":[{"name":"qwen3.6:35b-mlx","capabilities":["completion","vision"]}]}"#)
+        #expect(await rig.service.check() == .modelMissing("qwen3.8:27b-mlx"))
+        #expect(rig.settings.model == "qwen3.8:27b-mlx")     // not silently replaced (FR-007)
+    }
 }

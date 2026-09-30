@@ -45,6 +45,19 @@ public enum ServerStatus: Sendable, Equatable {
     }
 }
 
+/// The installed models the user can pick from.
+public struct ModelList: Sendable, Equatable {
+    /// Models that can read images, in the server's order.
+    public let usable: [InstalledModel]
+    /// Installed models left out because they cannot read images.
+    public let hiddenCount: Int
+
+    public init(usable: [InstalledModel], hiddenCount: Int) {
+        self.usable = usable
+        self.hiddenCount = hiddenCount
+    }
+}
+
 /// Knows whether the server and the chosen model are usable. The settings screen, the queue and the
 /// tests all ask this one place, so what the user sees and why the queue waits cannot disagree.
 public actor OllamaService {
@@ -75,6 +88,23 @@ public actor OllamaService {
     /// A client for the address in the settings right now.
     public func client() -> OllamaClient {
         OllamaClient(transport: makeTransport(settings.address))
+    }
+
+    /// The vision-capable installed models (FR-005). Throws when the server cannot be asked.
+    public func modelList() async throws -> ModelList {
+        let models = try await client().models()
+        let usable = models.filter(\.readsImages)
+        return ModelList(usable: usable, hiddenCount: models.count - usable.count)
+    }
+
+    /// Chooses the recommended model when nothing is chosen and it is installed (FR-006). Never
+    /// replaces an existing choice and does not even ask the server when one exists.
+    public func applyDefaultModelIfNeeded() async {
+        guard settings.model == nil else { return }
+        guard let list = try? await modelList(),
+              list.usable.contains(where: { $0.name == OllamaSettings.recommendedModel }) else { return }
+        // The user may have chosen while the server was answering.
+        if settings.model == nil { settings.setModel(OllamaSettings.recommendedModel) }
     }
 
     /// Runs a check. One check runs at a time: a call made while one is running joins it (FR-004).
