@@ -205,7 +205,7 @@ struct FailingEncoder: ImageEncoding {
 }
 
 struct FailingStore: CaptureStoring {
-    func insert(event: CaptureEventRecord, images: [CaptureImageRecord]) throws { throw CocoaError(.fileWriteUnknown) }
+    func insert(event: CaptureEventRecord, images: [CaptureImageRecord], windows: [String: [WindowInfo]]) throws { throw CocoaError(.fileWriteUnknown) }
 }
 
 /// Capture runner that returns a scripted outcome and records how it was called.

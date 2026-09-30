@@ -87,7 +87,14 @@ public struct CaptureImageRecord: Sendable, Equatable, Codable, FetchableRecord,
 
 /// The part of the store the capture pipeline needs, so tests can fake a failing store.
 public protocol CaptureStoring: Sendable {
-    func insert(event: CaptureEventRecord, images: [CaptureImageRecord]) throws
+    /// `windows` is keyed by image id; event, images and windows are stored in one transaction.
+    func insert(event: CaptureEventRecord, images: [CaptureImageRecord], windows: [String: [WindowInfo]]) throws
+}
+
+extension CaptureStoring {
+    public func insert(event: CaptureEventRecord, images: [CaptureImageRecord]) throws {
+        try insert(event: event, images: images, windows: [:])
+    }
 }
 
 public struct CaptureStore: CaptureStoring {
@@ -97,11 +104,30 @@ public struct CaptureStore: CaptureStoring {
         self.database = database
     }
 
-    /// Event and images in one transaction.
-    public func insert(event: CaptureEventRecord, images: [CaptureImageRecord]) throws {
+    /// Event, images and the windows seen on each display in one transaction.
+    public func insert(event: CaptureEventRecord, images: [CaptureImageRecord], windows: [String: [WindowInfo]]) throws {
         try database.pool.write { db in
             try event.insert(db)
             for image in images { try image.insert(db) }
+            for (imageID, list) in windows {
+                for (z, window) in list.enumerated() {
+                    try db.execute(sql: """
+                        INSERT INTO capture_windows (id, image_id, z, app_name, bundle_id, title, x, y, width, height)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, arguments: [UUID().uuidString, imageID, z, window.appName, window.bundleID, window.title,
+                                         window.frame.x, window.frame.y, window.frame.width, window.frame.height])
+                }
+            }
+        }
+    }
+
+    /// The windows recorded for a picture, largest first.
+    public func windows(imageID: String) throws -> [WindowInfo] {
+        try database.pool.read { db in
+            try Row.fetchAll(db, sql: "SELECT * FROM capture_windows WHERE image_id = ? ORDER BY z", arguments: [imageID]).map { row in
+                WindowInfo(appName: row["app_name"], bundleID: row["bundle_id"], title: row["title"],
+                           frame: PixelBox(x: row["x"], y: row["y"], width: row["width"], height: row["height"]))
+            }
         }
     }
 
