@@ -13,7 +13,9 @@ swift run --package-path Packages/MemorriCore memorri-eval <command> [options]
 | `generate-synthetic [--out eval/golden/synthetic]` | Draws the synthetic cases (same files every time). |
 | `run [--cases eval/golden] [--out eval/out/<name>.json] [--size 2048] [--model <name>] [--think off\|low\|medium\|high] [--prompt-set v1] [--address http://localhost:11434] [--only <case>] [--replay <report.json>] [--allow-busy]` | Runs every case (or one), prints the report, saves the JSON. `--replay` re-scores the stored model answers without calling the model. |
 | `compare <a.json> <b.json>` | Prints the difference in every measure and the cases that changed. |
-| `sweep-size [--cases …] [--sizes 1024,1536,2048,3072]` | Runs the set at each size and prints measures and mean seconds per picture; recommends a default (research R18). |
+| `sweep-size [--cases …] [--sizes 1024,1536,2048,3072]` | Runs the set at each size and prints a table (precision, recall, F1, field accuracy, mean seconds) and a recommendation: the smallest size whose F1 and field accuracy are each within 0.02 of the best, 2048 when no smaller size qualifies (research R18). |
+
+`run` also takes `--replay <report.json>` (score the stored model answers again without the model, the server or the busy check), `--only <case>`, `--size`, `--think`, `--model`, `--address`, `--out`, `--allow-busy`. The text report lists, for every case, `missed` and `unexpected` findings with their dates in UTC, `field` lines (each field of a matched finding that differs), `tag` lines (each wrong or missing tag) and `disagrees` lines.
 
 Exit code 0 when the run finished (scores are information, not pass or fail), 2 for a refusal (app busy, server unreachable, no cases), 1 for an error. `--min-recall <x>` and `--min-precision <x>` make `run` exit 3 when a score is below them, for use as a gate.
 
@@ -59,14 +61,14 @@ Only `synthetic/` cases are tracked; everything else under `eval/golden/` and ev
 
 - One-to-one matching by best score. A found finding matches an expected one when: same kind; titles at least 80% similar after lowercasing and removing spaces and punctuation (normalised edit distance), or one contains the other; start (or due, for tasks and deadlines) within 5 minutes. Thresholds are printed and saved in every report.
 - Precision = matched / found. Recall = matched / expected. Field accuracy = equal fields / compared fields over matched findings: `start`, `end`, `allDay`, `due`, `remind`, `people` (as a set), `place` (normalised), and `inferred` flags (a field flagged when expected, not flagged when not).
-- Classification accuracy = cases whose kind equals `screenKind`. Tag accuracy per key = cases with that expected tag where the stored tag has the same value (case-insensitive), plus the count of wrong and missing tags. Context accuracy when `context` is expected.
-- OCR: exact-text rate of expected `lines`, and box-overlap rate (a stored line's box overlaps the drawn box by at least 50% of the smaller box).
+- Classification accuracy = cases whose kind equals `screenKind`. Tag accuracy per key = cases with that expected tag where the stored tag has the same value (case-insensitive; for `application`, `remote_session` and `calendar_name` one name containing the other is the same, `Teams` and `Microsoft Teams`), plus the count of wrong and missing tags. Context accuracy when `context` is expected.
+- OCR: exact-text rate of expected `lines` (spaces and the kind of dash do not count; a string of four or more characters also counts when it is part of a longer recognised line, because the recogniser joins strings that sit side by side), and box-overlap rate (a stored line's box overlaps the drawn box by at least 50% of the smaller box).
 - Also printed: results by screen kind, by `origin`, and by confidence band (below 0.6, 0.6 to 0.85, above), the mean seconds per case, and for every case the list of missed findings, unexpected findings (with the closest expected one) and disagreements between the model's title and its cited lines' text.
 
 ## Report (JSON)
 
 ```json
-{ "version": 1, "createdAt": "…", "settings": {"model": "…", "size": 2048, "think": "off", "promptVersions": {"classify": "classify-v1", "calendar_week": "extract-calendar_week-v1"}, "thresholds": {"titleSimilarity": 0.8, "minutes": 5}},
+{ "version": 1, "createdAt": "…", "settings": {"model": "…", "size": 2048, "think": "off", "promptVersions": {"classify": "classify-v2", "calendar_week": "extract-calendar_week-v4"}, "thresholds": {"titleSimilarity": 0.8, "minutes": 5}},
   "ranWhileAppBusy": false, "overall": {"precision": 0, "recall": 0, "fieldAccuracy": 0, "classificationAccuracy": 0, "meanSeconds": 0},
   "byKind": {}, "byOrigin": {}, "tagAccuracy": {}, "cases": [ { "name": "…", "origin": "synthetic", "precision": 0, "recall": 0, "fieldAccuracy": 0,
       "kind": {"expected": "…", "found": "…"}, "missed": [], "unexpected": [], "steps": [ {"step": "classify", "request": "…", "rawAnswer": "…", "durationMs": 0} ] } ] }

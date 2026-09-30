@@ -39,15 +39,15 @@ public enum ScreenKind: String, Sendable, CaseIterable { case calendarMonth = "c
     calendarDay = "calendar_day", email, chat, document, other }
 
 public enum ExtractionPrompts {
-    public static let classifyVersion = "classify-v1"
+    public static let classifyVersion = "classify-v2"
     public static func classifyPrompt() -> String
-    public static func version(for kind: ScreenKind) -> String                    // "extract-<kind>-v1"
+    public static func version(for kind: ScreenKind) -> String                    // "extract-<kind>-v4"
     /// Lines are given as `L<n> (x%,y%) text`, capped (see research R4).
     public static func extractPrompt(kind: ScreenKind, lines: [RecognisedLine], pictureSize: (Int, Int)) -> (prompt: String, capApplied: Bool)
 }
 public enum ExtractionSchemas {
     public static let classifySchema: JSONValue
-    public static func schemaVersion(for kind: ScreenKind) -> String              // "schema-<kind>-v1"
+    public static func schemaVersion(for kind: ScreenKind) -> String              // "schema-<kind>-v1"; month views "schema-calendar_month-v2" (they gained column_line)
     public static func extractSchema(for kind: ScreenKind) -> JSONValue
 }
 
@@ -90,19 +90,22 @@ public enum CitationCheck {
 
 public struct ParsedDate: Sendable, Equatable { /* weekday, day, month, year, hour, minute, meridiem, relative */ }
 public enum DateParser {
-    public static func parse(_ text: String, locales: [Locale]) -> ParsedDate?
+    public static func parse(_ text: String, locales: [Locale], order: DateOrder? = nil) -> ParsedDate?
     public static func dateOrder(ofUnambiguous texts: [String]) -> DateOrder?      // dmy, mdy, ymd
 }
-public struct DateHeader: Sendable, Equatable { public let line: Int; public let midX: Double; public let date: DateComponents }
+public struct DateHeader: Sendable, Equatable { public let line: Int; public let midX: Double; public let midY: Double; public let cellWidth: Double; public let date: DateComponents }
 public struct ResolutionContext: Sendable {
-    public let captureTime: Date; public let timezone: TimeZone; public let headers: [DateHeader]
+    public let captureTime: Date; public let timezone: TimeZone; public let headers: [DateHeader]; public let cells: [DateHeader]   // cells: month view
     public let lines: [RecognisedLine]; public let dateOrder: DateOrder?; public let locales: [Locale]; public let sentReference: Date?
 }
 public struct ResolvedValue: Sendable, Equatable { public let date: Date?; public let allDay: Bool; public let provenance: FieldProvenance; public let unresolvedText: String? }
 public enum DateResolver {
-    /// Rules in order: explicit-date, header-column, relative-day, end-of-week, weekday-only, time-only, deadline-reminder (remind only), unresolved.
+    /// Rules in order: explicit-date, header-column or month-cell, relative-day, end-of-week, weekday-only, time-only, deadline-reminder (remind only), unresolved.
     public static func resolve(text: String, field: String, draft: FindingDraft, in context: ResolutionContext) -> ResolvedValue
-    public static func headers(in lines: [RecognisedLine], locales: [Locale], referenceYear: Int) -> [DateHeader]
+    public static func headers(in lines: [RecognisedLine], locales: [Locale], reference: Date, timezone: TimeZone) -> [DateHeader]   // week and day views
+    /// Month views: every cell of the grid with its date. A cell whose label was not read still has its date (from its row and column);
+    /// the days before the 1st and after the last belong to the neighbouring months. Empty with fewer than seven labels.
+    public static func monthCells(in lines: [RecognisedLine], locales: [Locale], reference: Date, timezone: TimeZone) -> [DateHeader]
 }
 
 // MARK: Durations (Extraction/BlockGeometry.swift)
@@ -111,7 +114,8 @@ public struct HourScale: Sendable, Equatable { public let pixelsPerHour: Double;
 public enum BlockGeometry {
     /// nil with fewer than two clock labels in one narrow column.
     public static func hourScale(lines: [RecognisedLine]) -> HourScale?
-    /// Vertical extent in pixels of the coloured block around `titleBox`, or nil when it is not clearly a block.
+    /// Vertical extent in pixels of the block around `titleBox` (filled: the colour inside the title's box differs from the page and the
+    /// region is between three title heights and a column wide; outlined: a border line above and below, each no longer than a column), or nil.
     public static func blockHeight(around titleBox: PixelBox, in image: CGImage, columnWidth: Int) -> Int?
     /// Minutes rounded to 15, limited to 30...720, or nil.
     public static func duration(titleBox: PixelBox, lines: [RecognisedLine], image: CGImage, columnWidth: Int) -> Int?
@@ -121,10 +125,14 @@ public enum BlockGeometry {
 
 public struct CaptureTag: Sendable, Equatable, Codable { public let key: String; public let value: String; public let confidence: Double; public let source: String }
 public struct WindowInfo: Sendable, Equatable { public let appName, bundleID, title: String?; public let frame: PixelBox }
+public enum WindowSelection { public static let maximum = 20
+    public static func select(_ windows: [WindowInfo], pictureWidth: Int, pictureHeight: Int) -> [WindowInfo] }   // clipped, largest visible area first
+public protocol WindowProviding: Sendable { func windows(imageID: String) throws -> [WindowInfo] }                // CaptureStore conforms
 public enum TagExtractor {
-    public static func fromCapture(displaySize: (Int, Int), scale: Double, windows: [WindowInfo]) -> [CaptureTag]
+    public static func tags(width: Int, height: Int, scale: Double?, windows: [WindowInfo], lines: [RecognisedLine], classification: ClassificationResult) -> [CaptureTag]
+    public static func fromCapture(width: Int, height: Int, scale: Double?, windows: [WindowInfo]) -> [CaptureTag]
     public static func fromLines(_ lines: [RecognisedLine]) -> [CaptureTag]          // language, clock_style, date_order, account, domain, timezone_label
-    public static func fromClassification(_ c: ClassificationResult) -> [CaptureTag]  // visual, low confidence marked
+    public static func fromClassification(_ c: ClassificationResult) -> [CaptureTag]  // visual; confidence is the classification's, `isLow` below 0.6
 }
 public struct ContextRecord: Sendable, Equatable { public let id: String; public var name: String; public var timezone: String?; public var hints: [ContextHint] }
 public struct ContextHint: Sendable, Equatable { public enum Kind: String, Sendable { case windowTitle = "window_title", app, domain, keyword }; public let kind: Kind; public let value: String }
@@ -153,11 +161,11 @@ public struct PipelineInput: Sendable {
     public let classificationJPEG: Data          // the same picture at 1024 pixels, for the classification call (spike S2)
     public let analysisSize: (width: Int, height: Int)
     public let captureTime: Date
-    public let displaySize: (Int, Int); public let scale: Double
+    public let displayScale: Double?
     public let windows: [WindowInfo]
     public let contexts: [ContextRecord]
-    public let userContextID: String?            // a user choice wins
-    public let macTimezone: TimeZone
+    public let userChoice: ContextDecision?      // a decision with source `user` wins and is used as it is
+    public let macTimezone: TimeZone; public let locales: [Locale]
     public let reuse: Reuse                      // stored lines and classification for a resumed job
     public struct Reuse: Sendable { public var lines: [RecognisedLine]?; public var classification: ClassificationResult? }
 }
@@ -189,8 +197,8 @@ public struct AnalysisResultStore: Sendable {
 }
 public struct ImageAnalysisJobRunner: AnalysisJobRunning {    // kinds "analyse" and "analyse-force"
     public init(service: OllamaService, pipeline: AnalysisPipeline, pictures: any AnalysisPictureProviding,
-                fullPictures: any FullPictureProviding, captures: CaptureStore, ocr: OCRStore, results: AnalysisResultStore,
-                contexts: ContextStore, jobs: any AnalysisJobStoring, settings: OllamaSettings, time: any TimeSource)
+                fullPictures: any FullPictureProviding, ocr: OCRStore, results: AnalysisResultStore, jobs: any AnalysisJobStoring,
+                settings: OllamaSettings, time: any TimeSource, contexts: ContextStore? = nil, windows: (any WindowProviding)? = nil)
 }
 public protocol FullPictureProviding: Sendable { func fullPicture(imageID: String) throws -> CGImage? }
 public struct CompositeJobRunner: AnalysisJobRunning { public init(runners: [String: any AnalysisJobRunning]) }   // by job kind
@@ -198,7 +206,9 @@ public struct CompositeJobRunner: AnalysisJobRunning { public init(runners: [Str
 public struct AnalysisSettings: Sendable { public init(store: any SettingsStore); public var automatic: Bool { get }; public func setAutomatic(_ value: Bool) }
 ```
 
-`AnalysisQueue` gains `enqueue(kind: String, imageID: String?)` (the existing `enqueueTest` stays) and conforms to `AnalysisEnqueuing`. `CapturePipeline` gains an optional `enqueuer` and calls it with the stored picture ids when `AnalysisSettings.automatic` is on. `CapturedDisplay` gains `windows: [WindowInfo]`, and `CaptureStoring` gains the windows to write.
+`AnalysisQueue` gains `enqueue(kind: String, imageID: String?)` (the existing `enqueueTest` stays) and conforms to `AnalysisEnqueuing`. `CapturePipeline` gains an optional `enqueuer` and calls it with the stored picture ids when `AnalysisSettings.automatic` is on. `CapturedDisplay` gains `windows: [WindowInfo]`, and `CaptureStoring.insert` gains the windows to write (at most 20 per display, chosen by `WindowSelection`).
+
+Also beyond the first plan: `Evaluation/SizeSweep.swift` (`SizeSweep.run`, `recommend`), `Evaluation/PipelineCaseAnalyser.swift` (the real `CaseAnalysing`, given the contexts the golden cases define), `PictureIngest` (Debug switches), `CaptureOverview` (Settings rows, with `contextID`), `ModelStep` (one model call with schema validation), `PictureCopies`, `StoredPicture.scale` and `TagExtractor`.
 
 ## Behaviour the tests pin down
 
