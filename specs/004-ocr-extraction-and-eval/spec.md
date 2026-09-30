@@ -8,6 +8,12 @@
 
 **Input**: User description: "Run Apple Vision OCR per capture and store lines with boxes. Classify screen type (calendar month/week/day, email, chat, document). Use per-type prompts and a JSON schema; the model cites OCR line IDs. Extract appointments, tasks ("X needs Y") and deadlines with reminders. Resolve relative dates using capture time, context timezone and calendar date headers. Guess missing durations from block height, else 1h, flagged as inferred. Detect the source context (which app, workspace or session a capture came from) automatically with manual override. Deliver the memorri-eval CLI and a golden set with precision, recall and field accuracy, and use it to set the downscale default (ADR 0004)."
 
+## Clarifications
+
+### Session 2026-09-30
+
+- Q: Should Memorri record the titles of the windows visible on each display when it captures, so contexts can be matched on them? → A: Yes. The titles of windows visible on each display are stored with its picture and deleted with it, in every kind of cleanup.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Measure extraction quality before trusting it (Priority: P1)
@@ -187,6 +193,7 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **FR-012**: An appointment with a start and no end MUST get an end: from the block height in a calendar view when the block and an hour scale are visible, otherwise one hour after the start. Every guessed value MUST be flagged inferred with its reason (block height or default).
 - **FR-013**: Every stored field of a finding MUST be marked as read or inferred, and MUST keep its confidence (the lowest confidence among the cited lines, or lower when inferred).
 - **FR-014**: Settings MUST let the user manage contexts: add, rename, delete, set a time zone and edit hints (window title text, domain names, keywords). A default time zone of the Mac is used when none is set.
+- **FR-014a**: At capture time, the titles of the windows visible on each display MUST be recorded with that display's picture, stored locally, and deleted together with the capture in every kind of cleanup. They are used only for context matching and MUST NOT be sent anywhere.
 - **FR-015**: Each capture's pictures MUST be assigned to the best-matching context automatically, from the text read and the window titles captured with the pictures, and the matched hints and the runner-up MUST be recorded. No match means unassigned.
 - **FR-016**: The user MUST be able to change the context of a capture. A user choice MUST be kept across reanalysis and MUST be marked as the user's.
 - **FR-017**: Captures MUST be queued for analysis automatically after they are stored, in the same queue as spec 003 (one job at a time, retries, pause, menu progress), unless the user has turned automatic analysis off. The menu line MUST keep the texts from spec 003 and count these jobs.
