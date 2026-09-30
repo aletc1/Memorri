@@ -35,9 +35,14 @@ public struct LoopbackAddress: Sendable, Equatable {
         self.host = host
     }
 
-    /// True when `url` points at the same loopback host. The transport checks every request with it.
-    public func isSameServer(as url: URL) -> Bool {
-        guard let other = LoopbackAddress(url.absoluteString) else { return false }
-        return other.host == host && other.url.port == self.url.port
+    /// True when `url` points at this same server (same scheme, host and port), whatever its path.
+    /// The transport checks every request with it.
+    public func isSameServer(as other: URL) -> Bool {
+        guard let parts = URLComponents(url: other, resolvingAgainstBaseURL: false),
+              parts.user == nil, parts.password == nil,
+              let scheme = parts.scheme?.lowercased(), scheme == url.scheme?.lowercased(),
+              let rawHost = parts.host?.lowercased() else { return false }
+        let otherHost = rawHost.hasPrefix("[") && rawHost.hasSuffix("]") ? String(rawHost.dropFirst().dropLast()) : rawHost
+        return otherHost == host && parts.port == url.port
     }
 }
