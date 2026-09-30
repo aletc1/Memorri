@@ -16,6 +16,7 @@
 - Q: What should `memorri-eval` do if the app's analysis queue has a job running? → A: Refuse to start and say to pause analysis first; an explicit option overrides the refusal.
 - Q: Should analysis of new captures be on by default? → A: Yes. Every stored capture is queued; a Settings switch and the Pause control turn it off.
 - Q: How strict should matching a found item to an expected one be on the title? → A: Same kind, titles at least 80% similar after ignoring case, spaces and punctuation (or one contains the other), and start or due date within 5 minutes; both thresholds are printed in the report.
+- Q: When a capture is reanalysed, what happens to the earlier run's findings? → A: The new run's findings replace them; the earlier run's record and raw answer stay until the capture is deleted.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -190,7 +191,7 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **FR-006**: A finding MUST have a kind (appointment, task, reminder or deadline), a title, and any of: start, end, all-day flag, due date, reminder time, people, place, notes; and it MUST cite the numbers of the lines it comes from. A finding that cites no line, or a line that does not exist in that picture, MUST be discarded and the discard recorded.
 - **FR-007**: A task stated as "X needs Y" (and equivalent phrasings the eval set covers) MUST be found as a task for X. A deadline found with an action MUST produce a reminder time when one can be derived.
 - **FR-008**: The model's answer MUST be checked against the required structure. A mismatch is a failed attempt handled by the queue's retry rules (spec 003). The raw answer MUST be kept with the run record.
-- **FR-009**: Findings MUST be stored per picture, with the model, prompt version, structure version, picture size and the time, and MUST be removed with their capture. Reanalysing a picture MUST replace its findings with the new run's.
+- **FR-009**: Findings MUST be stored per picture, with the model, prompt version, structure version, picture size and the time, and MUST be removed with their capture. Reanalysing a picture MUST replace its findings with the new run's, and MUST keep the earlier run's record and raw answer until the capture is deleted.
 - **FR-010**: Dates and times MUST be resolved to full values using, in this order of preference: what the finding shows in full, date headers visible in the view, then the capture time in the context's time zone for relative words. The rule used MUST be recorded. A value that cannot be resolved MUST be stored as written and flagged unresolved.
 - **FR-011**: Times MUST be expressed in the time zone of the picture's context, or the Mac's zone when the capture is unassigned or the context has no valid zone.
 - **FR-012**: An appointment with a start and no end MUST get an end: from the block height in a calendar view when the block and an hour scale are visible, otherwise one hour after the start. Every guessed value MUST be flagged inferred with its reason (block height or default).
