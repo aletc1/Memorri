@@ -132,3 +132,11 @@ docs/architecture/decisions/                  # 0014, 0015, 0016 (proposed now),
 |-----------|------------|-------------------------------------|
 | Two model calls per picture (classify, then extract) | Per-kind prompts need the kind first; the first call also gives the visual tags | One call with a generic prompt cannot read a calendar grid and a chat equally well (spec US4); the second call over the same picture is expected to be cheap because the server reuses its work (spike S2 measures it) |
 | A second executable target | The constitution and spec US1 require a runnable harness | A test-only harness cannot compare runs, sweep sizes or be run by a developer against a model |
+
+## Files added beyond this plan (recorded during implementation)
+
+- `Evaluation/SyntheticCalendars.swift`, `SyntheticMessages.swift`, `SyntheticChrome.swift`, `SyntheticCanvas.swift` (the drawn cases, split by kind), `EvalCommand.swift` (argument parsing, tested), `PipelineCaseAnalyser.swift` (the real `CaseAnalysing` over `AnalysisPipeline`), `SizeSweep.swift`, `BusyCheck.swift`, `MemorySettingsStore.swift`.
+- `Analysis/ModelStep.swift` (one model call with schema validation), `CaptureOverview.swift` (the Settings rows), `StoredPictureProvider.swift` additions, `AnalysisJobStore.swift` additions.
+- `Extraction/PictureCopies.swift` (the 1024 px classification copy and the analysis copy as JPEG), `TagExtractor.swift`, `ContextMatcher.swift`, `ContextDecision.swift`.
+- `Capture/WindowInfo.swift` (with `WindowSelection`) and `Capture/PictureIngest.swift` (the Debug switches), `Recognition/PixelBox.swift`.
+- `memorri-eval` lives in `Packages/MemorriCore/Sources/memorri-eval` (ADR 0015), not in `Tools/`.
