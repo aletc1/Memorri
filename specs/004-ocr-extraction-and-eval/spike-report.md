@@ -93,3 +93,16 @@ One synthetic picture of each kind was ingested with the Debug switch (`--ingest
 - 7 of 7 correct; all seven jobs finished on the first attempt; every call is stored as a `model_runs` row with `step = classify`.
 - The first picture after launch also paid about 40 s for Vision's first recognition (spike S1); the model call itself took about 5.5 s, as measured in S2.
 - The empty window came back as `other` with confidence 0.5, exactly at the threshold: the rule "below 0.5 counts as other" gives the same kind either way.
+
+## Picture size sweep (2026-09-30, tasks T103 to T105)
+
+`memorri-eval sweep-size` on the 27 synthetic cases (think off, `classify-v2`, `extract-<kind>-v4`, the app idle):
+
+| Size | Precision | Recall | F1 | Field accuracy | Mean seconds |
+|---|---|---|---|---|---|
+| 1024 | 0.84 | 0.89 | 0.86 | 0.96 | 16.7 |
+| 1536 | 0.82 | 0.87 | 0.84 | 0.94 | 21.2 |
+| 2048 | 0.90 | 0.96 | 0.93 | 0.94 | 22.1 |
+| 3072 | 0.90 | 0.96 | 0.93 | 0.94 | 22.1 |
+
+Recommendation: 2048 (no smaller size is within 0.02 of the best F1). 2048 and 3072 are identical because the synthetic pictures are 1600 pixels wide and a size never enlarges a picture. The default stays, so T104 and T105 do not apply. See ADR 0017.
