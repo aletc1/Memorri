@@ -15,6 +15,7 @@ struct OllamaSettingsView: View {
     @State private var testNote: String?
     @State private var testLine: String?
     @State private var isTesting = false
+    @State private var testToken = UUID()
     @State private var failures: [AnalysisJobRecord] = []
 
     var body: some View {
@@ -105,7 +106,7 @@ struct OllamaSettingsView: View {
             Text("Test the model").font(.headline)
             HStack {
                 Button("Test the model") { runTest() }
-                    .disabled(isTesting || environment.analysis == nil)
+                    .disabled(environment.analysis == nil)
                 if isTesting { ProgressView().controlSize(.small) }
             }
             if let testNote { Text(testNote).font(.callout).foregroundStyle(.secondary) }
@@ -147,17 +148,21 @@ struct OllamaSettingsView: View {
     }
 
     /// Queues the test and follows its job until it finishes or fails.
+    /// Several presses queue several jobs; only the newest one is followed.
     private func runTest() {
+        let token = UUID()
+        testToken = token
         isTesting = true
         testLine = nil
         Task {
-            defer { isTesting = false }
             guard let queued = await environment.enqueueModelTest() else {
                 testLine = "Failed: the capture storage is not available"
+                isTesting = false
                 return
             }
             testNote = queued.usedNewestCapture ? "Using the newest capture." : "Using the built-in sample picture."
-            while !Task.isCancelled {
+            defer { if testToken == token { isTesting = false } }
+            while !Task.isCancelled, testToken == token {
                 if let job = try? environment.analysisJobs?.job(id: queued.jobID) {
                     let run = try? environment.analysisJobs?.latestRun(jobID: queued.jobID)
                     if let line = ModelTestResultLine.text(job: job, run: run) { testLine = line; return }
