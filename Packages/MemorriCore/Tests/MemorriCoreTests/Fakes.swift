@@ -264,3 +264,31 @@ final class FakeOllamaTransport: OllamaTransport, @unchecked Sendable {
         return replies[request.path]
     }
 }
+
+// MARK: Analysis fakes
+
+import ImageIO
+
+/// HEIC bytes of a synthetic picture, like the stored analysis copies.
+func makeHEICData(width: Int, height: Int) -> Data {
+    let data = NSMutableData()
+    let destination = CGImageDestinationCreateWithData(data, "public.heic" as CFString, 1, nil)!
+    CGImageDestinationAddImage(destination, makeTestImage(width: width, height: height), nil)
+    CGImageDestinationFinalize(destination)
+    return data as Data
+}
+
+/// Picture provider with a fixed set of stored pictures; a missing id is "no longer stored".
+final class FakePictureProvider: AnalysisPictureProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var pictures: [String: StoredPicture]
+
+    init(_ pictures: [String: StoredPicture] = [:]) { self.pictures = pictures }
+
+    func set(_ picture: StoredPicture?, for id: String) { lock.lock(); pictures[id] = picture; lock.unlock() }
+
+    func analysisPicture(imageID: String) throws -> StoredPicture? {
+        lock.lock(); defer { lock.unlock() }
+        return pictures[imageID]
+    }
+}
