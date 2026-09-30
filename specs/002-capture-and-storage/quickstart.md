@@ -94,7 +94,7 @@ With the real remote-desktop client full-screen, press the shortcut 10 times, a 
 
 | Client | Captures | Complete | Display shows the session | Result |
 |---|---|---|---|---|
-| (to be filled in by the user with the real remote-desktop client) | | | | |
+| Windows App | 11 shortcut presses (2026-09-30, 08:47:47 to 08:48:07 UTC) | 11 of 11 (3 images each, none failed; read from the database) | not yet confirmed by the user | pending |
 
 ### Observed on the developer Mac (2026-09-30, scenarios 1 to 7, driven from the terminal)
 
