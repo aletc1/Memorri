@@ -11,6 +11,7 @@ public enum StartupNotice: Sendable, Equatable {
 public struct StorageContext: Sendable {
     public let paths: AppPaths
     /// `nil` when the database cannot be used (see `capturingDisabledReason`).
+    public let database: StorageDatabase?
     public let store: CaptureStore?
     public let files: CaptureFileStore
     public let notice: StartupNotice?
@@ -31,7 +32,7 @@ public enum StorageBootstrap {
         switch try StorageDatabase.open(paths: paths) {
         case .refusedNewerVersion:
             logger.notice("database from a newer version left untouched")
-            return StorageContext(paths: paths, store: nil, files: files, notice: nil,
+            return StorageContext(paths: paths, database: nil, store: nil, files: files, notice: nil,
                                   capturingDisabledReason: newerVersionReason, reconcile: nil)
         case .opened(let database):
             return try finish(paths: paths, files: files, database: database, notice: nil)
@@ -47,7 +48,7 @@ public enum StorageBootstrap {
         let store = CaptureStore(database: database)
         let report = try files.reconcile(with: store)
         logger.notice("reconcile staging=\(report.stagingRemoved) orphans=\(report.orphansRemoved) missing=\(report.markedMissing)")
-        return StorageContext(paths: paths, store: store, files: files, notice: notice,
+        return StorageContext(paths: paths, database: database, store: store, files: files, notice: notice,
                               capturingDisabledReason: nil, reconcile: report)
     }
 }
