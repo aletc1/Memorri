@@ -17,16 +17,20 @@ final class AppEnvironment {
     let feedback: FeedbackAdapter
     let captureService: CaptureRequestService
     let shortcuts: ShortcutAdapter
+    private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
         feedbackSettings = CaptureFeedbackSettings(store: settingsStore)
         permission = PermissionMonitor(checker: screenRecording)
         feedback = FeedbackAdapter(state: state)
         let windows = self.windows
+        let state = self.state
         captureService = CaptureRequestService(
+            runner: Self.makeCaptureRunner(settingsStore: settingsStore),
             permission: permission,
             feedback: feedback,
             settings: feedbackSettings,
+            onOutcome: { outcome in Task { @MainActor in state.record(outcome) } },
             onNeedsOnboarding: { Task { @MainActor in windows.show(.onboarding) } }
         )
         shortcuts = ShortcutAdapter(onCapture: { [captureService] in
@@ -42,6 +46,41 @@ final class AppEnvironment {
             }
         }
         startPermissionPolling()
+        startClockTick()
+    }
+
+    /// Opens the storage and builds the capture pipeline. When storage cannot be used, capturing
+    /// reports why instead of crashing (the start-up dialogs come with spec 002 user story 3).
+    private static func makeCaptureRunner(settingsStore: any SettingsStore) -> any CaptureRunning {
+        do {
+            let paths = try AppPaths.standard()
+            try paths.prepare()
+            switch try StorageDatabase.open(paths: paths) {
+            case .refusedNewerVersion:
+                return UnavailableCaptureRunner(reason: "database from a newer version")
+            case .opened(let database), .openedAfterSettingAside(let database, _):
+                let store = CaptureStore(database: database)
+                let files = CaptureFileStore(paths: paths)
+                if let report = try? files.reconcile(with: store) {
+                    logger.notice("reconcile staging=\(report.stagingRemoved) orphans=\(report.orphansRemoved) missing=\(report.markedMissing)")
+                }
+                return CapturePipeline(capturer: ScreenCaptureKitCapturer(), encoder: HEICImageEncoder(),
+                                       disk: DiskSpaceAdapter(), files: files, store: store, paths: paths,
+                                       settings: StorageSettings(store: settingsStore))
+            }
+        } catch {
+            logger.error("storage unavailable: \(error.localizedDescription, privacy: .public)")
+            return UnavailableCaptureRunner(reason: "could not open the capture storage")
+        }
+    }
+
+    private func startClockTick() {
+        Task { @MainActor [state] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                state.now = Date()
+            }
+        }
     }
 
     /// Follows the permission for as long as the app runs. A running process keeps the answer it

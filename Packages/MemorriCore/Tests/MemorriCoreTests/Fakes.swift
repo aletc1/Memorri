@@ -207,3 +207,22 @@ struct FailingEncoder: ImageEncoding {
 struct FailingStore: CaptureStoring {
     func insert(event: CaptureEventRecord, images: [CaptureImageRecord]) throws { throw CocoaError(.fileWriteUnknown) }
 }
+
+/// Capture runner that returns a scripted outcome and records how it was called.
+final class FakeCaptureRunner: CaptureRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var outcome: CaptureOutcome?
+    private var triggers: [CaptureTrigger] = []
+
+    init(outcome: CaptureOutcome? = .complete(displays: 1)) { self.outcome = outcome }
+
+    var calls: [CaptureTrigger] { lock.lock(); defer { lock.unlock() }; return triggers }
+
+    func run(trigger: CaptureTrigger) async -> CaptureOutcome? { record(trigger) }
+
+    private func record(_ trigger: CaptureTrigger) -> CaptureOutcome? {
+        lock.lock(); defer { lock.unlock() }
+        triggers.append(trigger)
+        return outcome
+    }
+}

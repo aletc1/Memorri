@@ -6,7 +6,15 @@ public enum CaptureTrigger: String, Sendable {
     case shortcut
 }
 
-/// A recorded intent to capture. Spec 002 turns it into a real capture.
+/// What the service hands a request to: the capture pipeline (a fake in tests).
+public protocol CaptureRunning: Sendable {
+    /// `nil` when another capture is already running.
+    func run(trigger: CaptureTrigger) async -> CaptureOutcome?
+}
+
+extension CapturePipeline: CaptureRunning {}
+
+/// A recorded intent to capture, kept in memory for diagnostics.
 public struct CaptureRequest: Sendable, Identifiable {
     public let id: UUID
     public let timestamp: Date
@@ -50,20 +58,26 @@ public actor CaptureRequestService {
 
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "capture")
 
+    private let runner: any CaptureRunning
     private let permission: PermissionMonitor
     private let feedback: any FeedbackPlaying
     private let settings: CaptureFeedbackSettings
     private let time: any TimeSource
     private let onNeedsOnboarding: @Sendable () -> Void
+    private let onOutcome: @Sendable (CaptureOutcome) -> Void
 
     private var history: [CaptureRequest] = []
     private var lastAccepted: Date?
 
-    public init(permission: PermissionMonitor,
+    public init(runner: any CaptureRunning,
+                permission: PermissionMonitor,
                 feedback: any FeedbackPlaying,
                 settings: CaptureFeedbackSettings,
                 time: any TimeSource = SystemTimeSource(),
+                onOutcome: @escaping @Sendable (CaptureOutcome) -> Void = { _ in },
                 onNeedsOnboarding: @escaping @Sendable () -> Void) {
+        self.runner = runner
+        self.onOutcome = onOutcome
         self.permission = permission
         self.feedback = feedback
         self.settings = settings
@@ -74,9 +88,10 @@ public actor CaptureRequestService {
     /// Newest last, at most `historyLimit` items.
     public var recent: [CaptureRequest] { history }
 
-    /// Returns the recorded request, or `nil` when it was dropped as a double press.
+    /// Runs one capture and plays the feedback for its outcome. Returns `nil` when the request was
+    /// dropped as a double press or ignored because a capture was already running.
     @discardableResult
-    public func request(_ trigger: CaptureTrigger) async -> CaptureRequest? {
+    public func request(_ trigger: CaptureTrigger) async -> CaptureOutcome? {
         let now = time.now()
         if let last = lastAccepted {
             // Rounded to whole milliseconds so 0.3 s apart is exactly on the limit.
@@ -86,18 +101,25 @@ public actor CaptureRequestService {
         lastAccepted = now
 
         let status = await permission.status
-        let request = CaptureRequest(timestamp: now, trigger: trigger, permissionAtRequest: status)
-        history.append(request)
+        history.append(CaptureRequest(timestamp: now, trigger: trigger, permissionAtRequest: status))
         if history.count > Self.historyLimit { history.removeFirst(history.count - Self.historyLimit) }
 
         Self.logger.notice("capture requested trigger=\(trigger.rawValue, privacy: .public) permission=\(status.rawValue, privacy: .public)")
 
-        if status == .granted {
+        // The real capture is the source of truth for the permission, not the tracked status.
+        guard let outcome = await runner.run(trigger: trigger) else { return nil }
+        onOutcome(outcome)
+
+        switch outcome {
+        case .complete:
             if settings.flashIcon { await feedback.flashIcon() }
             if settings.playSound { await feedback.playSound() }
-        } else {
+        case .partial, .failed:
+            if settings.flashIcon { await feedback.flashWarning() }
+            if settings.playSound { await feedback.playWarningSound() }
+        case .permissionDenied:
             onNeedsOnboarding()
         }
-        return request
+        return outcome
     }
 }
