@@ -226,3 +226,41 @@ final class FakeCaptureRunner: CaptureRunning, @unchecked Sendable {
         return outcome
     }
 }
+
+// MARK: Ollama fakes
+
+/// Transport that returns scripted answers per path and records every request.
+final class FakeOllamaTransport: OllamaTransport, @unchecked Sendable {
+    enum Reply {
+        case json(String)                              // HTTP 200
+        case status(Int, String = "{}")
+        case fail(OllamaTransportError)
+    }
+
+    private let lock = NSLock()
+    private var replies: [String: Reply] = [:]
+    private var sent: [OllamaHTTPRequest] = []
+    var delay: Duration = .zero
+
+    func set(_ path: String, _ reply: Reply) { lock.lock(); replies[path] = reply; lock.unlock() }
+
+    var requests: [OllamaHTTPRequest] { lock.lock(); defer { lock.unlock() }; return sent }
+    func requests(to path: String) -> [OllamaHTTPRequest] { requests.filter { $0.path == path } }
+
+    func send(_ request: OllamaHTTPRequest) async throws -> OllamaHTTPResponse {
+        let reply = record(request)
+        if delay > .zero { try await Task.sleep(for: delay) }
+        switch reply {
+        case .json(let text): return OllamaHTTPResponse(status: 200, body: Data(text.utf8))
+        case .status(let code, let text): return OllamaHTTPResponse(status: code, body: Data(text.utf8))
+        case .fail(let error): throw error
+        case nil: return OllamaHTTPResponse(status: 404, body: Data(#"{"error":"not scripted"}"#.utf8))
+        }
+    }
+
+    private func record(_ request: OllamaHTTPRequest) -> Reply? {
+        lock.lock(); defer { lock.unlock() }
+        sent.append(request)
+        return replies[request.path]
+    }
+}
