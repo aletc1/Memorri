@@ -234,7 +234,7 @@ public enum Metrics {
     private static func scoreLines(_ expected: [ExpectedLine], _ found: [FoundLine]) -> (exact: Int, expected: Int, overlap: Int, boxed: Int) {
         var exact = 0, overlap = 0, boxed = 0
         for line in expected {
-            let matches = found.filter { $0.text.trimmingCharacters(in: .whitespaces) == line.text }
+            let matches = found.filter { readable($0.text) == readable(line.text) }
             if !matches.isEmpty { exact += 1 }
             if let box = line.box, box.count == 4 {
                 boxed += 1
@@ -242,6 +242,11 @@ public enum Metrics {
             }
         }
         return (exact, expected.count, overlap, boxed)
+    }
+
+    /// Reading is exact up to surrounding spaces and the kind of dash: the recogniser writes every dash as a hyphen.
+    static func readable(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "\u{2013}", with: "-").replacingOccurrences(of: "\u{2014}", with: "-")
     }
 
     /// The boxes overlap by at least half of the smaller one.

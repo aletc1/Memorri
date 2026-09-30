@@ -114,6 +114,12 @@ import Testing
         #expect(s.ocrOverlap == 1 && s.ocrBoxed == 3)
     }
 
+    @Test func readingIgnoresTheKindOfDashAndSurroundingSpaces() {
+        let g = golden(lines: [ExpectedLine(text: "October 12 \u{2013} 16, 2026", box: [0, 0, 100, 20])])
+        let s = score(g, result(lines: [FoundLine(text: " October 12 - 16, 2026 ", box: [0, 0, 100, 20])]))
+        #expect(s.ocrExact == 1 && s.ocrOverlap == 1)
+    }
+
     @Test func aTitleThatIsNotInTheCitedTextIsADisagreement() {
         let g = golden(findings: [ExpectedFinding(kind: "task", title: "Send the report", due: t0)])
         let ok = FoundFinding(kind: "task", title: "Send the report", due: t0, citedText: "Anna needs: send the report by Friday")

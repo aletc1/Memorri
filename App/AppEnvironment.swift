@@ -51,9 +51,16 @@ final class AppEnvironment {
         }
         if let context = opened.storage, let database = context.database, let captures = context.store {
             let jobs = AnalysisStore(database: database)
-            let runner = ModelTestJobRunner(
-                service: ollama, store: jobs, pictures: StoredPictureProvider(paths: context.paths, store: captures),
-                settings: ollamaSettings, time: SystemTimeSource())
+            let pictures = StoredPictureProvider(paths: context.paths, store: captures)
+            let testRunner = ModelTestJobRunner(
+                service: ollama, store: jobs, pictures: pictures, settings: ollamaSettings, time: SystemTimeSource())
+            let analyseRunner = ImageAnalysisJobRunner(
+                pictures: pictures, recogniser: VisionTextRecogniser(), ocr: OCRStore(database: database), time: SystemTimeSource())
+            let runner = CompositeJobRunner(runners: [
+                "test": testRunner,
+                ImageAnalysisJobRunner.analyseKind: analyseRunner,
+                ImageAnalysisJobRunner.forceKind: analyseRunner,
+            ])
             analysis = AnalysisQueue(store: jobs, runner: runner, ready: { [ollama] in await ollama.check() },
                                      settings: ollamaSettings)
             analysisJobs = jobs
@@ -83,12 +90,15 @@ final class AppEnvironment {
         }
         startPermissionPolling()
         startClockTick()
-        Task { [ollama, analysis] in
+        Task { [ollama, analysis, storage, settingsStore] in
             // The recommended model is chosen without opening Settings (FR-006), then one check,
             // and only then does the queue start, so its first look at the server sees the choice.
             await ollama.applyDefaultModelIfNeeded()
             await ollama.check()
             await analysis?.start()
+            #if DEBUG
+            await DebugIngest.runIfRequested(storage: storage, analysis: analysis, settingsStore: settingsStore)
+            #endif
         }
         followAnalysisProgress()
         if let storage { StartupAlerts.showIfNeeded(for: storage) }
