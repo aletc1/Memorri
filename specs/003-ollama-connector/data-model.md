@@ -73,8 +73,8 @@ Migration `"v2"` creates both tables, the CHECK constraints on `state` and `outc
 |---|---|---|
 | `memorri.ollama.address` | String | Default `http://localhost:11434`. Only `localhost`, `127.0.0.1` and `::1` are accepted (FR-002); anything else is rejected and the previous value kept. |
 | `memorri.ollama.model` | String | Empty until chosen. First use with nothing chosen: `qwen3.8:27b-mlx` if installed. |
-| `memorri.ollama.think` | String | `off`, `low`, `medium` or `high`. Default `off` until the spike sets it. |
-| `memorri.ollama.timeoutSeconds` | Int | 10 to 1800, default 300 until the spike sets it. Out of range is rejected and the previous value kept. |
+| `memorri.ollama.think` | String | `off`, `low`, `medium` or `high`. Default `off` (spike, ADR 0013). |
+| `memorri.ollama.timeoutSeconds` | Int | 10 to 1800, default 300 (spike, ADR 0013). Out of range is rejected and the previous value kept. |
 | `memorri.analysis.paused` | Bool | Default false; survives restarts. |
 
 ## In-memory types

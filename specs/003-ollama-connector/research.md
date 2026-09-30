@@ -33,14 +33,14 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Spike** 
 
 ## R5. Think level
 
-- **Decision**: The setting is one of `off`, `low`, `medium`, `high`, default `off`, enabled only when the chosen model lists `thinking`. `off` sends `think: false`; a level is sent as the string level if the spike shows the model honours levels, and as `think: true` if it only honours the boolean (then `low`, `medium` and `high` all mean on, and the UI says so). The spike decides the default.
+- **Decision**: The setting is one of `off`, `low`, `medium`, `high`, default `off`, enabled only when the chosen model lists `thinking`. `off` sends `think: false`; a level is sent as the string level if the spike shows the model honours levels, and as `think: true` if it only honours the boolean (then `low`, `medium` and `high` all mean on, and the UI says so). The spike decided: the default is `off`; `qwen3.8` accepts `low`, `medium` and `high` but they behave like `true`, so they are sent as `true` (ADR 0013).
 - **Rationale**: The API accepts a boolean or a level depending on the model; what `qwen3.8` does has to be observed.
 - **Which models accept levels** is not in `capabilities` (it only says "thinking"), so it is a small built-in rule by model name (`ThinkWireValue.acceptsLevels(modelName:)`), written from the spike; the default is boolean only.
 - **Spike S3** (part of S2 below): compare `think: false` with the levels the model accepts.
 
 ## R6. Request timeout
 
-- **Decision**: Range 10 to 1800 seconds, default 300 until the spike sets it. The transport sets the URLSession request timeout to the setting and the resource timeout to the setting plus 10 s, so a request that has produced nothing by then is abandoned and counts as a temporary failure. With `stream: false` the server sends nothing until the answer is complete, so this is also the limit for the whole answer.
+- **Decision**: Range 10 to 1800 seconds, default 300 (confirmed by the spike: a new picture at 4096 pixels took 62 s). The transport sets the URLSession request timeout to the setting and the resource timeout to the setting plus 10 s, so a request that has produced nothing by then is abandoned and counts as a temporary failure. With `stream: false` the server sends nothing until the answer is complete, so this is also the limit for the whole answer.
 - **Alternatives**: a streaming idle timeout (would let slow but progressing answers finish, at the cost of streaming code; revisit only if the spike shows long legitimate answers).
 
 ## R7. Durable serial queue
@@ -56,7 +56,7 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Spike** 
 
 ## R8. Retry for invalid answers
 
-- **Decision**: An answer that is not valid JSON, or does not match the schema, is a transient failure. Because the temperature is near zero, resending the same request would usually give the same answer, so attempts 2 and 3 of the same job add a short repair note to the prompt that names the problem ("Your previous answer was not valid for this schema: …. Answer with JSON only."). Whether that helps, and whether the native `format` makes it unnecessary, is measured by the spike (S2) and the note is dropped if it does not help.
+- **Decision**: An answer that is not valid JSON, or does not match the schema, is a transient failure. Because the temperature is near zero, resending the same request would usually give the same answer, so attempts 2 and 3 of the same job add a short repair note to the prompt that names the problem ("Your previous answer was not valid for this schema: …. Answer with JSON only."). **Spike result:** the native `format` produced no invalid answer in 50 runs, so there is nothing to repair; the note is not used and a retry resends the same request, which is cheap because the server reuses its work (ADR 0013).
 - **Alternatives**: retrying unchanged (cheap but often pointless), raising the temperature on retries (breaks the reproducibility principle in ADR 0005).
 
 ## R9. Run records and cleanup

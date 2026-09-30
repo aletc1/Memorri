@@ -32,7 +32,7 @@ Top to bottom, in a scrolling view like Storage:
 ## Messages and defaults
 
 - Reasons shown for failed jobs use these texts or a short server message: `timed out`, `connection lost`, `server error <code>`, `invalid answer`, `picture no longer stored`, `request rejected`.
-- Defaults until the spike sets them: thinking Off, timeout 300 s.
+- Defaults, from the spike (ADR 0013): thinking Off, timeout 300 s, analysis picture size 2048 (spec 002).
 
 ## Settings keys
 
