@@ -19,10 +19,11 @@ public struct SizeSweepResult: Sendable, Equatable, Codable {
 
     public var text: String {
         func f(_ value: Double?) -> String { value.map { String(format: "%.2f", $0) } ?? "n/a" }
-        var lines = ["size   cases  precision  recall  F1    field accuracy  mean seconds"]
+        func pad(_ text: String, _ width: Int) -> String { text + String(repeating: " ", count: max(0, width - text.count)) }
+        var lines = [pad("size", 7) + pad("cases", 7) + pad("precision", 11) + pad("recall", 8) + pad("F1", 6) + pad("field accuracy", 16) + "mean seconds"]
         for row in rows {
-            lines.append(String(format: "%-6d %-6d %-10@ %-7@ %-5@ %-15@ %.1f", row.size, row.cases, f(row.precision) as NSString, f(row.recall) as NSString,
-                                f(row.f1) as NSString, f(row.fieldAccuracy) as NSString, row.meanSeconds))
+            lines.append(pad("\(row.size)", 7) + pad("\(row.cases)", 7) + pad(f(row.precision), 11) + pad(f(row.recall), 8) + pad(f(row.f1), 6)
+                         + pad(f(row.fieldAccuracy), 16) + String(format: "%.1f", row.meanSeconds))
         }
         lines.append("recommended \(recommended): \(reason)")
         return lines.joined(separator: "\n")
