@@ -117,7 +117,7 @@ struct OllamaSettingsView: View {
     }
 
     private var queueSection: some View {
-        let progress = environment.state.analysis
+        let progress = environment.state.analysisProgress
         let counts = progress.counts
         return VStack(alignment: .leading, spacing: 8) {
             Text("Analysis queue").font(.headline)
@@ -166,9 +166,9 @@ struct OllamaSettingsView: View {
                 if let job = try? environment.analysisJobs?.job(id: queued.jobID) {
                     let run = try? environment.analysisJobs?.latestRun(jobID: queued.jobID)
                     if let line = ModelTestResultLine.text(job: job, run: run) { testLine = line; return }
-                    if let reason = environment.state.analysis.holdingReason {
+                    if let reason = environment.state.analysisProgress.holdingReason {
                         testLine = "Waiting: \(reason)"
-                    } else if environment.state.analysis.paused {
+                    } else if environment.state.analysisProgress.paused {
                         testLine = "Waiting: analysis is paused"
                     } else {
                         testLine = nil

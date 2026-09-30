@@ -100,7 +100,7 @@ final class AppEnvironment {
         guard let analysis else { return }
         Task { [state] in
             for await progress in await analysis.progressUpdates() {
-                state.analysis = progress
+                state.analysisProgress = progress
             }
         }
     }

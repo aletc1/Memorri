@@ -14,7 +14,14 @@ struct MenuContent: View {
         let status = environment.state.permissionStatus
 
         Text(environment.state.lastCaptureLine)
+        Text(environment.state.analysisLine)
         Button(captureTitle) { environment.requestCapture(.menu) }
+        if environment.analysis != nil {
+            let paused = environment.state.analysisProgress.paused
+            Button(paused ? "Resume analysis" : "Pause analysis") {
+                Task { await environment.analysis?.pause(!paused) }
+            }
+        }
         Button("Inbox") { environment.windows.show(.inbox) }
         Button("Search") { environment.windows.show(.search) }
 

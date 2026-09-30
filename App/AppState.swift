@@ -10,7 +10,7 @@ final class AppState {
     var isWarning = false
 
     /// The model queue: counts, pause flag and why it is holding (spec 003).
-    var analysis = QueueProgress(counts: JobCounts(waiting: 0, running: 0, finished: 0, failed: 0), paused: false, holdingReason: nil)
+    var analysisProgress = QueueProgress(counts: JobCounts(waiting: 0, running: 0, finished: 0, failed: 0), paused: false, holdingReason: nil)
 
     /// The result shown on the first menu line, and when it happened.
     var lastCapture: (result: LastCaptureResult, at: Date)?
@@ -27,6 +27,8 @@ final class AppState {
         }
         now = date
     }
+
+    var analysisLine: String { AnalysisLine.text(for: analysisProgress) }
 
     var lastCaptureLine: String {
         LastCaptureLine.text(for: lastCapture?.result, age: lastCapture.map { now.timeIntervalSince($0.at) } ?? 0)
