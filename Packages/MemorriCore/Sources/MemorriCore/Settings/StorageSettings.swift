@@ -4,6 +4,15 @@ import Foundation
 public enum RetentionPolicy: Sendable, Equatable {
     case forever
     case days(Int)
+
+    /// True when this policy keeps captures for less time than `other` (FR-018).
+    public func isShorter(than other: RetentionPolicy) -> Bool {
+        switch (self, other) {
+        case (.days(let mine), .days(let theirs)): mine < theirs
+        case (.days, .forever): true
+        case (.forever, _): false
+        }
+    }
 }
 
 /// Analysis copy size and retention policy, with the validation rules from the spec

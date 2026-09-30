@@ -63,4 +63,13 @@ import Testing
         #expect(settings.modelLongEdge == 2048)
         #expect(settings.retention == .days(7))
     }
+
+    @Test func shorteningIsRecognised() {
+        #expect(RetentionPolicy.days(3).isShorter(than: .days(7)))
+        #expect(RetentionPolicy.days(3).isShorter(than: .forever))
+        #expect(!RetentionPolicy.days(7).isShorter(than: .days(7)))
+        #expect(!RetentionPolicy.days(30).isShorter(than: .days(7)))
+        #expect(!RetentionPolicy.forever.isShorter(than: .days(7)))
+        #expect(!RetentionPolicy.forever.isShorter(than: .forever))
+    }
 }

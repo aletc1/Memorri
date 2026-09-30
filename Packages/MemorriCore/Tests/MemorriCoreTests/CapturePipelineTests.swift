@@ -170,4 +170,18 @@ import Testing
         #expect(try rig.store.allImages().isEmpty)
         #expect(rig.stagingEntries == 0 && rig.captureFolders.isEmpty)
     }
+
+    @Test func aNewAnalysisSizeAppliesToLaterCapturesOnly() async throws {
+        let rig = try Rig(capturer: FakeDisplayCapturer(displays: [makeDisplay()]))
+        defer { rig.temp.cleanUp() }
+        #expect(await rig.pipeline.run(trigger: .shortcut) == .complete(displays: 1))
+        let before = try rig.store.allImages()
+        #expect(before.map(\.modelWidth) == [2048])
+        #expect(StorageSettings(store: rig.settingsStore).setModelLongEdge(1024))
+        #expect(await rig.pipeline.run(trigger: .shortcut) == .complete(displays: 1))
+        let after = try rig.store.allImages()
+        #expect(after.count == 2)
+        #expect(after.first { $0.id == before[0].id } == before[0])            // the earlier capture is unchanged
+        #expect(after.filter { $0.id != before[0].id }.map(\.modelWidth) == [1024])
+    }
 }

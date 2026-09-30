@@ -20,7 +20,7 @@ final class AppEnvironment {
     /// `nil` when the storage could not be opened at all.
     let storage: StorageContext?
     /// The figures and clean-up shown in Settings; `nil` when the storage is unavailable.
-    let storageServices: (stats: StorageStats, cleanup: CleanupService)?
+    let storageServices: StorageServices?
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -32,8 +32,11 @@ final class AppEnvironment {
         let opened = Self.openStorage(settingsStore: settingsStore)
         storage = opened.storage
         if let context = opened.storage, let store = context.store {
-            storageServices = (StorageStats(paths: context.paths, store: store),
-                               CleanupService(paths: context.paths, store: store, files: context.files))
+            let cleanup = CleanupService(paths: context.paths, store: store, files: context.files)
+            let settings = StorageSettings(store: settingsStore)
+            storageServices = StorageServices(
+                stats: StorageStats(paths: context.paths, store: store), cleanup: cleanup, settings: settings,
+                retention: RetentionService(cleanup: cleanup, settings: settings, store: settingsStore))
         } else {
             storageServices = nil
         }
@@ -60,6 +63,19 @@ final class AppEnvironment {
         startPermissionPolling()
         startClockTick()
         if let storage { StartupAlerts.showIfNeeded(for: storage) }
+        startRetention()
+    }
+
+    /// The retention policy is applied at start and then checked every hour; it runs about daily.
+    private func startRetention() {
+        guard let retention = storageServices?.retention else { return }
+        Task.detached {
+            _ = try? retention.runNow(now: Date())
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3600))
+                _ = try? retention.runIfDue(now: Date())
+            }
+        }
     }
 
     /// Opens the storage and builds the capture pipeline. When storage cannot be used, capturing

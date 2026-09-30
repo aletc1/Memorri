@@ -117,9 +117,9 @@ description: "Task list for spec 002: capture every display and keep the capture
 
 **Goal**: the retention policy (default 7 days) is applied at start and about daily, and changing it is confirmed.
 
-- [ ] T041 [P] [US5] Write failing tests in `Packages/MemorriCore/Tests/MemorriCoreTests/RetentionServiceTests.swift` with a fake `TimeSource`: `apply(now:)` with `.days(7)` removes captures older than 7 days and keeps the rest; `.forever` removes nothing; `runIfDue(now:)` does nothing when `memorri.retention.lastRun` is less than 24 hours old and runs (and stores the time) when it is 24 hours old or missing; `removalPreview(for:)` of a shorter policy returns the count and bytes that would go (FR-018); it never touches anything outside captures
-- [ ] T042 [US5] Implement `RetentionService` in `Packages/MemorriCore/Sources/MemorriCore/Storage/RetentionService.swift` on top of `CleanupService` (log `retention removed=<n>`); the tests pass
-- [ ] T043 [US5] Run retention at start and then check hourly in `App/AppEnvironment.swift` (`apply` at start, `runIfDue` every hour), and add the `Keep captures` picker (`Forever` or `For <n> days`, default 7) to `App/Windows/StorageSettingsView.swift` with the note "Captures are the raw screenshots. Appointments, tasks and reminders found in them are always kept." and the shortening confirmation from `contracts/ui-contract.md`
+- [x] T041 [P] [US5] Write failing tests in `Packages/MemorriCore/Tests/MemorriCoreTests/RetentionServiceTests.swift` with a fake `TimeSource`: `apply(now:)` with `.days(7)` removes captures older than 7 days and keeps the rest; `.forever` removes nothing; `runIfDue(now:)` does nothing when `memorri.retention.lastRun` is less than 24 hours old and runs (and stores the time) when it is 24 hours old or missing; `removalPreview(for:)` of a shorter policy returns the count and bytes that would go (FR-018); it never touches anything outside captures
+- [x] T042 [US5] Implement `RetentionService` in `Packages/MemorriCore/Sources/MemorriCore/Storage/RetentionService.swift` on top of `CleanupService` (log `retention removed=<n>`); the tests pass
+- [x] T043 [US5] Run retention at start and then check hourly in `App/AppEnvironment.swift` (`apply` at start, `runIfDue` every hour), and add the `Keep captures` picker (`Forever` or `For <n> days`, default 7) to `App/Windows/StorageSettingsView.swift` with the note "Captures are the raw screenshots. Appointments, tasks and reminders found in them are always kept." and the shortening confirmation from `contracts/ui-contract.md`
 - [ ] T044 [US5] Run quickstart Scenario 6 (default shows 7 days, backdate and relaunch, `Forever`, shortening with confirmation) and fix any difference
 
 **Checkpoint**: User Stories 1 to 5 work: old captures expire on their own, items are never touched.
@@ -130,8 +130,8 @@ description: "Task list for spec 002: capture every display and keep the capture
 
 **Goal**: the analysis copy size is editable, validated, and applies to later captures only.
 
-- [ ] T045 [P] [US6] Write a failing test in `Packages/MemorriCore/Tests/MemorriCoreTests/CapturePipelineTests.swift`: with `modelLongEdge` 2048 a capture gives 2048-long analysis copies; after `setModelLongEdge(1024)` the next capture gives 1024 and the stored earlier capture's files and rows are unchanged
-- [ ] T046 [US6] Add the `Longer side of the analysis copy (pixels)` field (range 512 to 4096, default 2048, note "Applies to new captures.") to `App/Windows/StorageSettingsView.swift`, showing `Enter a value between 512 and 4096.` and keeping the previous value when `setModelLongEdge` returns false; make the pipeline read the setting at the start of each run
+- [x] T045 [P] [US6] Write a failing test in `Packages/MemorriCore/Tests/MemorriCoreTests/CapturePipelineTests.swift`: with `modelLongEdge` 2048 a capture gives 2048-long analysis copies; after `setModelLongEdge(1024)` the next capture gives 1024 and the stored earlier capture's files and rows are unchanged
+- [x] T046 [US6] Add the `Longer side of the analysis copy (pixels)` field (range 512 to 4096, default 2048, note "Applies to new captures.") to `App/Windows/StorageSettingsView.swift`, showing `Enter a value between 512 and 4096.` and keeping the previous value when `setModelLongEdge` returns false; make the pipeline read the setting at the start of each run
 - [ ] T047 [US6] Run quickstart Scenario 7 (1024, invalid 100, back to 2048, a display smaller than the size) and fix any difference
 
 **Checkpoint**: all six user stories work independently.

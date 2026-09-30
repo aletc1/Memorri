@@ -29,8 +29,8 @@ public struct CleanupService: Sendable {
     }
 
     /// What `delete(olderThanDays:)` would remove now. `nil` means all captures.
-    public func preview(olderThanDays days: Int?) throws -> Preview {
-        let events = try events(olderThanDays: days)
+    public func preview(olderThanDays days: Int?, now: Date? = nil) throws -> Preview {
+        let events = try events(olderThanDays: days, now: now)
         let bytes = events.reduce(Int64(0)) { total, event in
             total + StorageStats.bytes(under: files.captureDirectory(eventID: event.id, capturedAt: event.capturedAt))
         }
@@ -40,8 +40,8 @@ public struct CleanupService: Sendable {
     /// Returns how many captures were deleted. A capture in progress is not in the database yet,
     /// so it cannot be selected.
     @discardableResult
-    public func delete(olderThanDays days: Int?) throws -> Int {
-        let events = try events(olderThanDays: days)
+    public func delete(olderThanDays days: Int?, now: Date? = nil) throws -> Int {
+        let events = try events(olderThanDays: days, now: now)
         guard !events.isEmpty else { return 0 }
         try store.deleteEvents(ids: events.map(\.id))
         for event in events { files.removeCaptureDirectory(eventID: event.id, capturedAt: event.capturedAt) }
@@ -49,8 +49,8 @@ public struct CleanupService: Sendable {
         return events.count
     }
 
-    private func events(olderThanDays days: Int?) throws -> [CaptureEventRecord] {
+    private func events(olderThanDays days: Int?, now: Date?) throws -> [CaptureEventRecord] {
         guard let days else { return try store.events(olderThan: nil) }
-        return try store.events(olderThan: time.now().addingTimeInterval(-Double(days) * 86_400))
+        return try store.events(olderThan: (now ?? time.now()).addingTimeInterval(-Double(days) * 86_400))
     }
 }
