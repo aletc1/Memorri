@@ -29,8 +29,29 @@ public struct AnalysisResult: Sendable {
     public let lines: [RecognisedLine]
     /// Already resolved: an unsure answer is `other`.
     public let classification: ClassificationResult
+    public let tags: [CaptureTag]
+    public let findings: [Finding]
+    /// Findings the model gave that cited no line or a line that does not exist.
+    public let discards: [CitationCheck.Discard]
+    public let decision: ContextDecision
+    public let timezone: TimeZone
+    public let timezoneSource: String
+    /// True when the line list sent to the model was cut to its maximum.
+    public let lineCapApplied: Bool
+    public let model: String
+    /// The longer side of the picture sent for extraction.
+    public let pictureLongEdge: Int
     /// The model calls made in this run (none for a step that was reused), in order.
     public let steps: [StepRecord]
+
+    public init(lines: [RecognisedLine], classification: ClassificationResult, tags: [CaptureTag] = [], findings: [Finding] = [],
+                discards: [CitationCheck.Discard] = [], decision: ContextDecision = .unassigned, timezone: TimeZone = .current,
+                timezoneSource: String = "mac", lineCapApplied: Bool = false, model: String = "", pictureLongEdge: Int = 0,
+                steps: [StepRecord] = []) {
+        self.lines = lines; self.classification = classification; self.tags = tags; self.findings = findings; self.discards = discards
+        self.decision = decision; self.timezone = timezone; self.timezoneSource = timezoneSource; self.lineCapApplied = lineCapApplied
+        self.model = model; self.pictureLongEdge = pictureLongEdge; self.steps = steps
+    }
 }
 
 /// An analysis that stopped. The steps made so far are kept so the caller can still record the failed call.
@@ -76,7 +97,7 @@ public struct AnalysisPipeline: Sendable {
             let result = await ModelStep.call(using: model, settings: settings, step: "classify", prompt: ExtractionPrompts.classifyPrompt(),
                                               picture: input.classificationJPEG, placeholder: placeholder,
                                               schema: ExtractionSchemas.classifySchema, promptVersion: ExtractionPrompts.classifyVersion,
-                                              schemaVersion: "schema-classify-v1", startedAt: time.now())
+                                              schemaVersion: ExtractionSchemas.classifySchemaVersion, startedAt: time.now())
             switch result {
             case .failure(let failure):
                 steps.append(failure.record)
