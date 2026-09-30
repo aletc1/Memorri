@@ -8,7 +8,7 @@
 
 Give Memorri a reliable line to the local Ollama server and a safe way to use it. Settings gets a real Ollama section: server address (local addresses only), a health check with precise statuses, a model picker limited to vision-capable models read from the server, think level and request timeout. A spike on the real `qwen3.8:27b-mlx` first proves that it honours a JSON schema with a picture attached and measures time at several picture sizes; its report sets the defaults and the way structured answers are requested (ADR 0005, recorded in ADR 0013).
 
-Work for the model goes through a durable, strictly serial queue kept in the local database: one job at a time, oldest first, retries with growing waits, waiting (not failing) while the server or model is unavailable, pause and resume, and progress as one line in the menu. In this spec the only jobs come from a **Test the model** button, which sends the newest stored analysis copy (or a synthetic built-in picture) with a fixed prompt and shape and records the attempt; captures are not queued automatically until extraction (spec 004). All network use sits in one loopback-only component (ADR 0011).
+Work for the model goes through a durable, strictly serial queue kept in the local database: one job at a time, oldest first, retries with growing waits, waiting (not failing) while the server or model is unavailable, pause and resume, and progress as one line in the menu. In this spec the only jobs come from a **Test the model** button, which sends the newest stored analysis copy (or a synthetic built-in picture) with a fixed prompt and schema and records the attempt; captures are not queued automatically until extraction (spec 004). All network use sits in one loopback-only component (ADR 0011).
 
 All logic (address rules, client, schema validation, status, queue, retry, menu text) lives in `MemorriCore` and is written test-first against a fake transport; the URLSession transport, the settings view and the menu are thin. See [research.md](research.md) for decisions and the spike design.
 
@@ -39,11 +39,11 @@ All logic (address rules, client, schema validation, status, queue, retry, menu 
 | Principle | Status | Notes |
 |---|---|---|
 | I. Local-first and private | Pass | Addresses other than `localhost`, `127.0.0.1`, `::1` cannot be built (`LoopbackAddress`); one allow-listed network file that re-checks every request and refuses redirects (ADR 0011); no telemetry; test picture is synthetic. |
-| II. Every item carries evidence | Pass (enabling) | Run records keep model, settings, prompt and shape versions, timing and the raw answer, which later items cite. No items yet. |
+| II. Every item carries evidence | Pass (enabling) | Run records keep model, settings, prompt and schema versions, timing and the raw answer, which later items cite. No items yet. |
 | III. Idempotent, no duplicates | Pass | One queue loop, jobs have ids, a quit does not repeat or lose work; nothing is created twice by a retry (an attempt writes its own run row, the job stays one). |
 | IV. The User wins | Pass | Pause and resume, retry failed, clear finished are user actions; settings are never replaced silently (the chosen model is kept when it disappears). |
 | V. Raw data kept, under user control | Pass | Raw answers are kept with their capture and expire with it under the existing retention and cleanup (clarification 1); no new hidden store. |
-| VI. Test-first core, measured prompts | Pass | Every core type is test-first; the spike measures the model before defaults are set; the test prompt and shape are versioned (`test-v1`). The `memorri-eval` gate applies from spec 004, when real prompts exist. |
+| VI. Test-first core, measured prompts | Pass | Every core type is test-first; the spike measures the model before defaults are set; the test prompt and schema are versioned (`test-v1`). The `memorri-eval` gate applies from spec 004, when real prompts exist. |
 | VII. Incremental, always runnable | Pass | Ends with a runnable app that talks to the model and runs test jobs; extraction and sync untouched. |
 | VIII. Decisions recorded | Pass | ADR 0011 (one loopback-only network component), ADR 0012 (durable serial queue), ADR 0013 (request defaults from the spike, written when the spike finishes); ADR 0005 is relied on and superseded only if the spike says so. |
 
@@ -76,8 +76,6 @@ App/
 ├── AppEnvironment.swift                    # creates settings, service, queue; starts the loop (edit)
 ├── AppState.swift                          # analysis progress and line (edit)
 ├── MenuContent.swift                       # analysis line, Pause/Resume (edit)
-├── Adapters/
-│   └── AnalysisPictureAdapter.swift        # reads the stored analysis copy for a job (new)
 └── Windows/
     ├── SettingsView.swift                  # Ollama section replaces the placeholder (edit)
     └── OllamaSettingsView.swift            # connection, model, thinking, timeout, test, queue (new)
@@ -89,14 +87,15 @@ Packages/MemorriCore/
 │   │   ├── OllamaURLSessionTransport.swift # the one file allowed to use URLSession (new)
 │   │   ├── OllamaClient.swift              # version, models, chat, request JSON (new)
 │   │   ├── JSONValue.swift                 # values for schemas and answers (new)
-│   │   ├── SchemaValidator.swift           # exact-shape check of answers (new)
+│   │   ├── SchemaValidator.swift           # exact-schema check of answers (new)
 │   │   ├── OllamaService.swift             # status, model list, default model (new)
 │   │   └── SamplePicture.swift             # built-in synthetic picture (new)
 │   ├── Analysis/
 │   │   ├── AnalysisJobStore.swift          # records, protocol, GRDB store (new)
+│   │   ├── StoredPictureProvider.swift     # reads the stored analysis copy for a job (new)
 │   │   ├── AnalysisQueue.swift             # the serial loop, retry policy, progress (new)
 │   │   ├── AnalysisLine.swift              # menu texts (new)
-│   │   └── ModelTestJob.swift              # prompt, shape, runner (new)
+│   │   └── ModelTestJob.swift              # prompt, schema, runner (new)
 │   ├── Settings/
 │   │   └── OllamaSettings.swift            # address, model, think, timeout, paused (new)
 │   └── Storage/

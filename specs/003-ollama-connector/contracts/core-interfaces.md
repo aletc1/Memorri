@@ -50,14 +50,24 @@ public struct InstalledModel: Sendable, Equatable {
 
 public enum ThinkSetting: String, Sendable, CaseIterable { case off, low, medium, high }
 
+public enum ThinkWireValue: Sendable, Equatable {
+    case bool(Bool), level(String)
+    /// `off` or a model that does not think gives `.bool(false)`; a level gives `.level` when
+    /// `acceptsLevels`, else `.bool(true)`.
+    public static func make(setting: ThinkSetting, modelThinks: Bool, acceptsLevels: Bool) -> ThinkWireValue
+    /// From the spike (ADR 0013): a small built-in rule by model name (default: boolean only).
+    public static func acceptsLevels(modelName: String) -> Bool
+}
+
 public struct ChatRequest: Sendable {
     public let model: String
     public let systemPrompt: String?
     public let prompt: String
     public let picture: Data                  // sent as base64; never stored in request_json
     public let picturePlaceholder: String     // "[picture <id> 2048x857]"
-    public let schema: JSONValue              // goes to "format"
-    public let think: ThinkWireValue          // false, true or a level string, from ThinkSetting + model
+    public let schema: JSONValue              // goes to "format" when useNativeFormat, else is described in the prompt
+    public let useNativeFormat: Bool          // from the spike decision (ADR 0013); false = schema in the prompt, no "format"
+    public let think: ThinkWireValue          // from ThinkSetting + model (see make)
     public let temperature: Double            // 0
     public let timeout: TimeInterval
 }
@@ -87,7 +97,7 @@ public enum JSONValue: Sendable, Equatable, Codable { case null, bool(Bool), int
 
 public enum SchemaValidationError: Error, Sendable, Equatable { case notJSON, mismatch(String) }
 
-/// Checks an answer against the subset of JSON Schema that our shapes use: type (object, string,
+/// Checks an answer against the subset of JSON Schema that our schemas use: type (object, string,
 /// boolean, integer, number, array), properties, required, enum, items, additionalProperties false.
 public enum SchemaValidator {
     public static func validate(_ answer: String, against schema: JSONValue) -> Result<JSONValue, SchemaValidationError>
@@ -188,7 +198,7 @@ public struct RetryPolicy: Sendable, Equatable {
 public struct QueueProgress: Sendable, Equatable {
     public let counts: JobCounts
     public let paused: Bool
-    public let holdingReason: String?         // "Ollama not reachable", "model not installed", "choose a model"
+    public let holdingReason: String?         // mapped from ServerStatus: notReachable/timedOut -> "Ollama not reachable"; noVisionModel/modelMissing -> "model not installed"; noModelChosen -> "choose a model"
 }
 
 public actor AnalysisQueue {

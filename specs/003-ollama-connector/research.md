@@ -35,6 +35,7 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Spike** 
 
 - **Decision**: The setting is one of `off`, `low`, `medium`, `high`, default `off`, enabled only when the chosen model lists `thinking`. `off` sends `think: false`; a level is sent as the string level if the spike shows the model honours levels, and as `think: true` if it only honours the boolean (then `low`, `medium` and `high` all mean on, and the UI says so). The spike decides the default.
 - **Rationale**: The API accepts a boolean or a level depending on the model; what `qwen3.8` does has to be observed.
+- **Which models accept levels** is not in `capabilities` (it only says "thinking"), so it is a small built-in rule by model name (`ThinkWireValue.acceptsLevels(modelName:)`), written from the spike; the default is boolean only.
 - **Spike S3** (part of S2 below): compare `think: false` with the levels the model accepts.
 
 ## R6. Request timeout
@@ -70,7 +71,7 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Spike** 
 
 ## R11. What "Test the model" asks
 
-- **Decision**: A fixed prompt, version `test-v1`, and a small schema, version `test-v1`: `{ "description": string, "contains_text": boolean, "text_sample": string }`, all required. The result line in Settings shows: valid or not, the time, and the first characters of `description`. It is not extraction; spec 004 adds real prompts and shapes.
+- **Decision**: A fixed prompt, version `test-v1`, and a small schema, version `test-v1`: `{ "description": string, "contains_text": boolean, "text_sample": string }`, all required. The result line in Settings shows: valid or not, the time, and the first characters of `description`. It is not extraction; spec 004 adds real prompts and schemas.
 
 ## R12. Menu line and its texts
 

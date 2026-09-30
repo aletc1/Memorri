@@ -11,7 +11,7 @@ One unit of work for the model. In this spec only one kind exists, the model tes
 | Column | Type | Rules |
 |---|---|---|
 | `id` | TEXT, primary key | UUID string. |
-| `kind` | TEXT, not null | `test` (CHECK constraint). Later specs add kinds in their own migrations. |
+| `kind` | TEXT, not null | `test` in this spec. **No CHECK constraint**: the value is validated in code, so a later spec can add a kind without rebuilding the table (SQLite cannot change a CHECK). |
 | `image_id` | TEXT, nullable | The picture the job needs, from `capture_images.id`. **No foreign key**: a queued job must outlive its picture so it can fail with "picture no longer stored". Null when the job uses the built-in sample. |
 | `state` | TEXT, not null | `waiting`, `running`, `finished` or `failed` (CHECK constraint). |
 | `attempts` | INTEGER, not null, default 0 | Number of **failed** attempts so far (a quit during a run does not add one). |
@@ -50,7 +50,7 @@ One attempt of a job.
 
 Indexes: `analysis_jobs(state, created_at)`, `model_runs(image_id)`, `model_runs(job_id)`.
 
-Migration `"v2"` creates both tables, the CHECK constraints and the indexes. Databases with migrations unknown to the app keep being refused untouched (spec 002, FR-013). The existing capture cleanup needs no change: deleting an event cascades to images and, through `image_id`, to runs.
+Migration `"v2"` creates both tables, the CHECK constraints on `state` and `outcome`, and the indexes. Databases with migrations unknown to the app keep being refused untouched (spec 002, FR-013). The existing capture cleanup needs no change: deleting an event cascades to images and, through `image_id`, to runs.
 
 ## Job states (transitions)
 
@@ -82,5 +82,5 @@ Migration `"v2"` creates both tables, the CHECK constraints and the indexes. Dat
 - **ServerStatus**: `unchecked`, `reachable(version)`, `notReachable`, `timedOut`, `noVisionModel`, `noModelChosen`, `modelMissing(name)`. With the time of the check.
 - **InstalledModel**: name, `readsImages`, `thinks` (from `capabilities`).
 - **ModelList**: the vision models, and the number hidden because they cannot read images.
-- **QueueProgress**: counts of waiting, running, finished and failed jobs, the paused flag, and the reason the queue is holding (`Ollama not reachable`, `model not installed`, `choose a model`) or none. Drives the menu line; not stored.
+- **QueueProgress**: counts of waiting, running, finished and failed jobs, the paused flag, and the reason the queue is holding or none. The reason follows the server status: `notReachable` and `timedOut` give `Ollama not reachable`; `noVisionModel` and `modelMissing` give `model not installed`; `noModelChosen` gives `choose a model`. Drives the menu line; not stored.
 - **TestResult**: valid or not, duration, and the start of the description; shown in Settings after **Test the model**; not stored (the run record has everything).
