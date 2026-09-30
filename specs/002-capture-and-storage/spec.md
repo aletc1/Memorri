@@ -17,6 +17,7 @@
 - Q: How much free disk space must Memorri leave, and should it refuse to capture when less is available? → A: It refuses to capture when less than 1 GB is free, and the menu line says "Not enough free disk space".
 - Q: Should the full-resolution picture be stored with a little quality loss or without any loss? → A: High quality with a small loss, for compact files. The quality level is one named value, so it can be raised later without changing how captures are stored.
 - Q: Should the mouse pointer appear in the captured pictures? → A: No. The pointer is never included in captured pictures.
+- Additional clarification from the user: automatic cleanup and every manual cleanup apply only to the raw captures (the raw ingestion). The appointments, tasks and reminders that Memorri later finds are kept, each with its cropped piece of the screenshot as evidence; cleaning up captures never removes them.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -79,7 +80,7 @@ Every capture is kept as a record of the request and its pictures. The records a
 
 ### User Story 4 - See how much space captures use and clean up (Priority: P2)
 
-In Settings, the Storage section shows how many captures exist and how much space they use. The user can delete captures older than a chosen number of days, or delete everything, after a confirmation that says exactly what will be removed.
+In Settings, the Storage section shows how many captures exist and how much space they use. The user can delete captures older than a chosen number of days, or delete all captures, after a confirmation that says exactly what will be removed.
 
 **Why this priority**: Screenshots of work sessions are large and sensitive. The user must be able to see and control what stays on the Mac.
 
@@ -89,8 +90,8 @@ In Settings, the Storage section shows how many captures exist and how much spac
 
 1. **Given** captures exist, **When** the user opens Storage, **Then** it shows the number of captures and the space used by pictures and by records.
 2. **Given** captures of different ages, **When** the user chooses "delete older than N days" and confirms, **Then** only captures older than N days are removed, together with their pictures, and the numbers update.
-3. **Given** captures exist, **When** the user chooses "delete everything" and confirms, **Then** all captures and pictures are removed and the numbers show zero.
-4. **Given** a cleanup is offered, **When** the user sees the confirmation, **Then** it states how many captures and how much space will be freed, and cancelling changes nothing.
+3. **Given** captures exist, **When** the user chooses "delete all captures" and confirms, **Then** all captures and pictures are removed, the numbers show zero, and the confirmation said that appointments, tasks and reminders found in them are kept.
+4. **Given** a cleanup is offered, **When** the user sees the confirmation, **Then** it states how many captures and how much space will be freed and that items found in them are kept, and cancelling changes nothing.
 5. **Given** a capture is running, **When** the user starts a cleanup, **Then** the running capture is not removed.
 
 ---
@@ -162,13 +163,14 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 - **FR-013**: Storage MUST be created on first use, MUST upgrade without data loss when a newer app version changes its shape, and MUST NOT be modified by an older app version that finds data from a newer one (the app says so instead).
 - **FR-014**: At start the app MUST reconcile records and files: a record whose picture file is missing is marked as such, and a picture file without a record is removed.
 - **FR-015**: Settings MUST have a Storage section (replacing the placeholder from spec 001) showing the number of captures and the space used by pictures and by records, refreshed whenever it is opened.
-- **FR-016**: Settings MUST offer "delete older than N days" and "delete everything", each after a confirmation that states how many captures and how much space are affected, and each removing each affected capture's record and pictures together (no record is kept without its pictures); a capture in progress MUST NOT be removed.
+- **FR-016**: Settings MUST offer "delete older than N days" and "delete all captures", each after a confirmation that states how many captures and how much space are affected, and each removing each affected capture's record and pictures together (no record is kept without its pictures); a capture in progress MUST NOT be removed.
 - **FR-017**: Settings MUST offer a retention policy, either "keep forever" or "delete older than N days", default 30 days, applied at start and once a day while the app runs. An expired capture is deleted completely, record and pictures together, like in every other cleanup.
 - **FR-018**: Shortening the retention policy MUST state how many captures it will remove before applying.
 - **FR-019**: A damaged database MUST NOT be deleted; it is set aside, the user is told, and capturing continues with a new one.
 - **FR-020**: The app MUST NOT send any data over the network.
 - **FR-021**: The top of the menu MUST show the result of the last capture (complete, partial with how many displays, or failed with the short reason) and how long ago it happened, until the next capture replaces it. It MUST NOT use macOS notifications or alert windows. A capture that failed for lack of permission shows the onboarding window as in FR-007 instead of an error line.
 - **FR-022**: Before capturing, the app MUST check the free space on the disk that holds the data folder and refuse to capture when less than 1 GB is free, reporting "Not enough free disk space" as in FR-009 and FR-021.
+- **FR-023**: Retention and every cleanup MUST apply only to captures (their records and pictures). They MUST NOT delete, change or make unreadable anything derived from captures, such as appointments, tasks, reminders or their cropped evidence. The Storage section and each cleanup confirmation MUST say "captures" and MUST state that items found in them are kept.
 
 ### Key Entities
 
@@ -188,7 +190,7 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 - **SC-004**: After revoking Screen Recording while the app runs, the next capture stores nothing, opens the onboarding window within 2 seconds, and the permission status reads "not granted", in every one of 5 trials.
 - **SC-005**: After quitting and relaunching 3 times, the number of captures and their pictures is identical each time.
 - **SC-006**: The figures in Storage match the actual space used on disk within 1%.
-- **SC-007**: After "delete older than N days", 100% of captures older than N days are gone with their files and 100% of newer ones are untouched; after "delete everything", no capture records or files remain.
+- **SC-007**: After "delete older than N days", 100% of captures older than N days are gone with their files and 100% of newer ones are untouched; after "delete all captures", no capture records or files remain.
 - **SC-008**: The data folder is reported by the system as excluded from backups, and another user account cannot read it.
 - **SC-009**: The menu and Settings remain usable (respond within 1 second) while a capture of the largest connected displays is in progress.
 - **SC-010**: After every capture, whether complete, partial or failed, the top of the menu shows the matching result within 1 second, and the warning flash and sound play for every partial or failed one.
@@ -201,7 +203,7 @@ The user can change the longer side, in pixels, of the smaller copy kept for ana
 - Analysis of the pictures (reading text, finding appointments) is out of scope here and arrives in specs 003 and 004. This spec only captures and keeps.
 - The default retention is 30 days. Screenshots of work sessions are sensitive, so automatic expiry is the safer default. The user can change it or keep everything.
 - The analysis copy size is a setting because the best value is settled later by measurement (spec 004).
-- A deleted capture leaves no trace, not even its record. Later specs that find appointments and tasks must therefore keep each item's own evidence (the cropped part of the picture) separate from the capture, so an item keeps its evidence after the capture has expired.
+- Cleanup applies to raw captures only. A deleted capture leaves no trace, not even its record, but the appointments, tasks and reminders found in it are kept, each with its cropped piece of the screenshot as evidence. Later specs must therefore store each item's evidence crop, and the time it was seen, on the item itself and never depend on the capture still existing.
 - Protected content that the system shows as black is captured as shown; bypassing protection is not attempted.
 - The Memorri windows are captured like any other window if they are on screen.
 - Captures are not encrypted by the app. Protection relies on the private folder and disk encryption of the Mac (FileVault); encrypting at rest may come later.
