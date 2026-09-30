@@ -5,6 +5,12 @@ import Foundation
 public protocol SettingsStore: Sendable {
     func bool(forKey key: String, default defaultValue: Bool) -> Bool
     func setBool(_ value: Bool, forKey key: String)
+    func int(forKey key: String) -> Int?
+    func setInt(_ value: Int, forKey key: String)
+    func string(forKey key: String) -> String?
+    func setString(_ value: String, forKey key: String)
+    func date(forKey key: String) -> Date?
+    func setDate(_ value: Date, forKey key: String)
 }
 
 /// `SettingsStore` backed by `UserDefaults`.
@@ -21,6 +27,30 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
     }
 
     public func setBool(_ value: Bool, forKey key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    public func int(forKey key: String) -> Int? {
+        defaults.object(forKey: key) as? Int
+    }
+
+    public func setInt(_ value: Int, forKey key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    public func string(forKey key: String) -> String? {
+        defaults.string(forKey: key)
+    }
+
+    public func setString(_ value: String, forKey key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    public func date(forKey key: String) -> Date? {
+        defaults.object(forKey: key) as? Date
+    }
+
+    public func setDate(_ value: Date, forKey key: String) {
         defaults.set(value, forKey: key)
     }
 }

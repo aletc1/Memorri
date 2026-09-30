@@ -5,6 +5,9 @@ import Foundation
 final class FakeSettingsStore: SettingsStore, @unchecked Sendable {
     private let lock = NSLock()
     private var values: [String: Bool] = [:]
+    private var ints: [String: Int] = [:]
+    private var strings: [String: String] = [:]
+    private var dates: [String: Date] = [:]
 
     func bool(forKey key: String, default defaultValue: Bool) -> Bool {
         lock.lock(); defer { lock.unlock() }
@@ -15,6 +18,13 @@ final class FakeSettingsStore: SettingsStore, @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         values[key] = value
     }
+
+    func int(forKey key: String) -> Int? { lock.lock(); defer { lock.unlock() }; return ints[key] }
+    func setInt(_ value: Int, forKey key: String) { lock.lock(); defer { lock.unlock() }; ints[key] = value }
+    func string(forKey key: String) -> String? { lock.lock(); defer { lock.unlock() }; return strings[key] }
+    func setString(_ value: String, forKey key: String) { lock.lock(); defer { lock.unlock() }; strings[key] = value }
+    func date(forKey key: String) -> Date? { lock.lock(); defer { lock.unlock() }; return dates[key] }
+    func setDate(_ value: Date, forKey key: String) { lock.lock(); defer { lock.unlock() }; dates[key] = value }
 
     func rawValue(forKey key: String) -> Bool? {
         lock.lock(); defer { lock.unlock() }
@@ -88,4 +98,52 @@ final class OnboardingCounter: @unchecked Sendable {
 struct FakeSystemShortcuts: SystemShortcutChecking {
     var reserved: Set<KeyCombo> = []
     func isReservedBySystem(_ combo: KeyCombo) -> Bool { reserved.contains(combo) }
+}
+
+// MARK: Synthetic images
+
+import CoreGraphics
+
+/// A solid-colour image with a simple gradient so it is not trivially compressible.
+func makeTestImage(width: Int, height: Int) -> CGImage {
+    let space = CGColorSpace(name: CGColorSpace.sRGB)!
+    let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    for x in stride(from: 0, to: width, by: 16) {
+        ctx.setFillColor(CGColor(red: Double(x) / Double(width), green: 0.4, blue: 0.7, alpha: 1))
+        ctx.fill(CGRect(x: x, y: 0, width: 16, height: height))
+    }
+    return ctx.makeImage()!
+}
+
+// MARK: Temporary directories
+
+/// A fresh directory under the system temp folder, removed by `cleanUp()`.
+final class TempDirectory: @unchecked Sendable {
+    let url: URL
+
+    init() {
+        url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("memorri-tests-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    }
+
+    func cleanUp() { try? FileManager.default.removeItem(at: url) }
+}
+
+// MARK: Storage records
+
+func makeEventRecord(id: String = UUID().uuidString, at date: Date = Date(timeIntervalSince1970: 1_800_000_000),
+                     trigger: String = "shortcut", status: String = "complete",
+                     failureReason: String? = nil, displayCount: Int = 1) -> CaptureEventRecord {
+    CaptureEventRecord(id: id, capturedAt: date, trigger: trigger, status: status,
+                       failureReason: failureReason, displayCount: displayCount)
+}
+
+func makeImageRecord(eventID: String, id: String = UUID().uuidString, displayID: Int = 1) -> CaptureImageRecord {
+    CaptureImageRecord(id: id, eventId: eventID, displayId: displayID, displayName: "Test display",
+                       pixelWidth: 3440, pixelHeight: 1440, scale: 1.0,
+                       fullPath: "captures/2027-01/\(eventID)/\(id)-full.heic",
+                       modelPath: "captures/2027-01/\(eventID)/\(id)-model.heic",
+                       modelWidth: 2048, modelHeight: 857, fullBytes: 1000, modelBytes: 500, missing: false)
 }
