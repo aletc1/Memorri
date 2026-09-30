@@ -292,3 +292,158 @@ final class FakePictureProvider: AnalysisPictureProviding, @unchecked Sendable {
         return pictures[imageID]
     }
 }
+
+// MARK: Queue fakes
+
+/// Sleeper whose sleeps last until the test releases them; records what was asked for.
+final class FakeQueueSleeper: QueueSleeping, @unchecked Sendable {
+    private let lock = NSLock()
+    private var waiters: [UUID: CheckedContinuation<Void, Error>] = [:]
+    private var cancelledEarly: Set<UUID> = []
+    private var asked: [Duration] = []
+
+    var requested: [Duration] { lock.lock(); defer { lock.unlock() }; return asked }
+    var pendingCount: Int { lock.lock(); defer { lock.unlock() }; return waiters.count }
+
+    func sleep(for duration: Duration) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                if !register(id, continuation, duration) { continuation.resume(throwing: CancellationError()) }
+            }
+        } onCancel: {
+            cancel(id)
+        }
+    }
+
+    /// Ends every sleep that is waiting now.
+    func releaseAll() {
+        let all = drain()
+        for continuation in all { continuation.resume() }
+    }
+
+    private func register(_ id: UUID, _ continuation: CheckedContinuation<Void, Error>, _ duration: Duration) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        asked.append(duration)
+        if cancelledEarly.remove(id) != nil { return false }
+        waiters[id] = continuation
+        return true
+    }
+
+    private func cancel(_ id: UUID) {
+        lock.lock()
+        let continuation = waiters.removeValue(forKey: id)
+        if continuation == nil { cancelledEarly.insert(id) }
+        lock.unlock()
+        continuation?.resume(throwing: CancellationError())
+    }
+
+    private func drain() -> [CheckedContinuation<Void, Error>] {
+        lock.lock(); defer { lock.unlock() }
+        let all = Array(waiters.values)
+        waiters = [:]
+        return all
+    }
+}
+
+/// Server status the test sets; counts how often it was asked.
+final class FakeGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: ServerStatus
+    private var asked = 0
+
+    init(_ status: ServerStatus = .reachable(version: "0.34.4")) { current = status }
+
+    var calls: Int { lock.lock(); defer { lock.unlock() }; return asked }
+    func set(_ status: ServerStatus) { lock.lock(); current = status; lock.unlock() }
+    func ask() -> ServerStatus { lock.lock(); defer { lock.unlock() }; asked += 1; return current }
+}
+
+/// A door the test opens; `wait` returns at once when it is already open.
+final class FakeLatch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen: Bool
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(open: Bool = false) { isOpen = open }
+
+    func open() {
+        lock.lock()
+        isOpen = true
+        let all = waiters
+        waiters = []
+        lock.unlock()
+        for continuation in all { continuation.resume() }
+    }
+
+    func wait() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            if !add(continuation) { continuation.resume() }
+        }
+    }
+
+    private func add(_ continuation: CheckedContinuation<Void, Never>) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if isOpen { return false }
+        waiters.append(continuation)
+        return true
+    }
+}
+
+/// Job runner with a scripted outcome per job; tracks how many ran at once and in which order.
+final class FakeJobRunner: AnalysisJobRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var active = 0
+    private var maximum = 0
+    private var started: [String] = []
+    private var attempts: [(String, Int)] = []
+    private var outcome: @Sendable (AnalysisJobRecord, Int) -> JobOutcome
+    let latch: FakeLatch
+    let delay: Duration
+
+    init(latch: FakeLatch = FakeLatch(open: true), delay: Duration = .zero,
+         outcome: @escaping @Sendable (AnalysisJobRecord, Int) -> JobOutcome = { _, _ in .success }) {
+        self.latch = latch
+        self.delay = delay
+        self.outcome = outcome
+    }
+
+    var maxActive: Int { lock.lock(); defer { lock.unlock() }; return maximum }
+    var activeNow: Int { lock.lock(); defer { lock.unlock() }; return active }
+    var order: [String] { lock.lock(); defer { lock.unlock() }; return started }
+    var attemptLog: [(String, Int)] { lock.lock(); defer { lock.unlock() }; return attempts }
+    func setOutcome(_ value: @escaping @Sendable (AnalysisJobRecord, Int) -> JobOutcome) {
+        lock.lock(); outcome = value; lock.unlock()
+    }
+
+    func run(_ job: AnalysisJobRecord, attempt: Int) async -> JobOutcome {
+        begin(job, attempt)
+        await latch.wait()
+        if delay > .zero { try? await Task.sleep(for: delay) }
+        return finish(job, attempt)
+    }
+
+    private func begin(_ job: AnalysisJobRecord, _ attempt: Int) {
+        lock.lock(); defer { lock.unlock() }
+        active += 1
+        maximum = max(maximum, active)
+        started.append(job.id)
+        attempts.append((job.id, attempt))
+    }
+
+    private func finish(_ job: AnalysisJobRecord, _ attempt: Int) -> JobOutcome {
+        lock.lock(); defer { lock.unlock() }
+        active -= 1
+        return outcome(job, attempt)
+    }
+}
+
+/// Polls until the condition holds (real time), for tests that wait on a background loop.
+func waitUntil(timeout: Duration = .seconds(5), _ condition: @Sendable () -> Bool) async -> Bool {
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    return condition()
+}
