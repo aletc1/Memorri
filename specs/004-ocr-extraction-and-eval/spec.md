@@ -13,6 +13,7 @@
 ### Session 2026-09-30
 
 - Q: Should Memorri record the titles of the windows visible on each display when it captures, so contexts can be matched on them? → A: Yes. The titles of windows visible on each display are stored with its picture and deleted with it, in every kind of cleanup.
+- Q: What should `memorri-eval` do if the app's analysis queue has a job running? → A: Refuse to start and say to pause analysis first; an explicit option overrides the refusal.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -199,6 +200,7 @@ Using the golden set, the developer compares picture sizes (the longer side of t
 - **FR-017**: Captures MUST be queued for analysis automatically after they are stored, in the same queue as spec 003 (one job at a time, retries, pause, menu progress), unless the user has turned automatic analysis off. The menu line MUST keep the texts from spec 003 and count these jobs.
 - **FR-018**: Settings MUST show recent captures with their analysis state (waiting, analysing, analysed, failed with reason), screen kind, context, and number of findings, and offer **Reanalyse** for a capture. This is a checking aid; the full Items window is spec 006.
 - **FR-019**: A command-line tool `memorri-eval` MUST run the same reading, classification and extraction code as the app over a folder of golden cases and print precision, recall and field accuracy overall and per case, per screen kind, and classification accuracy, with lists of missed and unexpected findings.
+- **FR-019a**: `memorri-eval` MUST refuse to start while the app's analysis queue has a job running, telling the user to pause analysis first, because both would load the same model at once. An explicit option MUST allow the run anyway, and the report MUST then say it was run that way.
 - **FR-020**: Golden cases MUST each contain a picture, a metadata file (capture time, time zone, optional context hint) and an expected-findings file. Matching a found item to an expected one MUST be defined and documented (same kind, title similarity above a stated threshold, and start or due date within a stated tolerance); field accuracy MUST be measured on matched items only.
 - **FR-021**: `memorri-eval` MUST be able to record a run's results and compare two runs, and MUST accept the picture size, model and prompt version as options.
 - **FR-022**: Only synthetic golden cases MAY be tracked in the repository; cases with real content MUST stay untracked. The repository MUST include enough synthetic cases to cover every screen kind, relative dates, header dates, "X needs Y", missing durations and time zone differences.
