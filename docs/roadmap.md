@@ -5,7 +5,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | # | Spec | Status |
 |---|---|---|
 | 001 | menubar-shell | Done |
-| 002 | capture-and-storage | Planned |
+| 002 | capture-and-storage | Done |
 | 003 | ollama-connector | Not started |
 | 004 | ocr-extraction-and-eval | Not started |
 | 005 | reconciliation | Not started |
