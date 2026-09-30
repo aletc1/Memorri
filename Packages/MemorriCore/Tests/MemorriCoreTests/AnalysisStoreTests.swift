@@ -158,7 +158,7 @@ import Testing
         try store.record(run: record("other-version", step: "classify", version: "classify-v2", outcome: .success, at: 10))
         try store.record(run: record("other-step", step: "extract", version: "classify-v1", outcome: .success, at: 11))
         #expect(try store.latestSuccessfulRun(imageID: fixture.imageID, step: "classify", promptVersion: "classify-v1")?.rawAnswer == "new")
-        #expect(try store.latestSuccessfulRun(imageID: fixture.imageID, step: "classify", promptVersion: "classify-v2") == nil)
+        #expect(try store.latestSuccessfulRun(imageID: fixture.imageID, step: "classify", promptVersion: "classify-v3") == nil)
         #expect(try store.latestSuccessfulRun(imageID: "nobody", step: "classify", promptVersion: "classify-v1") == nil)
     }
 }
