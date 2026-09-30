@@ -91,7 +91,7 @@ public protocol CaptureStoring: Sendable {
 }
 
 public struct CaptureStore: CaptureStoring {
-    private let database: StorageDatabase
+    let database: StorageDatabase
 
     public init(database: StorageDatabase) {
         self.database = database

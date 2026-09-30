@@ -17,6 +17,10 @@ final class AppEnvironment {
     let feedback: FeedbackAdapter
     let captureService: CaptureRequestService
     let shortcuts: ShortcutAdapter
+    /// `nil` when the storage could not be opened at all.
+    let storage: StorageContext?
+    /// The figures and clean-up shown in Settings; `nil` when the storage is unavailable.
+    let storageServices: (stats: StorageStats, cleanup: CleanupService)?
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -25,8 +29,16 @@ final class AppEnvironment {
         feedback = FeedbackAdapter(state: state)
         let windows = self.windows
         let state = self.state
+        let opened = Self.openStorage(settingsStore: settingsStore)
+        storage = opened.storage
+        if let context = opened.storage, let store = context.store {
+            storageServices = (StorageStats(paths: context.paths, store: store),
+                               CleanupService(paths: context.paths, store: store, files: context.files))
+        } else {
+            storageServices = nil
+        }
         captureService = CaptureRequestService(
-            runner: Self.makeCaptureRunner(settingsStore: settingsStore),
+            runner: opened.runner,
             permission: permission,
             feedback: feedback,
             settings: feedbackSettings,
@@ -47,30 +59,24 @@ final class AppEnvironment {
         }
         startPermissionPolling()
         startClockTick()
+        if let storage { StartupAlerts.showIfNeeded(for: storage) }
     }
 
     /// Opens the storage and builds the capture pipeline. When storage cannot be used, capturing
-    /// reports why instead of crashing (the start-up dialogs come with spec 002 user story 3).
-    private static func makeCaptureRunner(settingsStore: any SettingsStore) -> any CaptureRunning {
+    /// reports why instead of crashing.
+    private static func openStorage(settingsStore: any SettingsStore) -> (runner: any CaptureRunning, storage: StorageContext?) {
         do {
-            let paths = try AppPaths.standard()
-            try paths.prepare()
-            switch try StorageDatabase.open(paths: paths) {
-            case .refusedNewerVersion:
-                return UnavailableCaptureRunner(reason: "database from a newer version")
-            case .opened(let database), .openedAfterSettingAside(let database, _):
-                let store = CaptureStore(database: database)
-                let files = CaptureFileStore(paths: paths)
-                if let report = try? files.reconcile(with: store) {
-                    logger.notice("reconcile staging=\(report.stagingRemoved) orphans=\(report.orphansRemoved) missing=\(report.markedMissing)")
-                }
-                return CapturePipeline(capturer: ScreenCaptureKitCapturer(), encoder: HEICImageEncoder(),
-                                       disk: DiskSpaceAdapter(), files: files, store: store, paths: paths,
-                                       settings: StorageSettings(store: settingsStore))
+            let context = try StorageBootstrap.start(paths: try AppPaths.standard())
+            guard let store = context.store else {
+                return (UnavailableCaptureRunner(reason: context.capturingDisabledReason ?? "could not open the capture storage"), context)
             }
+            let pipeline = CapturePipeline(capturer: ScreenCaptureKitCapturer(), encoder: HEICImageEncoder(),
+                                           disk: DiskSpaceAdapter(), files: context.files, store: store,
+                                           paths: context.paths, settings: StorageSettings(store: settingsStore))
+            return (pipeline, context)
         } catch {
             logger.error("storage unavailable: \(error.localizedDescription, privacy: .public)")
-            return UnavailableCaptureRunner(reason: "could not open the capture storage")
+            return (UnavailableCaptureRunner(reason: "could not open the capture storage"), nil)
         }
     }
 

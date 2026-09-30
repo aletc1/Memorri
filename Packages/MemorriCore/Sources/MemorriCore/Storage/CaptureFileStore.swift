@@ -78,7 +78,7 @@ public struct CaptureFileStore: Sendable {
                                markedMissing: markedMissing)
     }
 
-    private func captureDirectory(eventID: String, capturedAt: Date) -> URL {
+    func captureDirectory(eventID: String, capturedAt: Date) -> URL {
         paths.captures
             .appendingPathComponent(Self.monthFolder(for: capturedAt), isDirectory: true)
             .appendingPathComponent(eventID, isDirectory: true)

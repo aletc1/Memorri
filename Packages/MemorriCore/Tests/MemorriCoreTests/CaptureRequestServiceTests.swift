@@ -158,6 +158,41 @@ import Testing
         #expect(feedback.flashCount == 0 && feedback.soundCount == 0)
     }
 
+    @Test func aRefusedCaptureMarksThePermissionNotGrantedFromAnyTrackedState() async {
+        let granted = makeRig(granted: true, outcome: .permissionDenied)
+        _ = await granted.service.request(.shortcut)
+        #expect(await granted.permission.status == .notGranted)
+        #expect(granted.onboarding.count == 1)
+
+        let restart = makeRig(granted: false, outcome: .permissionDenied)
+        _ = await restart.permission.observeFreshProcess(granted: true)
+        _ = await restart.service.request(.shortcut)
+        #expect(await restart.permission.status == .notGranted)
+        #expect(restart.onboarding.count == 1)
+    }
+
+    @Test(arguments: [CaptureOutcome.complete(displays: 2), .partial(captured: 1, of: 2)])
+    func aCaptureThatWorkedMarksThePermissionGrantedEvenWhenItWasNot(outcome: CaptureOutcome) async {
+        let notGranted = makeRig(granted: false, outcome: outcome)
+        _ = await notGranted.service.request(.shortcut)
+        #expect(await notGranted.permission.status == .granted)
+
+        let restart = makeRig(granted: false, outcome: outcome)
+        _ = await restart.permission.observeFreshProcess(granted: true)
+        _ = await restart.service.request(.shortcut)
+        #expect(await restart.permission.status == .granted)
+        #expect(notGranted.onboarding.count == 0)
+    }
+
+    @Test func anotherFailureLeavesThePermissionStatusUnchanged() async {
+        for start in [true, false] {
+            let rig = makeRig(granted: start, outcome: .failed(reason: "Not enough free disk space"))
+            _ = await rig.service.request(.shortcut)
+            #expect(await rig.permission.status == (start ? .granted : .notGranted))
+            #expect(rig.onboarding.count == 0)
+        }
+    }
+
     @Test func everyOutcomeIsReportedToTheOnOutcomeHook() async {
         let seen = OutcomeLog()
         let service = CaptureRequestService(

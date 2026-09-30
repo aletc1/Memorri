@@ -112,12 +112,18 @@ public actor CaptureRequestService {
 
         switch outcome {
         case .complete:
+            await permission.captureSucceeded()
             if settings.flashIcon { await feedback.flashIcon() }
             if settings.playSound { await feedback.playSound() }
-        case .partial, .failed:
+        case .partial:
+            await permission.captureSucceeded()
+            if settings.flashIcon { await feedback.flashWarning() }
+            if settings.playSound { await feedback.playWarningSound() }
+        case .failed:
             if settings.flashIcon { await feedback.flashWarning() }
             if settings.playSound { await feedback.playWarningSound() }
         case .permissionDenied:
+            await permission.captureDeniedByPermission()
             onNeedsOnboarding()
         }
         return outcome

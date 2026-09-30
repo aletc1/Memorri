@@ -159,4 +159,15 @@ import Testing
         #expect(await rig.pipeline.run(trigger: .shortcut) == .complete(displays: 1))
         #expect(rig.captureFolders.count == 1)
     }
+
+    @Test func aRefusedPermissionStoresNoPicturesAndRecordsAFailedEvent() async throws {
+        let rig = try Rig(capturer: FakeDisplayCapturer(failure: .permissionDenied))
+        defer { rig.temp.cleanUp() }
+        #expect(await rig.pipeline.run(trigger: .shortcut) == .permissionDenied)
+        let events = try rig.store.events(olderThan: nil)
+        #expect(events.count == 1 && events[0].status == "failed" && events[0].displayCount == 0)
+        #expect(events[0].failureReason == "permission denied")
+        #expect(try rig.store.allImages().isEmpty)
+        #expect(rig.stagingEntries == 0 && rig.captureFolders.isEmpty)
+    }
 }

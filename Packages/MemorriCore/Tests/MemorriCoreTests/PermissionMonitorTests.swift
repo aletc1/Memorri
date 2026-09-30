@@ -84,4 +84,43 @@ import Testing
         #expect(await iterator.next() == .restartRequired)
         #expect(await iterator.next() == .notGranted)
     }
+
+    // MARK: the real capture is the source of truth (spec 002, FR-007 and FR-010)
+
+    @Test func aSuccessfulCaptureSetsGrantedFromAnyState() async {
+        for launchGranted in [true, false] {
+            let fromLaunch = monitor(launchGranted: launchGranted)
+            await fromLaunch.captureSucceeded()
+            #expect(await fromLaunch.status == .granted)
+        }
+        let restart = monitor(launchGranted: false)
+        _ = await restart.observeFreshProcess(granted: true)
+        #expect(await restart.status == .restartRequired)
+        await restart.captureSucceeded()
+        #expect(await restart.status == .granted)
+    }
+
+    @Test func aRefusedCaptureSetsNotGrantedFromAnyState() async {
+        let granted = monitor(launchGranted: true)
+        await granted.captureDeniedByPermission()
+        #expect(await granted.status == .notGranted)
+
+        let restart = monitor(launchGranted: false)
+        _ = await restart.observeFreshProcess(granted: true)
+        await restart.captureDeniedByPermission()
+        #expect(await restart.status == .notGranted)
+
+        let already = monitor(launchGranted: false)
+        await already.captureDeniedByPermission()
+        #expect(await already.status == .notGranted)
+    }
+
+    @Test func captureResultsEmitAChangeOnlyWhenTheStatusChanges() async {
+        let monitor = monitor(launchGranted: true)
+        var iterator = await monitor.statusUpdates().makeAsyncIterator()
+        #expect(await iterator.next() == .granted)        // the current status first
+        await monitor.captureSucceeded()                  // no change, nothing emitted
+        await monitor.captureDeniedByPermission()
+        #expect(await iterator.next() == .notGranted)
+    }
 }
