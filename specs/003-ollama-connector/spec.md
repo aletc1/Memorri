@@ -13,6 +13,7 @@
 ### Session 2026-09-30
 
 - Q: When cleanup removes a capture, should the model's raw answers for its pictures be removed too, or kept on their own? → A: Removed together with the capture, in every kind of cleanup (age-based, automatic retention and "delete all captures"). Run records from "Test the model" that have no capture are removed by **Clear finished**.
+- Q: After the queue finishes, should Memorri ask Ollama to free the model's memory or leave it loaded? → A: Leave it to Ollama's own default; Memorri sends no unload request and has no setting for it.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -133,7 +134,7 @@ The user can set how much the model thinks (off, low, medium or high) and how lo
 ### Edge Cases
 
 - The app starts while the server is not running: nothing fails; the queue waits and the menu says so.
-- The first request after the server was idle is very slow because the model must be loaded into memory: the timeout default is chosen from the spike so this does not count as a failure, and the menu keeps saying it is working.
+- The first request after the server (or its default idle period) has unloaded the model is very slow because the model must be loaded into memory again: the timeout default is chosen from the spike so this does not count as a failure, and the menu keeps saying it is working.
 - The server answers with text that is not valid JSON, or valid JSON that does not match the required shape: the attempt counts as a temporary failure and the raw answer is kept.
 - The model takes the whole timeout and produces nothing: the request is abandoned and retried within the attempt limit.
 - The user changes the server address or model while jobs are queued: waiting jobs use the new values when they run; the running job is not interrupted.
@@ -198,6 +199,7 @@ The user can set how much the model thinks (off, low, medium or high) and how lo
 ## Assumptions
 
 - Builds on spec 002: the stored analysis copies and the database exist. Extraction (reading text, finding appointments) is out of scope and arrives in specs 004 and later; this spec delivers the connection, the settings, the spike and the queue.
+- Memory use of the model is left to Ollama: Memorri does not ask it to unload the model and offers no setting for it. The user can still unload it with Ollama's own tools.
 - The server is Ollama on the same Mac, which is already installed here (version 0.34.4) with `qwen3.8:27b-mlx`, a model that reports vision, tools and thinking support. Remote servers are not supported, because captured content must never leave this Mac (Constitution principle I).
 - Captures are not queued automatically in this spec. Running the 27-billion-parameter model on every capture before extraction exists would use time and memory for results nobody reads. The queue is exercised by the **Test the model** action, and spec 004 adds real jobs to the same queue.
 - Default values for the think level, the timeout and the picture size are chosen from the spike report. Until the spike is done, the starting guesses are: thinking off, timeout 300 seconds, picture size 2048 (the existing default).
