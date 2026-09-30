@@ -18,6 +18,13 @@ struct StorageSettingsView: View {
     private static let keptNote = "Appointments, tasks and reminders found in them are kept."
 
     var body: some View {
+        ScrollView {
+            content.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .onAppear { loadSettings(); refresh() }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 20) {
             if environment.storageServices == nil {
                 Text("The capture storage could not be opened.").foregroundStyle(.secondary)
@@ -31,8 +38,6 @@ struct StorageSettingsView: View {
                 cleanUpSection
             }
         }
-        .padding(24)
-        .onAppear { loadSettings(); refresh() }
     }
 
     // MARK: Retention (spec 002, user story 5)
@@ -56,6 +61,7 @@ struct StorageSettingsView: View {
             }
             Text("Captures are the raw screenshots. Appointments, tasks and reminders found in them are always kept.")
                 .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             if let retentionMessage {
                 Text(retentionMessage).font(.callout).foregroundStyle(.red)
             }
@@ -84,7 +90,7 @@ struct StorageSettingsView: View {
                 let preview = await Task.detached { try? services.retention.removalPreview(for: policy, now: Date()) }.value
                 if let preview, preview.captureCount > 0,
                    case .days(let days) = policy,
-                   !Self.confirm("Setting the retention to \(days) days removes \(preview.captureCount) captures now (\(Self.size(preview.bytes))). \(Self.keptNote)", confirmTitle: "Change") {
+                   !Self.confirm("Setting the retention to \(days) days removes \(Self.captures(preview.captureCount)) now (\(Self.size(preview.bytes))). \(Self.keptNote)", confirmTitle: "Change") {
                     loadSettings()                       // cancelled: nothing changes
                     return
                 }
@@ -139,11 +145,9 @@ struct StorageSettingsView: View {
     private var summarySection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Storage").font(.headline)
-            Text(summary.map { "\($0.captureCount) captures" } ?? "…")
+            Text(summary.map { Self.captures($0.captureCount) } ?? "…")
             Text("Pictures: \(summary.map { Self.size($0.pictureBytes) } ?? "…")")
             Text("Database: \(summary.map { Self.size($0.databaseBytes) } ?? "…")")
-            Text("Captures are the raw screenshots. Appointments, tasks and reminders found in them are always kept.")
-                .font(.callout).foregroundStyle(.secondary)
         }
     }
 
@@ -176,13 +180,13 @@ struct StorageSettingsView: View {
             return
         }
         confirmAndDelete(days: days) { preview in
-            "Delete \(preview.captureCount) captures older than \(days) days? This frees \(Self.size(preview.bytes)) and cannot be undone. \(Self.keptNote)"
+            "Delete \(Self.captures(preview.captureCount)) older than \(days) days? This frees \(Self.size(preview.bytes)) and cannot be undone. \(Self.keptNote)"
         } confirmTitle: { "Delete" }
     }
 
     private func deleteAll() {
         confirmAndDelete(days: nil) { preview in
-            "Delete all \(preview.captureCount) captures? This frees \(Self.size(preview.bytes)) and cannot be undone. \(Self.keptNote)"
+            "Delete all \(Self.captures(preview.captureCount))? This frees \(Self.size(preview.bytes)) and cannot be undone. \(Self.keptNote)"
         } confirmTitle: { "Delete All" }
     }
 
@@ -202,7 +206,7 @@ struct StorageSettingsView: View {
             }
             guard Self.confirm(question(preview), confirmTitle: title) else { return }
             let removed = await Task.detached { try? cleanup.delete(olderThanDays: days) }.value
-            message = removed.map { "Deleted \($0) captures." } ?? "Could not delete the captures."
+            message = removed.map { "Deleted \(Self.captures($0))." } ?? "Could not delete the captures."
             refresh()
         }
     }
@@ -231,7 +235,14 @@ struct StorageSettingsView: View {
         alert.runModal()
     }
 
+    static func captures(_ count: Int) -> String {
+        count == 1 ? "1 capture" : "\(count) captures"
+    }
+
     static func size(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowsNonnumericFormatting = false
+        return formatter.string(fromByteCount: bytes)
     }
 }
