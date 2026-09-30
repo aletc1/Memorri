@@ -29,9 +29,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     /// What a later version will put here, for the placeholder sections.
     var comingLater: String? {
         switch self {
-        case .ollama: "the address and model used to read your screenshots (spec 003)."
         case .calendarSync: "the calendar and reminders list your items are copied to (spec 009)."
-        case .general, .permissions, .storage: nil
+        case .general, .permissions, .storage, .ollama: nil
         }
     }
 }
@@ -66,7 +65,9 @@ struct SettingsView: View {
             .padding(24)
         case .storage:
             StorageSettingsView(environment: environment)
-        case .ollama, .calendarSync:
+        case .ollama:
+            OllamaSettingsView(environment: environment)
+        case .calendarSync:
             VStack(alignment: .leading, spacing: 8) {
                 Text(section.title).font(.headline)
                 Text("Coming in a later version: \(section.comingLater ?? "")")

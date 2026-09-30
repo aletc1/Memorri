@@ -12,6 +12,9 @@ final class AppEnvironment {
     let screenRecording = ScreenRecordingAdapter()
     let settingsStore: any SettingsStore = UserDefaultsSettingsStore()
     let feedbackSettings: CaptureFeedbackSettings
+    let ollamaSettings: OllamaSettings
+    /// Knows whether the local model server and the chosen model are usable.
+    let ollama: OllamaService
     let permission: PermissionMonitor
     let windows = WindowCoordinator()
     let feedback: FeedbackAdapter
@@ -25,6 +28,9 @@ final class AppEnvironment {
 
     init() {
         feedbackSettings = CaptureFeedbackSettings(store: settingsStore)
+        ollamaSettings = OllamaSettings(store: settingsStore)
+        ollama = OllamaService(settings: ollamaSettings,
+                               makeTransport: { address in OllamaURLSessionTransport(address: address) })
         permission = PermissionMonitor(checker: screenRecording)
         feedback = FeedbackAdapter(state: state)
         let windows = self.windows
@@ -62,6 +68,7 @@ final class AppEnvironment {
         }
         startPermissionPolling()
         startClockTick()
+        Task { [ollama] in await ollama.check() }
         if let storage { StartupAlerts.showIfNeeded(for: storage) }
         startRetention()
     }
