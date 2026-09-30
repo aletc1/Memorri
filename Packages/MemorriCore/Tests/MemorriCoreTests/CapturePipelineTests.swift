@@ -15,7 +15,8 @@ import Testing
         let capturer: FakeDisplayCapturer
 
         init(capturer: FakeDisplayCapturer, disk: FakeDiskSpace = FakeDiskSpace(),
-             encoder: any ImageEncoding = HEICImageEncoder(), failingStore: Bool = false) throws {
+             encoder: any ImageEncoding = HEICImageEncoder(), failingStore: Bool = false, enqueuer: (any AnalysisEnqueuing)? = nil,
+             automatic: Bool? = nil) throws {
             paths = AppPaths(root: temp.url.appendingPathComponent("Memorri"))
             try paths.prepare()
             files = CaptureFileStore(paths: paths)
@@ -25,7 +26,9 @@ import Testing
             self.capturer = capturer
             pipeline = CapturePipeline(capturer: capturer, encoder: encoder, disk: disk, files: files,
                                        store: failingStore ? FailingStore() : store, paths: paths,
-                                       settings: StorageSettings(store: settingsStore), time: FakeTimeSource())
+                                       settings: StorageSettings(store: settingsStore), time: FakeTimeSource(),
+                                       enqueuer: enqueuer, analysisSettings: AnalysisSettings(store: settingsStore))
+            if let automatic { AnalysisSettings(store: settingsStore).setAutomatic(automatic) }
         }
 
         var stagingEntries: Int { ((try? FileManager.default.contentsOfDirectory(atPath: paths.staging.path)) ?? []).count }
@@ -183,5 +186,44 @@ import Testing
         #expect(after.count == 2)
         #expect(after.first { $0.id == before[0].id } == before[0])            // the earlier capture is unchanged
         #expect(after.filter { $0.id != before[0].id }.map(\.modelWidth) == [1024])
+    }
+
+    // MARK: Automatic analysis
+
+    @Test func aSuccessfulCaptureQueuesOneAnalysisPerStoredPicture() async throws {
+        let enqueuer = FakeEnqueuer()
+        let rig = try Rig(capturer: FakeDisplayCapturer(displays: [makeDisplay(id: 1), makeDisplay(id: 2)]), enqueuer: enqueuer)
+        defer { rig.temp.cleanUp() }
+        _ = await rig.pipeline.run(trigger: .shortcut)
+        let stored = try rig.store.allImages().map(\.id)
+        #expect(enqueuer.calls.count == 1)
+        #expect(Set(enqueuer.calls[0]) == Set(stored) && enqueuer.calls[0].count == 2)
+    }
+
+    @Test func aPartialCaptureQueuesTheDisplaysThatWereStored() async throws {
+        let enqueuer = FakeEnqueuer()
+        let rig = try Rig(capturer: FakeDisplayCapturer(displays: [makeDisplay(id: 1)], failedDisplayCount: 1), enqueuer: enqueuer)
+        defer { rig.temp.cleanUp() }
+        _ = await rig.pipeline.run(trigger: .shortcut)
+        #expect(enqueuer.calls.count == 1 && enqueuer.calls[0].count == 1)
+    }
+
+    @Test func nothingIsQueuedWhenTheSwitchIsOff() async throws {
+        let enqueuer = FakeEnqueuer()
+        let rig = try Rig(capturer: FakeDisplayCapturer(displays: [makeDisplay()]), enqueuer: enqueuer, automatic: false)
+        defer { rig.temp.cleanUp() }
+        #expect(await rig.pipeline.run(trigger: .shortcut) == .complete(displays: 1))
+        #expect(enqueuer.calls.isEmpty)
+    }
+
+    @Test func nothingIsQueuedForAFailedCaptureOrAFailedStore() async throws {
+        let enqueuer = FakeEnqueuer()
+        let failed = try Rig(capturer: FakeDisplayCapturer(failure: .noDisplays), enqueuer: enqueuer)
+        defer { failed.temp.cleanUp() }
+        _ = await failed.pipeline.run(trigger: .shortcut)
+        let broken = try Rig(capturer: FakeDisplayCapturer(displays: [makeDisplay()]), failingStore: true, enqueuer: enqueuer)
+        defer { broken.temp.cleanUp() }
+        _ = await broken.pipeline.run(trigger: .shortcut)
+        #expect(enqueuer.calls.isEmpty)
     }
 }

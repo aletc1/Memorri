@@ -553,3 +553,15 @@ final class FakeTextRecogniser: TextRecogniser, @unchecked Sendable {
 
     func recognise(_ image: CGImage) async throws -> [RecognisedLine] { try next(image) }
 }
+
+/// Remembers which pictures were handed to the analysis queue.
+final class FakeEnqueuer: AnalysisEnqueuing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var batches: [[String]] = []
+
+    var calls: [[String]] { lock.withLock { batches } }
+
+    private func add(_ ids: [String]) { lock.withLock { batches.append(ids) } }
+
+    func enqueueAnalysis(imageIDs: [String]) async { add(imageIDs) }
+}

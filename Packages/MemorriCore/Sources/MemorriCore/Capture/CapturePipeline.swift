@@ -21,12 +21,15 @@ public actor CapturePipeline {
     private let paths: AppPaths
     private let settings: StorageSettings
     private let time: any TimeSource
+    private let enqueuer: (any AnalysisEnqueuing)?
+    private let analysisSettings: AnalysisSettings?
 
     private var isRunning = false
 
     public init(capturer: any DisplayCapturing, encoder: any ImageEncoding, disk: any DiskSpaceChecking,
                 files: CaptureFileStore, store: any CaptureStoring, paths: AppPaths,
-                settings: StorageSettings, time: any TimeSource = SystemTimeSource()) {
+                settings: StorageSettings, time: any TimeSource = SystemTimeSource(),
+                enqueuer: (any AnalysisEnqueuing)? = nil, analysisSettings: AnalysisSettings? = nil) {
         self.capturer = capturer
         self.encoder = encoder
         self.disk = disk
@@ -35,6 +38,8 @@ public actor CapturePipeline {
         self.paths = paths
         self.settings = settings
         self.time = time
+        self.enqueuer = enqueuer
+        self.analysisSettings = analysisSettings
     }
 
     /// `nil` when another capture is already running.
@@ -123,6 +128,8 @@ public actor CapturePipeline {
 
             let status = partial ? "partial" : "complete"
             Self.logger.notice("capture finished status=\(status, privacy: .public) displays=\(attempted) images=\(images.count) ms=\(Self.milliseconds(since: started))")
+            // The capture is done and stored; queueing its analysis can never turn it into a failure.
+            if let enqueuer, analysisSettings?.automatic ?? true { await enqueuer.enqueueAnalysis(imageIDs: images.map(\.id)) }
             return partial ? .partial(captured: result.displays.count, of: attempted) : .complete(displays: attempted)
         } catch {
             files.discard(staging: staging)
