@@ -161,14 +161,29 @@ public struct AnalysisPipeline: Sendable {
         let order = DateParser.dateOrder(ofUnambiguous: lines.map(\.text))
         let base = ResolutionContext(captureTime: input.captureTime, timezone: zone, headers: headers, lines: lines, dateOrder: order,
                                      locales: input.locales)
-        let findings = checked.kept.map { Self.assemble($0, lines: lines, context: base) }
+        let geometry = calendarKind ? Geometry(image: input.image, columnWidth: Self.columnWidth(headers: headers, imageWidth: input.image.width,
+                                                                                                  kind: resolved.kind)) : nil
+        let findings = checked.kept.map { Self.assemble($0, lines: lines, context: base, geometry: geometry) }
         return AnalysisResult(lines: lines, classification: resolved, findings: findings, discards: discards, timezone: zone,
                               timezoneSource: "mac", lineCapApplied: capped, model: settings.model,
                               pictureLongEdge: max(input.analysisSize.width, input.analysisSize.height), steps: steps)
     }
 
+    /// What the duration step needs from a calendar view: the picture and the width of one column of blocks.
+    struct Geometry {
+        let image: CGImage
+        let columnWidth: Int
+    }
+
+    /// The median spacing of the date headers, else a seventh of the picture for a week and the whole width for a day.
+    static func columnWidth(headers: [DateHeader], imageWidth: Int, kind: ScreenKind) -> Int {
+        let gaps = zip(headers, headers.dropFirst()).map { $1.midX - $0.midX }.sorted()
+        if !gaps.isEmpty { return max(1, Int(gaps[gaps.count / 2])) }
+        return kind == .calendarWeek ? imageWidth / 7 : imageWidth
+    }
+
     /// Turns a checked draft into a finding. Each date text is resolved by `DateResolver`; what it cannot settle stays as written.
-    static func assemble(_ draft: FindingDraft, lines: [RecognisedLine], context base: ResolutionContext) -> Finding {
+    static func assemble(_ draft: FindingDraft, lines: [RecognisedLine], context base: ResolutionContext, geometry: Geometry? = nil) -> Finding {
         // An email's own date is the reference for the words in it.
         let context = ResolutionContext(captureTime: base.captureTime, timezone: base.timezone, headers: base.headers, lines: base.lines,
                                         dateOrder: base.dateOrder, locales: base.locales,
@@ -190,6 +205,20 @@ public struct AnalysisPipeline: Sendable {
         case .reminder:
             results["remind"] = resolve("remind", draft.remindText, draft.startText, draft.dateText, draft.dueText)
             if draft.dueText != nil { results["due"] = resolve("due", draft.dueText) }
+        }
+        // An appointment with a start and no end gets one: from its block's height, else one hour, never past midnight.
+        if draft.kind == .appointment, draft.endText == nil, let start = results["start"], let begins = start.date, !start.allDay, draft.allDay != true {
+            var minutes = 60, reason = "default-60"
+            if let geometry, let title = draft.citedLines.compactMap({ n in lines.first { $0.n == n } }).min(by: { $0.box.y < $1.box.y }),
+               let measured = BlockGeometry.duration(titleBox: title.box, lines: lines, image: geometry.image, columnWidth: geometry.columnWidth) {
+                minutes = measured; reason = "block-height"
+            }
+            var end = begins.addingTimeInterval(Double(minutes) * 60)
+            var zoned = Calendar(identifier: .gregorian)
+            zoned.timeZone = context.timezone
+            if let midnight = zoned.date(byAdding: .day, value: 1, to: zoned.startOfDay(for: begins)), end > midnight { end = midnight; reason = "end-of-day" }
+            results["end"] = ResolvedValue(date: end, allDay: false, provenance: FieldProvenance(origin: .inferred, rule: reason, reason: reason),
+                                           unresolvedText: nil)
         }
         var provenance: [String: FieldProvenance] = [:], unresolved: [String: String] = [:]
         for (field, value) in results {

@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
 @testable import MemorriCore
 
@@ -123,7 +124,7 @@ import Testing
         let step = try #require(result.steps.last)
         #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v1" && step.schemaVersion == "schema-calendar_week-v1")
         #expect(result.findings.count == 1 && result.findings[0].title == "Team sync" && result.findings[0].citedLines == [1])
-        #expect(result.findings[0].kind == .appointment && result.findings[0].confidence == 0.9)
+        #expect(result.findings[0].kind == .appointment && result.findings[0].confidence == 0.5)   // the end is guessed, so at most 0.5
         #expect(result.model == "m" && result.pictureLongEdge == 2048 && !result.lineCapApplied)
     }
 
@@ -242,5 +243,98 @@ import Testing
         rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"task","title":"Send the report","cited_lines":[1],"due_text":"tomorrow","sent_text":"Mon 12 Oct 2026 09:12"}]}"#)
         let finding = try #require(try await rig.pipeline.analyse(input, settings: settings).findings.first)
         #expect(finding.due == SyntheticTime.date(2026, 10, 13, zone: "Europe/Madrid"))
+    }
+
+    // MARK: Durations
+
+    /// A drawn week view: headers, an hour scale and one block (`hours` long from 13:00 on Wednesday).
+    private func weekPicture(hours: Double, title: String = "Design review", labels: Bool = true) throws -> (CGImage, [RecognisedLine]) {
+        let canvas = SyntheticCanvas(width: 1600, height: 1000, background: RGB(0xFFFFFF))
+        for (i, header) in ["Mon 12", "Tue 13", "Wed 14", "Thu 15", "Fri 16"].enumerated() { canvas.text(header, x: 110 + Double(i) * 300 + 10, y: 50, size: 18, color: RGB(0)) }
+        if labels {
+            for i in 0..<9 { canvas.text(String(format: "%02d:00", 9 + i), x: 12, y: 90 + Double(i) * 80 - 9, size: 18, color: RGB(0)) }
+        }
+        let top = 90 + 4 * 80.0 + 2          // 13:00
+        canvas.fill(CGRect(x: 110 + 2 * 300 + 6, y: top, width: 288, height: hours * 80 - 4), RGB(0x1F73D9))
+        canvas.text("13:00 \(title)", x: 110 + 2 * 300 + 18, y: top + 10, size: 20, color: RGB(0xFFFFFF))
+        let source = CGImageSourceCreateWithData(try canvas.pngData() as CFData, nil)!
+        let image = CGImageSourceCreateImageAtIndex(source, 0, nil)!
+        return (image, canvas.lines.enumerated().map { i, l in
+            RecognisedLine(n: i + 1, text: l.text, box: PixelBox(x: l.box![0], y: l.box![1], width: l.box![2], height: l.box![3]), confidence: 0.9)
+        })
+    }
+
+    private func durationRig(picture: (CGImage, [RecognisedLine]), kind: String = "calendar_week", findings: String) -> (Rig, PipelineInput) {
+        let recogniser = FakeTextRecogniser(lines: picture.1)
+        let model = FakeModelChatting()
+        model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer.replacingOccurrences(of: "calendar_week", with: kind))
+        model.answer(whenSchemaHas: "findings", findings)
+        let rig = Rig(recogniser: recogniser, model: model, pipeline: AnalysisPipeline(recogniser: recogniser, model: model, time: FakeTimeSource(1000)))
+        let input = PipelineInput(image: picture.0, classificationJPEG: Data("c".utf8), classificationSize: (1024, 640), analysisJPEG: Data("a".utf8),
+                                  analysisSize: (1600, 1000), macTimezone: madrid, captureTime: captureTime,
+                                  locales: [Locale(identifier: "en_US"), Locale(identifier: "es_ES")])
+        return (rig, input)
+    }
+
+    private func blockAnswer(end: String? = nil, extra: String = "") -> String {
+        let endPart = end.map { #","end_text":"\#($0)""# } ?? ""
+        return #"{"findings":[{"kind":"appointment","title":"Design review","cited_lines":[15],"start_text":"13:00"\#(endPart)\#(extra)}]}"#
+    }
+
+    private func citedNumber(_ lines: [RecognisedLine], _ text: String) -> Int { lines.first { $0.text == text }!.n }
+
+    private func endFinding(hours: Double = 1.5, labels: Bool = true, kind: String = "calendar_week", end: String? = nil, extra: String = "") async throws -> Finding {
+        let picture = try weekPicture(hours: hours, labels: labels)
+        let number = citedNumber(picture.1, "13:00 Design review")
+        let answer = blockAnswer(end: end, extra: extra).replacingOccurrences(of: "[15]", with: "[\(number)]")
+        let (rig, input) = durationRig(picture: picture, kind: kind, findings: answer)
+        return try #require(try await rig.pipeline.analyse(input, settings: settings).findings.first)
+    }
+
+    @Test func aWeekViewBlockWithoutAnEndGetsItFromItsHeight() async throws {
+        for (hours, minutes) in [(0.5, 30), (1.0, 60), (1.5, 90), (2.0, 120)] {
+            let finding = try await endFinding(hours: hours)
+            let start = SyntheticTime.date(2026, 10, 14, 13, 0, zone: "Europe/Madrid")
+            #expect(finding.end == start.addingTimeInterval(Double(minutes) * 60), Comment(rawValue: "\(minutes) minutes"))
+            #expect(finding.provenance["end"] == FieldProvenance(origin: .inferred, rule: "block-height", reason: "block-height"))
+            #expect(finding.confidence <= 0.5)
+        }
+    }
+
+    @Test func withoutGeometryTheEndIsOneHourLater() async throws {
+        let noScale = try await endFinding(hours: 1.5, labels: false)
+        let start = SyntheticTime.date(2026, 10, 14, 13, 0, zone: "Europe/Madrid")
+        #expect(noScale.end == start.addingTimeInterval(3600))
+        #expect(noScale.provenance["end"] == FieldProvenance(origin: .inferred, rule: "default-60", reason: "default-60"))
+        let email = try await endFinding(hours: 1.5, kind: "email")
+        #expect(email.end == start.addingTimeInterval(3600) && email.provenance["end"]?.reason == "default-60")
+    }
+
+    @Test func anExplicitEndIsReadAndNotFlagged() async throws {
+        let finding = try await endFinding(hours: 2, end: "14:15")
+        #expect(finding.end == SyntheticTime.date(2026, 10, 14, 14, 15, zone: "Europe/Madrid"))
+        #expect(finding.provenance["end"]?.origin == .read)
+        #expect(!finding.provenance.values.contains { $0.origin == .inferred })
+    }
+
+    @Test func anEndThatWouldPassMidnightIsCutAtTheEndOfTheDay() async throws {
+        let plain = [RecognisedLine(n: 1, text: "Late call", box: PixelBox(x: 10, y: 10, width: 100, height: 18), confidence: 0.9)]
+        let (rig, input) = durationRig(picture: (makeTestImage(width: 1600, height: 1000), plain), kind: "document",
+                                       findings: #"{"findings":[{"kind":"appointment","title":"Late call","cited_lines":[1],"start_text":"Oct 14 23:30"}]}"#)
+        let finding = try #require(try await rig.pipeline.analyse(input, settings: settings).findings.first)
+        #expect(finding.end == SyntheticTime.date(2026, 10, 15, 0, 0, zone: "Europe/Madrid"))
+        #expect(finding.provenance["end"] == FieldProvenance(origin: .inferred, rule: "end-of-day", reason: "end-of-day"))
+    }
+
+    @Test func tasksDeadlinesAllDayAppointmentsAndUnresolvedStartsGetNoEnd() async throws {
+        let plain = [RecognisedLine(n: 1, text: "text", box: PixelBox(x: 10, y: 10, width: 100, height: 18), confidence: 0.9)]
+        let (rig, input) = durationRig(picture: (makeTestImage(width: 1600, height: 1000), plain), kind: "document", findings: #"""
+        {"findings":[{"kind":"task","title":"Task","cited_lines":[1],"due_text":"Friday"},
+                     {"kind":"deadline","title":"Submit it","cited_lines":[1],"due_text":"2026-11-06"},
+                     {"kind":"appointment","title":"Conference","cited_lines":[1],"date_text":"Oct 20","all_day":true},
+                     {"kind":"appointment","title":"Vague","cited_lines":[1],"start_text":"sometime"}]}
+        """#)
+        let findings = try await rig.pipeline.analyse(input, settings: settings).findings
+        #expect(findings.count == 4 && findings.allSatisfy { $0.end == nil && $0.provenance["end"] == nil })
     }
 }
