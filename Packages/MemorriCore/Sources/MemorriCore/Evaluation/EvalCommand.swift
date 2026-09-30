@@ -95,7 +95,7 @@ public enum EvalCommand: Sendable, Equatable {
             return .generateSynthetic(out: try words.value("--out") ?? "eval/golden/synthetic")
         case "run": return .run(try parseRun(rest))
         case "compare":
-            var words = try Words(rest, flags: [], options: [])
+            let words = try Words(rest, flags: [], options: [])
             guard words.positionals.count == 2 else {
                 throw words.positionals.count < 2 ? EvalUsageError.missingValue("compare <a.json> <b.json>")
                                                    : EvalUsageError.unexpectedArgument(words.positionals[2])
