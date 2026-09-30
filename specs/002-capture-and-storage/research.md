@@ -9,12 +9,14 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Spike** 
 - **Alternatives**: `CGDisplayCreateImage` (deprecated, and changes how permission is asked), a stream per display (more moving parts for a single frame).
 - **Mirrored displays**: a mirror set is treated as one display. The display list is filtered with `CGDisplayIsInMirrorSet` and `CGDisplayMirrorsDisplay`, keeping one member per set.
 - **Spike S1**: with the three displays of this Mac, confirm one image per display at the native pixel size, no cursor, and what the list looks like with mirroring switched on (if a test is practical).
+- **S1 outcome (2026-09-30, done)**: `SCShareableContent.current` listed 3 displays in 90 ms, each 3440x1440 points at `pointPixelScale` 1.0; `captureImage` with `width/height = contentRect x pointPixelScale` returned 3440x1440 for each (native size), `showsCursor = false` accepted. All three report `CGDisplayIsInMirrorSet == 0`. Not verified here: a real mirror set and the pointer not showing (both checked in quickstart Scenario 1 and SC-012; mirroring stays untested unless a mirror is set up by hand).
 
 ## R2. Telling "permission refused" from other failures
 
 - **Decision**: `CaptureFailure` has three cases: `permissionDenied`, `noDisplays`, `other(String)`. The ScreenCaptureKit adapter maps the error it gets (expected: `SCStreamError.userDeclined`, code -3801, and the equivalent failure from `SCShareableContent`) to `permissionDenied`. `PermissionMonitor.captureDeniedByPermission()` then sets "not granted" and the onboarding window opens. A successful capture calls `captureSucceeded()`, which sets "granted" from any state.
 - **Rationale**: Spec 001 proved a running process cannot see permission changes itself. The real capture is the only call that always tells the truth (FR-007, FR-010).
 - **Spike S2** (can be run by the assistant with `tccutil`): with the permission granted, run a capture; reset it with `tccutil reset ScreenCapture com.aletc1.memorri` while the app runs; capture again and record the exact error type and code from both `SCShareableContent.current` and `captureImage`. Also check whether a process that has lost the permission still captures from a cached grant (if it does, the failure path needs the probe from 001 as a second signal).
+- **S2 outcome (2026-09-30, done; temporary `--spike-capture` loop started through `open -n -W`, `tccutil reset` after 8 s, run twice)**: one second after the reset both `SCShareableContent.current` and `SCScreenshotManager.captureImage` (with a display filter cached before the reset) throw `NSError` domain `com.apple.ScreenCaptureKit.SCStreamErrorDomain`, code **-3801** (message is localized, so match on domain and code, never on text). The process does **not** keep capturing from a cached grant, and it stays denied for the rest of the run (17 s). `CGPreflightScreenCaptureAccess()` keeps returning `true` in the running process throughout, so it must not be used as a signal. Conclusion: a real capture is a reliable, immediate revocation signal inside the running app, and the R2 mapping (`-3801` from either call gives `permissionDenied`) is confirmed. One unexplained observation: in the first run the capture recovered 9 s after the reset without an intended grant (a later probe read `granted`), which may have been a manual action; the second run did not recover. The permission must therefore be re-granted by hand after this spike.
 
 ## R3. Picture format and quality
 
@@ -22,6 +24,7 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Spike** 
 - **Rationale**: One codec keeps storage small and code simple. The hardware HEVC encoder on Apple silicon keeps three displays inside the 2 s budget. Conversion for the model is a few milliseconds and belongs with the connector.
 - **Alternatives**: PNG (lossless, several times larger), JPEG for the analysis copy (universal for models but a second codec to maintain). Revisit only if spec 003 shows the model cannot be fed cheaply.
 - **Spike S3**: capture the three displays once, encode at 0.9, and measure time per display and bytes per picture. Confirms SC-001 feasibility and the size estimate in the plan, and that text stays readable (look at one crop of a non-sensitive window).
+- **S3 outcome (2026-09-30, done)**: per display, capture 58 to 179 ms (the first includes warm-up); HEIC 0.9 of the full 3440x1440 picture 60 to 91 ms and 372 to 650 KB; 2048-long-edge copy 58 to 62 ms and 187 to 295 KB. Three displays total about 2.2 MB per capture (about 0.75 MB per display), well under the 2 MB per display estimate for this screen content (busier screens will be larger; revisit if the real figure exceeds it). Sequential time is about 0.7 s for three displays, so SC-001 (2 s) has a wide margin even before encoding in parallel. Readability of text was not inspected by eye (it would show the user's screens); spec 004 measures reading accuracy on the stored pictures.
 
 ## R4. Downscaling the analysis copy
 
@@ -45,6 +48,7 @@ Each item: Decision, Rationale, Alternatives considered. Items marked **Spike** 
 - **Rationale**: Screenshots of work sessions must not be copied to a backup disk by accident. The folder mode keeps other user accounts out; FileVault covers the disk.
 - **Alternatives**: `tmutil addexclusion` (external tool, may need admin rights for the fixed-path form).
 - **Spike S4**: create the folder, set both, and check `tmutil isexcluded` and `ls -ld`.
+- **S4 outcome (2026-09-30, done)**: a directory created under `~/Library/Application Support` with mode 0700 and `URLResourceValues.isExcludedFromBackup = true` shows `drwx------` and `tmutil isexcluded` reports `[Excluded]` (before setting it reported `[Included]`; the extended attribute `com.apple.metadata:com_apple_backup_excludeItem` is set). Decision R6 stands. (A first attempt under `/private/tmp` was meaningless because that path is excluded by default.)
 
 ## R7. Free-space floor
 
