@@ -66,10 +66,13 @@ public struct ModelRunRecord: Sendable, Equatable, Codable, FetchableRecord, Per
     public var failureReason: String?
     public var requestJson: String
     public var rawAnswer: String?
+    /// `test`, `classify` or `extract` (migration v3); rows from spec 003 read as `test`.
+    public var step: String
 
     public init(id: String = UUID().uuidString, jobId: String, imageId: String?, attempt: Int, model: String, think: String,
                 temperature: Double, imageLongEdge: Int, promptVersion: String, schemaVersion: String, startedAt: Date,
-                durationMs: Int, outcome: Outcome, failureReason: String?, requestJson: String, rawAnswer: String?) {
+                durationMs: Int, outcome: Outcome, failureReason: String?, requestJson: String, rawAnswer: String?,
+                step: String = "test") {
         self.id = id
         self.jobId = jobId
         self.imageId = imageId
@@ -86,6 +89,7 @@ public struct ModelRunRecord: Sendable, Equatable, Codable, FetchableRecord, Per
         self.failureReason = failureReason
         self.requestJson = requestJson
         self.rawAnswer = rawAnswer
+        self.step = step
     }
 
     enum CodingKeys: String, CodingKey {
@@ -102,6 +106,7 @@ public struct ModelRunRecord: Sendable, Equatable, Codable, FetchableRecord, Per
         case failureReason = "failure_reason"
         case requestJson = "request_json"
         case rawAnswer = "raw_answer"
+        case step
     }
 }
 
