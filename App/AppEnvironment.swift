@@ -28,6 +28,10 @@ final class AppEnvironment {
     let analysis: AnalysisQueue?
     /// Read access to the jobs and their runs for the settings block.
     let analysisJobs: AnalysisStore?
+    /// Whether new captures are analysed on their own.
+    let analysisSettings: AnalysisSettings
+    /// What the Analysis settings list shows; `nil` when the storage is unavailable.
+    let captureOverview: CaptureOverview?
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -38,9 +42,10 @@ final class AppEnvironment {
         feedback = FeedbackAdapter(state: state)
         let windows = self.windows
         let state = self.state
-        let opened = Self.openStorage(settingsStore: settingsStore)
-        storage = opened.storage
-        if let context = opened.storage, let store = context.store {
+        analysisSettings = AnalysisSettings(store: settingsStore)
+        let context = Self.openStorage()
+        storage = context
+        if let context, let store = context.store {
             let cleanup = CleanupService(paths: context.paths, store: store, files: context.files)
             let settings = StorageSettings(store: settingsStore)
             storageServices = StorageServices(
@@ -49,7 +54,7 @@ final class AppEnvironment {
         } else {
             storageServices = nil
         }
-        if let context = opened.storage, let database = context.database, let captures = context.store {
+        if let context, let database = context.database, let captures = context.store {
             let jobs = AnalysisStore(database: database)
             let pictures = StoredPictureProvider(paths: context.paths, store: captures)
             let testRunner = ModelTestJobRunner(
@@ -65,14 +70,16 @@ final class AppEnvironment {
                 ImageAnalysisJobRunner.forceKind: analyseRunner,
             ])
             analysis = AnalysisQueue(store: jobs, runner: runner, ready: { [ollama] in await ollama.check() },
-                                     settings: ollamaSettings)
+                                     settings: ollamaSettings, results: AnalysisResultStore(database: database))
             analysisJobs = jobs
+            captureOverview = CaptureOverview(database: database)
         } else {
             analysis = nil
             analysisJobs = nil
+            captureOverview = nil
         }
         captureService = CaptureRequestService(
-            runner: opened.runner,
+            runner: Self.makeCaptureRunner(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings),
             permission: permission,
             feedback: feedback,
             settings: feedbackSettings,
@@ -127,6 +134,20 @@ final class AppEnvironment {
         return (id, newest != nil)
     }
 
+    /// Adds every stored picture that was never analysed to the queue, oldest first. Returns how many.
+    @discardableResult
+    func analyseStoredCaptures() async -> Int { await analysis?.enqueueBacklog() ?? 0 }
+
+    /// Asks for a fresh analysis of one picture.
+    @discardableResult
+    func reanalyse(imageID: String) async -> Bool { await analysis?.reanalyse(imageID: imageID) ?? false }
+
+    /// How many stored pictures have no analysis and no pending job.
+    func unanalysedCount() -> Int {
+        guard let database = storage?.database else { return 0 }
+        return (try? AnalysisResultStore(database: database).unanalysedImageIDs().count) ?? 0
+    }
+
     /// The retention policy is applied at start and then checked every hour; it runs about daily.
     private func startRetention() {
         guard let retention = storageServices?.retention else { return }
@@ -139,22 +160,26 @@ final class AppEnvironment {
         }
     }
 
-    /// Opens the storage and builds the capture pipeline. When storage cannot be used, capturing
-    /// reports why instead of crashing.
-    private static func openStorage(settingsStore: any SettingsStore) -> (runner: any CaptureRunning, storage: StorageContext?) {
-        do {
-            let context = try StorageBootstrap.start(paths: try AppPaths.standard())
-            guard let store = context.store else {
-                return (UnavailableCaptureRunner(reason: context.capturingDisabledReason ?? "could not open the capture storage"), context)
-            }
-            let pipeline = CapturePipeline(capturer: ScreenCaptureKitCapturer(), encoder: HEICImageEncoder(),
-                                           disk: DiskSpaceAdapter(), files: context.files, store: store,
-                                           paths: context.paths, settings: StorageSettings(store: settingsStore))
-            return (pipeline, context)
-        } catch {
+    /// Opens the storage. `nil` when it cannot be opened at all.
+    private static func openStorage() -> StorageContext? {
+        do { return try StorageBootstrap.start(paths: try AppPaths.standard()) }
+        catch {
             logger.error("storage unavailable: \(error.localizedDescription, privacy: .public)")
-            return (UnavailableCaptureRunner(reason: "could not open the capture storage"), nil)
+            return nil
         }
+    }
+
+    /// The capture pipeline, which queues each new capture for analysis when the switch is on. When the storage cannot
+    /// be used, capturing reports why instead of crashing.
+    private static func makeCaptureRunner(context: StorageContext?, settingsStore: any SettingsStore, enqueuer: AnalysisQueue?,
+                                          analysisSettings: AnalysisSettings) -> any CaptureRunning {
+        guard let context else { return UnavailableCaptureRunner(reason: "could not open the capture storage") }
+        guard let store = context.store else {
+            return UnavailableCaptureRunner(reason: context.capturingDisabledReason ?? "could not open the capture storage")
+        }
+        return CapturePipeline(capturer: ScreenCaptureKitCapturer(), encoder: HEICImageEncoder(), disk: DiskSpaceAdapter(),
+                               files: context.files, store: store, paths: context.paths,
+                               settings: StorageSettings(store: settingsStore), enqueuer: enqueuer, analysisSettings: analysisSettings)
     }
 
     private func startClockTick() {
