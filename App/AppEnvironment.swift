@@ -32,6 +32,8 @@ final class AppEnvironment {
     let analysisSettings: AnalysisSettings
     /// What the Analysis settings list shows; `nil` when the storage is unavailable.
     let captureOverview: CaptureOverview?
+    /// The user's contexts and the context chosen for each picture; `nil` when the storage is unavailable.
+    let contexts: ContextStore?
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -74,10 +76,12 @@ final class AppEnvironment {
                                      settings: ollamaSettings, results: AnalysisResultStore(database: database))
             analysisJobs = jobs
             captureOverview = CaptureOverview(database: database)
+            contexts = ContextStore(database: database)
         } else {
             analysis = nil
             analysisJobs = nil
             captureOverview = nil
+            contexts = nil
         }
         captureService = CaptureRequestService(
             runner: Self.makeCaptureRunner(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings),

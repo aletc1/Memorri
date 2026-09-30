@@ -20,6 +20,7 @@ public struct RecentCapture: Sendable, Equatable, Identifiable {
     public let kind: ScreenKind?
     public let findingCount: Int
     public let findings: [Finding]
+    public let contextID: String?
     public let contextName: String?
     public let contextChosenByUser: Bool
     public let tags: [CaptureTag]
@@ -42,12 +43,12 @@ public struct CaptureOverview: Sendable {
                 let id: String = row["id"]
                 let analysis = try AnalysisResultStore.analysis(db, imageID: id)
                 let context = try Row.fetchOne(db, sql: """
-                    SELECT c.name AS name, ic.source AS source FROM image_context ic LEFT JOIN contexts c ON c.id = ic.context_id WHERE ic.image_id = ?
+                    SELECT c.id AS id, c.name AS name, ic.source AS source FROM image_context ic LEFT JOIN contexts c ON c.id = ic.context_id WHERE ic.image_id = ?
                     """, arguments: [id])
                 return RecentCapture(id: id, capturedAt: row["captured_at"], displayCount: row["display_count"], displayName: row["display_name"],
                                      state: try state(db, imageID: id, analysed: analysis != nil), kind: analysis?.kind,
                                      findingCount: analysis?.findingCount ?? 0, findings: analysis == nil ? [] : try AnalysisResultStore.findings(db, imageID: id),
-                                     contextName: context?["name"], contextChosenByUser: (context?["source"] as String?) == "user",
+                                     contextID: context?["id"], contextName: context?["name"], contextChosenByUser: (context?["source"] as String?) == "user",
                                      tags: try AnalysisResultStore.tags(db, imageID: id))
             }
         }
