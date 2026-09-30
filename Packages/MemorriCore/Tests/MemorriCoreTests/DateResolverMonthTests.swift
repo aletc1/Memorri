@@ -151,4 +151,12 @@ import Testing
         let result = DateResolver.resolve(text: "09:00", field: "start", draft: draft(cited: [eventLine], start: "09:00", date: "October 22, 2026"), in: resolver(lines))
         #expect(result.date == at(2026, 10, 22, 9, 0) && result.provenance?.rule == "explicit-date")
     }
+
+    @Test func aBareDayNumberInDateTextDoesNotStopAnAllDayEntryFromUsingItsCell() {
+        var lines = grid()
+        let eventLine = lines.count + 1
+        lines.append(RecognisedLine(n: eventLine, text: "Training", box: PixelBox(x: 10, y: 60 + 3 * 150 + 30, width: 160, height: 18), confidence: 0.9))
+        let result = DateResolver.resolve(text: "", field: "start", draft: draft(cited: [eventLine], start: "", date: "19"), in: resolver(lines))
+        #expect(result.date == at(2026, 10, 19) && result.allDay)
+    }
 }

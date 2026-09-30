@@ -162,10 +162,10 @@ public enum DateResolver {
 
     private static func isBlank(_ text: String) -> Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-    /// True when the text names a day of its own: a date, a weekday or a relative word.
+    /// True when the text names a day of its own: a month, a weekday or a relative word. A bare number is only a cell's label.
     private static func nameDay(_ text: String?, _ context: ResolutionContext) -> Bool {
         guard let text, !isBlank(text), let parsed = DateParser.parse(text, locales: context.locales, order: context.dateOrder) else { return false }
-        return parsed.day != nil || parsed.weekday != nil || parsed.relative != nil
+        return parsed.month != nil || parsed.weekday != nil || parsed.relative != nil
     }
 
     /// The header above the finding's column: the model's own `column_line` when it is a header, else the header whose
