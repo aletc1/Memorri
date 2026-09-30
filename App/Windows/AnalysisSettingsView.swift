@@ -139,7 +139,6 @@ private struct CaptureRow: View {
                 }
                 .onChange(of: row.contextID) { _, value in choice = value }
                 if row.contextChosenByUser { Text("(chosen by you)").foregroundStyle(.secondary) }
-                else if row.contextName == nil { Text("Unassigned").foregroundStyle(.secondary) }
                 Text("\(row.findingCount) \(row.findingCount == 1 ? "finding" : "findings")").foregroundStyle(.secondary)
             }
             .font(.callout)
