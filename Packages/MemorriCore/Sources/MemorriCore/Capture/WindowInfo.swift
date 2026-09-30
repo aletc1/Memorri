@@ -17,6 +17,13 @@ public struct WindowInfo: Sendable, Equatable {
     }
 }
 
+/// Where the analysis reads a picture's windows from.
+public protocol WindowProviding: Sendable {
+    func windows(imageID: String) throws -> [WindowInfo]
+}
+
+extension CaptureStore: WindowProviding {}
+
 /// Which windows are kept with a picture: the biggest ones that can be seen on it.
 public enum WindowSelection {
     /// Enough to tell the user's applications and customers apart without keeping every palette and tooltip.

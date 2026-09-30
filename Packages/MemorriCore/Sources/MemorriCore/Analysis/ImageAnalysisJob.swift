@@ -20,10 +20,13 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
     private let settings: OllamaSettings
     private let time: any TimeSource
     private let recogniserName: String
+    private let contexts: ContextStore?
+    private let windows: (any WindowProviding)?
 
     public init(service: OllamaService, pipeline: AnalysisPipeline, pictures: any AnalysisPictureProviding,
                 fullPictures: any FullPictureProviding, ocr: OCRStore, results: AnalysisResultStore, jobs: any AnalysisJobStoring,
-                settings: OllamaSettings, time: any TimeSource, recogniserName: String = VisionTextRecogniser.descriptor) {
+                settings: OllamaSettings, time: any TimeSource, recogniserName: String = VisionTextRecogniser.descriptor,
+                contexts: ContextStore? = nil, windows: (any WindowProviding)? = nil) {
         self.service = service
         self.pipeline = pipeline
         self.pictures = pictures
@@ -34,6 +37,8 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         self.settings = settings
         self.time = time
         self.recogniserName = recogniserName
+        self.contexts = contexts
+        self.windows = windows
     }
 
     private static let gone = JobOutcome.permanent("picture no longer stored")
@@ -66,9 +71,13 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
            let stored = run.rawAnswer.flatMap({ ClassificationResult.parse(storedAnswer: $0) }) {
             reuse.classification = stored
         }
+        // The context step's inputs: the user's contexts, the windows seen with the picture and what the user chose for it.
+        let knownContexts = (try? contexts?.all()) ?? []
+        let choice = (try? contexts?.decision(imageID: imageID)).flatMap { $0 }.flatMap { $0.source == .user ? $0 : nil }
         let input = PipelineInput(image: full, classificationJPEG: copies.classificationJPEG, classificationSize: size,
                                   analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: .current,
-                                  captureTime: analysisCopy.capturedAt ?? time.now(), reuse: reuse)
+                                  captureTime: analysisCopy.capturedAt ?? time.now(), reuse: reuse, contexts: knownContexts,
+                                  windows: (try? windows?.windows(imageID: imageID)) ?? [], userChoice: choice)
 
         let analysis: AnalysisResult?
         let steps: [StepRecord]
@@ -107,6 +116,8 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         if let extract = steps.first(where: { $0.step == "extract" }) {
             Self.logger.info("extract image=\(imageID, privacy: .public) kind=\(analysis.classification.kind.rawValue, privacy: .public) findings=\(analysis.findings.count) discarded=\(analysis.discards.count) ms=\(extract.durationMs)")
         }
+        let contextName = knownContexts.first { $0.id == analysis.decision.contextID }?.name
+        Self.logger.info("context image=\(imageID, privacy: .public) source=\(analysis.decision.source.rawValue, privacy: .public) name=\(contextName ?? "-", privacy: .public)")
         let unresolved = analysis.findings.reduce(0) { $0 + $1.unresolved.count }
         let inferred = analysis.findings.reduce(0) { $0 + $1.provenance.values.filter { $0.origin == .inferred }.count }
         Self.logger.info("resolve image=\(imageID, privacy: .public) unresolved=\(unresolved) inferred=\(inferred)")

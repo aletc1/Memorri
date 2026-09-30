@@ -13,6 +13,7 @@ import Testing
         let results: AnalysisResultStore
         let jobs: AnalysisStore
         let settings: OllamaSettings
+        let contexts: ContextStore
     }
 
     private func sampleLines() -> [RecognisedLine] {
@@ -20,8 +21,9 @@ import Testing
          RecognisedLine(n: 2, text: "Room 4", box: PixelBox(x: 10, y: 50, width: 120, height: 18), confidence: 0.8)]
     }
 
-    private func makeRig(lines: [RecognisedLine]? = nil, failWith error: Error? = nil, model modelName: String? = "qwen3.8:27b-mlx") throws -> Rig {
-        let fixture = try makePipelineFixture()
+    private func makeRig(lines: [RecognisedLine]? = nil, failWith error: Error? = nil, model modelName: String? = "qwen3.8:27b-mlx",
+                         windows: [WindowInfo] = []) throws -> Rig {
+        let fixture = try makePipelineFixture(windows: windows)
         let recogniser = FakeTextRecogniser(lines: lines ?? sampleLines(), failWith: error)
         let model = FakeModelChatting()
         model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer)
@@ -39,8 +41,10 @@ import Testing
         let jobs = AnalysisStore(database: fixture.database)
         let pipeline = AnalysisPipeline(recogniser: recogniser, model: model, time: time)
         let runner = ImageAnalysisJobRunner(service: service, pipeline: pipeline, pictures: provider, fullPictures: provider, ocr: ocr,
-                                            results: results, jobs: jobs, settings: settings, time: time)
-        return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, results: results, jobs: jobs, settings: settings)
+                                            results: results, jobs: jobs, settings: settings, time: time,
+                                            contexts: ContextStore(database: fixture.database), windows: fixture.captures)
+        return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, results: results, jobs: jobs, settings: settings,
+                   contexts: ContextStore(database: fixture.database))
     }
 
     private func job(_ rig: Rig, kind: String = "analyse", imageID: String? = nil, nilImage: Bool = false) throws -> AnalysisJobRecord {
@@ -214,5 +218,53 @@ import Testing
         _ = await rig.runner.run(try job(rig), attempt: 1)
         let stored = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
         #expect(stored.findingCount == 1 && stored.discarded.map(\.title) == ["Invented"])
+    }
+
+    // MARK: Context
+
+    private func titled(_ title: String) -> WindowInfo {
+        WindowInfo(appName: "Outlook", bundleID: nil, title: title, frame: PixelBox(x: 0, y: 0, width: 1000, height: 500))
+    }
+
+    @Test func theStoredWindowsPickTheContextAndItsZoneIsUsed() async throws {
+        let rig = try makeRig(windows: [titled("Inbox - Customer A - Outlook")]); defer { rig.fixture.cleanUp() }
+        let a = try rig.contexts.add(name: "Customer A", timezone: "America/New_York", hints: [ContextHint(kind: .windowTitle, value: "Customer A")])
+        try rig.contexts.add(name: "Customer B", timezone: "Asia/Tokyo", hints: [ContextHint(kind: .windowTitle, value: "Customer B")])
+        #expect(await rig.runner.run(try job(rig), attempt: 1) == .success)
+        let decision = try #require(try rig.contexts.decision(imageID: rig.fixture.imageID))
+        #expect(decision.contextID == a.id && decision.source == .auto && decision.score == 3)
+        let stored = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
+        #expect(stored.timezone == "America/New_York" && stored.timezoneSource == "context")
+        #expect(try rig.results.findings(imageID: rig.fixture.imageID).first?.timezone == "America/New_York")
+    }
+
+    @Test func noMatchLeavesThePictureUnassignedOnTheMacsZone() async throws {
+        let rig = try makeRig(windows: [titled("Something else")]); defer { rig.fixture.cleanUp() }
+        try rig.contexts.add(name: "Customer A", timezone: "America/New_York", hints: [ContextHint(kind: .windowTitle, value: "Customer A")])
+        #expect(await rig.runner.run(try job(rig), attempt: 1) == .success)
+        let decision = try #require(try rig.contexts.decision(imageID: rig.fixture.imageID))
+        #expect(decision.contextID == nil && decision.source == .none)
+        #expect(try rig.results.analysis(imageID: rig.fixture.imageID)?.timezoneSource == "mac")
+    }
+
+    @Test func aUserChoiceSurvivesAForcedAnalysisAndKeepsItsZone() async throws {
+        let rig = try makeRig(windows: [titled("Customer A")]); defer { rig.fixture.cleanUp() }
+        try rig.contexts.add(name: "Customer A", timezone: "America/New_York", hints: [ContextHint(kind: .windowTitle, value: "Customer A")])
+        let b = try rig.contexts.add(name: "Customer B", timezone: "Asia/Tokyo", hints: [])
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        try rig.contexts.setUserChoice(imageID: rig.fixture.imageID, contextID: b.id, at: Date())
+        #expect(await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1) == .success)
+        let decision = try #require(try rig.contexts.decision(imageID: rig.fixture.imageID))
+        #expect(decision.contextID == b.id && decision.source == .user)
+        #expect(try rig.results.analysis(imageID: rig.fixture.imageID)?.timezone == "Asia/Tokyo")
+    }
+
+    @Test func deletingAContextLeavesItsFindings() async throws {
+        let rig = try makeRig(windows: [titled("Customer A")]); defer { rig.fixture.cleanUp() }
+        let a = try rig.contexts.add(name: "Customer A", timezone: nil, hints: [ContextHint(kind: .windowTitle, value: "Customer A")])
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        try rig.contexts.delete(id: a.id)
+        #expect(try rig.contexts.decision(imageID: rig.fixture.imageID)?.contextID == nil)
+        #expect(try rig.results.findings(imageID: rig.fixture.imageID).count == 1)
     }
 }

@@ -16,6 +16,7 @@ struct CLIAnalyser: CaseAnalysing {
     let service: OllamaService
     let settings: OllamaSettings
     let size: Int
+    let contexts: [ContextRecord]
 
     func analyse(_ golden: GoldenCase, replaying steps: [EvalStepRecord]?) async throws -> CaseResult {
         let stepSettings: ModelStepSettings
@@ -29,7 +30,7 @@ struct CLIAnalyser: CaseAnalysing {
             }
         }
         let analyser = PipelineCaseAnalyser(recogniser: VisionTextRecogniser(), model: ServiceModelChatting(service: service),
-                                            settings: stepSettings, size: size)
+                                            settings: stepSettings, size: size, contexts: contexts)
         return try await analyser.analyse(golden, replaying: steps)
     }
 }
@@ -57,12 +58,13 @@ func run(_ options: RunOptions) async -> Int32 {
     let service = OllamaService.live(settings: settings)
     let evalSettings = EvalSettings(model: settings.model ?? OllamaSettings.recommendedModel, size: options.size, think: options.think.rawValue,
                                     promptVersions: promptVersions(), thresholds: .standard)
-    let runner = EvalRunner(analyser: CLIAnalyser(service: service, settings: settings, size: options.size), settings: evalSettings,
-                            isAppBusy: { (try? AppPaths.standard()).map(BusyCheck.isBusy(paths:)) ?? false },
-                            serverStatus: { await service.check() })
     do {
         let (cases, warnings) = try GoldenCase.loadAll(in: URL(fileURLWithPath: options.cases))
         for warning in warnings { FileHandle.standardError.write(Data((warning + "\n").utf8)) }
+        let analyser = CLIAnalyser(service: service, settings: settings, size: options.size, contexts: PipelineCaseAnalyser.contexts(in: cases))
+        let runner = EvalRunner(analyser: analyser, settings: evalSettings,
+                                isAppBusy: { (try? AppPaths.standard()).map(BusyCheck.isBusy(paths:)) ?? false },
+                                serverStatus: { await service.check() })
         let replay = try options.replay.map(readReport)
         let report = try await runner.run(cases: cases, only: options.only, replay: replay, allowBusy: options.allowBusy,
                                           progress: { print($0) })

@@ -50,6 +50,17 @@ import Testing
         #expect(result.steps.allSatisfy { $0.rawAnswer != nil && !$0.request.contains("base64") })
     }
 
+    @Test func theContextIsPickedFromTheCasesWindowsAndReportedByName() async throws {
+        let (golden, temp) = try golden(); defer { temp.cleanUp() }
+        let other = ContextRecord(id: "other", name: "Customer Z", timezone: "Asia/Tokyo", hints: [ContextHint(kind: .windowTitle, value: "Customer Z")])
+        let lines = recogniserLines() + [RecognisedLine(n: 3, text: "ana@customer-a.example", box: PixelBox(x: 10, y: 100, width: 200, height: 18), confidence: 0.9)]
+        let analyser = PipelineCaseAnalyser(recogniser: FakeTextRecogniser(lines: lines), model: makeModel(), settings: settings, size: 800,
+                                            time: FakeTimeSource(1000), contexts: [other])
+        let result = try await analyser.analyse(golden, replaying: nil)
+        #expect(result.contextName == golden.expected.context && result.contextName == "Customer A")
+        #expect(PipelineCaseAnalyser.contexts(in: [golden, golden]).map(\.name) == ["Customer A"])
+    }
+
     @Test func aLargeSizeSendsTheClassificationAt1024() async throws {
         let (golden, temp) = try golden(); defer { temp.cleanUp() }
         let model = makeModel()

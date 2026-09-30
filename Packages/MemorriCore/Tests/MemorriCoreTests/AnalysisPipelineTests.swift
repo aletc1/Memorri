@@ -245,6 +245,72 @@ import Testing
         #expect(finding.due == SyntheticTime.date(2026, 10, 13, zone: "Europe/Madrid"))
     }
 
+    // MARK: Contexts
+
+    private let newYork = TimeZone(identifier: "America/New_York")!
+    private func window(_ title: String, app: String = "Outlook") -> WindowInfo {
+        WindowInfo(appName: app, bundleID: nil, title: title, frame: PixelBox(x: 0, y: 0, width: 800, height: 600))
+    }
+    private func context(_ id: String, zone: String?, titleHint: String) -> ContextRecord {
+        ContextRecord(id: id, name: "Customer \(id)", timezone: zone, hints: [ContextHint(kind: .windowTitle, value: titleHint)])
+    }
+
+    /// "tomorrow" written at 22:30 in New York, which is already the 15th in UTC: the zone decides which day is meant.
+    private func contextInput(contexts: [ContextRecord], windows: [WindowInfo], userChoice: ContextDecision? = nil) async throws -> AnalysisResult {
+        let lines = [RecognisedLine(n: 1, text: "Send the report by tomorrow", box: PixelBox(x: 10, y: 10, width: 300, height: 18), confidence: 0.9)]
+        let (rig, base) = dateInput(lines: lines)
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"task","title":"Send the report","cited_lines":[1],"due_text":"tomorrow"}]}"#)
+        let input = PipelineInput(image: base.image, classificationJPEG: base.classificationJPEG, classificationSize: base.classificationSize,
+                                  analysisJPEG: base.analysisJPEG, analysisSize: base.analysisSize, macTimezone: TimeZone(identifier: "UTC")!,
+                                  captureTime: SyntheticTime.date(2026, 10, 15, 2, 30, zone: "UTC"), locales: base.locales,
+                                  contexts: contexts, windows: windows, userChoice: userChoice)
+        return try await rig.pipeline.analyse(input, settings: settings)
+    }
+
+    @Test func aMatchedContextsZoneDecidesWhichDayTomorrowIs() async throws {
+        let ny = context("A", zone: "America/New_York", titleHint: "Customer A")
+        let result = try await contextInput(contexts: [ny, context("B", zone: "Asia/Tokyo", titleHint: "Customer B")], windows: [window("Inbox - Customer A - Outlook")])
+        #expect(result.decision.contextID == "A" && result.decision.source == .auto)
+        #expect(result.timezone == newYork && result.timezoneSource == "context")
+        let finding = try #require(result.findings.first)
+        #expect(finding.due == SyntheticTime.date(2026, 10, 15, zone: "America/New_York") && finding.timezone == "America/New_York")
+    }
+
+    @Test func withoutAContextTheMacsZoneIsUsed() async throws {
+        let result = try await contextInput(contexts: [context("A", zone: "America/New_York", titleHint: "Customer A")], windows: [window("Something else")])
+        #expect(result.decision == .unassigned && result.timezone == TimeZone(identifier: "UTC")! && result.timezoneSource == "mac")
+        #expect(result.findings.first?.due == SyntheticTime.date(2026, 10, 16, zone: "UTC"))
+    }
+
+    @Test func aContextWithoutAZoneUsesTheMacsAndSaysSo() async throws {
+        let result = try await contextInput(contexts: [context("A", zone: nil, titleHint: "Customer A")], windows: [window("Customer A")])
+        #expect(result.decision.contextID == "A" && result.timezone == TimeZone(identifier: "UTC")! && result.timezoneSource == "mac")
+    }
+
+    @Test func anInvalidContextZoneFallsBackToTheMacsAndIsRecorded() async throws {
+        let result = try await contextInput(contexts: [context("A", zone: "Mars/Olympus", titleHint: "Customer A")], windows: [window("Customer A")])
+        #expect(result.decision.contextID == "A" && result.timezone == TimeZone(identifier: "UTC")! && result.timezoneSource == "invalid-context-zone")
+    }
+
+    @Test func aUserChoiceWinsOverWhatTheMatcherWouldPick() async throws {
+        let a = context("A", zone: "America/New_York", titleHint: "Customer A"), b = context("B", zone: "Asia/Tokyo", titleHint: "Customer B")
+        let choice = ContextDecision(contextID: "B", source: .user, score: 0)
+        let result = try await contextInput(contexts: [a, b], windows: [window("Customer A")], userChoice: choice)
+        #expect(result.decision == choice && result.timezone.identifier == "Asia/Tokyo" && result.timezoneSource == "context")
+    }
+
+    @Test func aUserChoiceOfUnassignedIsKeptToo() async throws {
+        let choice = ContextDecision(contextID: nil, source: .user, score: 0)
+        let result = try await contextInput(contexts: [context("A", zone: "America/New_York", titleHint: "Customer A")], windows: [window("Customer A")], userChoice: choice)
+        #expect(result.decision == choice && result.timezone == TimeZone(identifier: "UTC")! && result.timezoneSource == "mac")
+    }
+
+    @Test func aUserChoiceOfAContextThatNoLongerExistsFallsBackToTheMacsZone() async throws {
+        let choice = ContextDecision(contextID: "gone", source: .user, score: 0)
+        let result = try await contextInput(contexts: [], windows: [], userChoice: choice)
+        #expect(result.decision.source == .user && result.timezone == TimeZone(identifier: "UTC")! && result.timezoneSource == "mac")
+    }
+
     // MARK: Durations
 
     /// A drawn week view: headers, an hour scale and one block (`hours` long from 13:00 on Wednesday).

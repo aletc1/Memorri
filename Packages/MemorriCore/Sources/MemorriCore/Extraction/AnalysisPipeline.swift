@@ -27,6 +27,12 @@ public struct PipelineInput: @unchecked Sendable {
     /// The languages date texts are read in, first choice first.
     public let locales: [Locale]
     public let reuse: Reuse
+    /// The user's contexts, to pick the one this picture belongs to and to take its time zone from.
+    public let contexts: [ContextRecord]
+    /// The windows that were visible when the picture was taken.
+    public let windows: [WindowInfo]
+    /// What the user chose for this picture (a decision with source `user`); it is used as it is and never replaced.
+    public let userChoice: ContextDecision?
 
     /// The Mac's languages, then English and Spanish.
     public static func defaultLocales() -> [Locale] {
@@ -35,10 +41,12 @@ public struct PipelineInput: @unchecked Sendable {
 
     public init(image: CGImage, classificationJPEG: Data, classificationSize: (width: Int, height: Int), analysisJPEG: Data? = nil,
                 analysisSize: (width: Int, height: Int)? = nil, macTimezone: TimeZone = .current, captureTime: Date = Date(),
-                locales: [Locale] = PipelineInput.defaultLocales(), reuse: Reuse = Reuse()) {
+                locales: [Locale] = PipelineInput.defaultLocales(), reuse: Reuse = Reuse(), contexts: [ContextRecord] = [],
+                windows: [WindowInfo] = [], userChoice: ContextDecision? = nil) {
         self.image = image; self.classificationJPEG = classificationJPEG; self.classificationSize = classificationSize
         self.analysisJPEG = analysisJPEG ?? classificationJPEG; self.analysisSize = analysisSize ?? classificationSize
         self.macTimezone = macTimezone; self.captureTime = captureTime; self.locales = locales; self.reuse = reuse
+        self.contexts = contexts; self.windows = windows; self.userChoice = userChoice
     }
 }
 
@@ -155,7 +163,10 @@ public struct AnalysisPipeline: Sendable {
         }
         let checked = CitationCheck.apply(drafts, lineCount: lines.count)
         discards += checked.discarded
-        let zone = input.macTimezone
+        // The context decides the time zone the dates are read in, so it is settled before they are resolved.
+        let decision = input.userChoice.flatMap { $0.source == .user ? $0 : nil }
+            ?? ContextMatcher.decide(contexts: input.contexts, windows: input.windows, tags: [], lines: lines)
+        let (zone, zoneSource) = Self.zone(for: input.contexts.first { $0.id == decision.contextID }, mac: input.macTimezone)
         let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
         let headers = calendarKind ? DateResolver.headers(in: lines, locales: input.locales, reference: input.captureTime, timezone: zone) : []
         let order = DateParser.dateOrder(ofUnambiguous: lines.map(\.text))
@@ -164,9 +175,16 @@ public struct AnalysisPipeline: Sendable {
         let geometry = calendarKind ? Geometry(image: input.image, columnWidth: Self.columnWidth(headers: headers, imageWidth: input.image.width,
                                                                                                   kind: resolved.kind)) : nil
         let findings = checked.kept.map { Self.assemble($0, lines: lines, context: base, geometry: geometry) }
-        return AnalysisResult(lines: lines, classification: resolved, findings: findings, discards: discards, timezone: zone,
-                              timezoneSource: "mac", lineCapApplied: capped, model: settings.model,
+        return AnalysisResult(lines: lines, classification: resolved, findings: findings, discards: discards, decision: decision,
+                              timezone: zone, timezoneSource: zoneSource, lineCapApplied: capped, model: settings.model,
                               pictureLongEdge: max(input.analysisSize.width, input.analysisSize.height), steps: steps)
+    }
+
+    /// The zone a context gives its dates: its own, else the Mac's. A stored zone that no longer exists is reported, not hidden.
+    static func zone(for context: ContextRecord?, mac: TimeZone) -> (zone: TimeZone, source: String) {
+        guard let identifier = context?.timezone else { return (mac, "mac") }
+        if let zone = TimeZone(identifier: identifier) { return (zone, "context") }
+        return (mac, "invalid-context-zone")
     }
 
     /// What the duration step needs from a calendar view: the picture and the width of one column of blocks.
