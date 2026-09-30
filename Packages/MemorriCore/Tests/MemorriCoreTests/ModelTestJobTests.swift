@@ -197,4 +197,58 @@ import Testing
         try addCapture(rig)
         #expect(await rig.runner.run(try job(rig), attempt: 1) == .serverUnavailable)
     }
+
+    // MARK: settings are read once per attempt (user story 6)
+
+    private func chatBody(_ rig: Rig, _ index: Int) throws -> String {
+        let requests = rig.transport.requests(to: "/api/chat")
+        return String(decoding: try #require(requests[index].body), as: UTF8.self)
+    }
+
+    @Test func aChangeBetweenAttemptsAppliesToTheSecondOne() async throws {
+        let rig = try makeRig(); defer { rig.temp.cleanUp() }
+        try addCapture(rig)
+        let item = try job(rig)
+        _ = await rig.runner.run(item, attempt: 1)
+        rig.settings.setThink(.high)
+        #expect(rig.settings.setTimeoutSeconds(120))
+        _ = await rig.runner.run(item, attempt: 2)
+        #expect(try chatBody(rig, 0).contains(#""think":false"#))
+        #expect(try chatBody(rig, 1).contains(#""think":true"#))
+        #expect(rig.transport.requests(to: "/api/chat").map(\.timeout) == [300, 120])
+    }
+
+    @Test func aChangeDuringAnAttemptDoesNotAlterTheRunningOne() async throws {
+        let rig = try makeRig(); defer { rig.temp.cleanUp() }
+        try addCapture(rig)
+        rig.transport.delay = .milliseconds(300)
+        let item = try job(rig)
+        async let outcome = rig.runner.run(item, attempt: 1)
+        try await Task.sleep(for: .milliseconds(100))
+        rig.settings.setThink(.high)
+        _ = rig.settings.setTimeoutSeconds(50)
+        #expect(await outcome == .success)
+        #expect(try chatBody(rig, 0).contains(#""think":false"#))
+        #expect(try rig.store.runs().first?.think == "off")
+        #expect(rig.transport.requests(to: "/api/chat").first?.timeout == 300)
+    }
+
+    @Test func aModelWithoutThinkingGetsNoThinkFieldWhateverTheSetting() async throws {
+        let rig = try makeRig(tags: #"{"models":[{"name":"qwen3.8:27b-mlx","capabilities":["completion","vision"]}]}"#)
+        defer { rig.temp.cleanUp() }
+        try addCapture(rig)
+        rig.settings.setThink(.high)
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(try !chatBody(rig, 0).contains(#""think""#))
+        #expect(try rig.store.runs().first?.think == "off")
+    }
+
+    @Test func aLevelModelGetsTheLevelAndABooleanModelGetsTrue() {
+        #expect(ThinkWireValue.make(setting: .medium, modelThinks: true, acceptsLevels: true) == .level("medium"))
+        #expect(ThinkWireValue.make(setting: .medium, modelThinks: true, acceptsLevels: false) == .bool(true))
+        #expect(ThinkWireValue.make(setting: .off, modelThinks: true, acceptsLevels: true) == .bool(false))
+        #expect(ThinkWireValue.make(setting: .high, modelThinks: false, acceptsLevels: true) == .omitted)
+        #expect(ThinkWireValue.acceptsLevels(modelName: "gpt-oss:20b"))
+        #expect(!ThinkWireValue.acceptsLevels(modelName: "qwen3.8:27b-mlx"))
+    }
 }

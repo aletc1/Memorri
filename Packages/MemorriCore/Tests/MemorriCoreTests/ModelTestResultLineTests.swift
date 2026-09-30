@@ -33,4 +33,9 @@ import Testing
         #expect(ModelTestResultLine.text(job: job(.waiting), run: nil) == nil)
         #expect(ModelTestResultLine.text(job: job(.running), run: nil) == nil)
     }
+
+    @Test func thinkingTextAfterTheAnswerDoesNotHideTheDescription() {
+        let answer = #"{"description":"A weekly calendar.","contains_text":true,"text_sample":"x"}"# + ModelTestJob.thinkingMarker + "Let me look at the picture..."
+        #expect(ModelTestResultLine.text(job: job(.finished), run: run(answer)) == #"Answer valid in 12.4 s: "A weekly calendar.""#)
+    }
 }

@@ -33,6 +33,8 @@ public enum ModelTestJob {
         "required": .array([.string("description"), .string("contains_text"), .string("text_sample")]),
         "additionalProperties": .bool(false),
     ])
+    /// Separates the answer from the thinking text in a run's `raw_answer`.
+    public static let thinkingMarker = "\n\n[thinking]\n"
     /// Longer side of the built-in picture; the spike's default size.
     static let sampleLongEdge = 2048
 }
@@ -118,7 +120,7 @@ public struct ModelTestJobRunner: AnalysisJobRunning {
         }
 
         var answer = response.content
-        if let thinking = response.thinking, !thinking.isEmpty { answer += "\n\n[thinking]\n" + thinking }
+        if let thinking = response.thinking, !thinking.isEmpty { answer += ModelTestJob.thinkingMarker + thinking }
         switch SchemaValidator.validate(response.content, against: ModelTestJob.schema) {
         case .success:
             return record(nil, answer: answer) ?? .success

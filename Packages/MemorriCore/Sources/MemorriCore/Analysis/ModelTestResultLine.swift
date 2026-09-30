@@ -20,7 +20,8 @@ public enum ModelTestResultLine {
 
     /// The first 60 characters of the answer's `description`.
     static func sample(of answer: String?) -> String {
-        guard let answer, let data = answer.data(using: .utf8),
+        let json = answer?.components(separatedBy: ModelTestJob.thinkingMarker).first
+        guard let json, let data = json.data(using: .utf8),
               let value = try? JSONDecoder().decode(JSONValue.self, from: data),
               case .object(let fields) = value, case .string(let description)? = fields["description"] else { return "" }
         let collapsed = description.split(whereSeparator: \.isNewline).joined(separator: " ")

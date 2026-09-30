@@ -12,6 +12,9 @@ struct OllamaSettingsView: View {
     @State private var models: ModelList?
     @State private var modelsFailed = false
     @State private var chosenModel: String?
+    @State private var think: ThinkSetting = .off
+    @State private var timeoutText = ""
+    @State private var timeoutMessage: String?
     @State private var testNote: String?
     @State private var testLine: String?
     @State private var isTesting = false
@@ -25,6 +28,8 @@ struct OllamaSettingsView: View {
         .onAppear {
             addressText = environment.ollamaSettings.address.text
             chosenModel = environment.ollamaSettings.model
+            think = environment.ollamaSettings.think
+            timeoutText = String(environment.ollamaSettings.timeoutSeconds)
             runCheck()
             loadModels()
         }
@@ -35,6 +40,8 @@ struct OllamaSettingsView: View {
             connectionSection
             Divider()
             modelSection
+            Divider()
+            tuningSection
             Divider()
             testSection
             Divider()
@@ -97,6 +104,60 @@ struct OllamaSettingsView: View {
                 Text("The chosen model \(chosen) is no longer installed.").font(.callout).foregroundStyle(.orange)
             }
         }
+    }
+
+    // MARK: Thinking and timeout (user story 6)
+
+    private var chosenModelThinks: Bool {
+        guard let chosen = chosenModel else { return false }
+        return models?.usable.first { $0.name == chosen }?.thinks ?? false
+    }
+
+    private var tuningSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Thinking").font(.headline)
+            Picker("Thinking", selection: Binding(get: { think }, set: { chooseThink($0) })) {
+                Text("Off").tag(ThinkSetting.off)
+                Text("Low").tag(ThinkSetting.low)
+                Text("Medium").tag(ThinkSetting.medium)
+                Text("High").tag(ThinkSetting.high)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 280)
+            .disabled(!chosenModelThinks)
+            if !chosenModelThinks {
+                Text("This model does not support thinking.").font(.callout).foregroundStyle(.secondary)
+            } else if let chosen = chosenModel, !ThinkWireValue.acceptsLevels(modelName: chosen) {
+                Text("This model only supports thinking on or off; Low, Medium and High all mean on.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Timeout").font(.headline).padding(.top, 6)
+            HStack {
+                Text("Stop a request after (seconds)")
+                TextField("300", text: $timeoutText)
+                    .frame(width: 70)
+                    .onSubmit { applyTimeout() }
+                Button("Apply") { applyTimeout() }
+            }
+            if let timeoutMessage { Text(timeoutMessage).font(.callout).foregroundStyle(.red) }
+            Text("Applies to the next job.").font(.callout).foregroundStyle(.secondary)
+        }
+    }
+
+    private func chooseThink(_ value: ThinkSetting) {
+        think = value
+        environment.ollamaSettings.setThink(value)
+    }
+
+    private func applyTimeout() {
+        let trimmed = timeoutText.trimmingCharacters(in: .whitespaces)
+        if let value = Int(trimmed), environment.ollamaSettings.setTimeoutSeconds(value) {
+            timeoutMessage = nil
+        } else {
+            timeoutMessage = "Enter a value between 10 and 1800."
+        }
+        timeoutText = String(environment.ollamaSettings.timeoutSeconds)      // keep the previous value when rejected
     }
 
     // MARK: Test the model and the queue (user story 4)
