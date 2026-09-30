@@ -89,13 +89,15 @@ Packages/MemorriCore/
 │   │   ├── JSONValue.swift                 # values for schemas and answers (new)
 │   │   ├── SchemaValidator.swift           # exact-schema check of answers (new)
 │   │   ├── OllamaService.swift             # status, model list, default model (new)
+│   │   ├── PictureConverter.swift          # HEIC/PNG to JPEG 0.9 for the server (new)
 │   │   └── SamplePicture.swift             # built-in synthetic picture (new)
 │   ├── Analysis/
 │   │   ├── AnalysisJobStore.swift          # records, protocol, GRDB store (new)
 │   │   ├── StoredPictureProvider.swift     # reads the stored analysis copy for a job (new)
 │   │   ├── AnalysisQueue.swift             # the serial loop, retry policy, progress (new)
 │   │   ├── AnalysisLine.swift              # menu texts (new)
-│   │   └── ModelTestJob.swift              # prompt, schema, runner (new)
+│   │   ├── ModelTestJob.swift              # prompt, schema, runner (new)
+│   │   └── ModelTestResultLine.swift       # the result line under Test the model (new)
 │   ├── Settings/
 │   │   └── OllamaSettings.swift            # address, model, think, timeout, paused (new)
 │   └── Storage/
@@ -104,7 +106,7 @@ Packages/MemorriCore/
 docs/architecture/decisions/                # 0011, 0012 (proposed now), 0013 (from the spike)
 ```
 
-**Structure Decision**: same two-part layout as specs 001 and 002. The queue, service and client depend only on protocols (`OllamaTransport`, `AnalysisJobStoring`, `AnalysisJobRunning`, `TimeSource`, `QueueSleeping`), so every branch (server down, slow, invalid answer, quit mid-job, pause) is unit-tested with fakes; `OllamaURLSessionTransport`, the picture adapter and the views are the only parts that need the real system, covered by the spike and the quickstart.
+**Structure Decision**: same two-part layout as specs 001 and 002. The queue, service and client depend only on protocols (`OllamaTransport`, `AnalysisJobStoring`, `AnalysisJobRunning`, `TimeSource`, `QueueSleeping`), so every branch (server down, slow, invalid answer, quit mid-job, pause) is unit-tested with fakes; `OllamaURLSessionTransport`, `OllamaService.live(settings:)` and the views are the only parts that need the real system, covered by the spike and the quickstart.
 
 ## Complexity Tracking
 

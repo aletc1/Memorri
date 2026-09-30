@@ -1,6 +1,6 @@
 # 12. A durable, serial analysis queue in the local database
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-30
 - Related: spec 003 (FR-012 to FR-016), ADR 0003, ADR 0005, spec 002 ADR 0009
 

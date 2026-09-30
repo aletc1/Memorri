@@ -51,9 +51,9 @@ public struct InstalledModel: Sendable, Equatable {
 public enum ThinkSetting: String, Sendable, CaseIterable { case off, low, medium, high }
 
 public enum ThinkWireValue: Sendable, Equatable {
-    case bool(Bool), level(String)
-    /// `off` or a model that does not think gives `.bool(false)`; a level gives `.level` when
-    /// `acceptsLevels`, else `.bool(true)`.
+    case bool(Bool), level(String), omitted
+    /// A model that does not think gives `.omitted` (no `think` field); `off` gives `.bool(false)`;
+    /// a level gives `.level` when `acceptsLevels`, else `.bool(true)`.
     public static func make(setting: ThinkSetting, modelThinks: Bool, acceptsLevels: Bool) -> ThinkWireValue
     /// From the spike (ADR 0013): a small built-in rule by model name (default: boolean only).
     public static func acceptsLevels(modelName: String) -> Bool
@@ -80,6 +80,10 @@ public struct ChatResponse: Sendable, Equatable {
     public let loadDurationNanoseconds: Int64?
     public let promptEvalNanoseconds: Int64?
     public let evalCount: Int?
+}
+
+public enum OllamaClientError: Error, Sendable, Equatable {
+    case serverError(Int), requestRejected, badResponse, timedOut, unreachable, redirectRefused
 }
 
 public struct OllamaClient: Sendable {
@@ -142,7 +146,10 @@ public struct ModelList: Sendable, Equatable {
 public actor OllamaService {
     public static let checkTimeout: TimeInterval = 5
     public init(settings: OllamaSettings, makeTransport: @escaping @Sendable (LoopbackAddress) -> any OllamaTransport,
-                time: any TimeSource = SystemTimeSource())
+                time: any TimeSource = SystemTimeSource(),
+                sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) })
+    /// Defined in `OllamaURLSessionTransport.swift` so no other file names the session type.
+    public static func live(settings: OllamaSettings) -> OllamaService
     public private(set) var status: ServerStatus { get }
     /// One check at a time; a call made while one runs joins it (FR-004).
     @discardableResult public func check() async -> ServerStatus
@@ -160,7 +167,9 @@ public struct ModelRunRecord: Sendable, Equatable { /* columns of model_runs */ 
 
 public protocol AnalysisJobStoring: Sendable {
     func enqueue(_ job: AnalysisJobRecord) throws
-    func recoverRunningJobs() throws                          // running -> waiting at start
+    func job(id: String) throws -> AnalysisJobRecord?
+    func latestRun(jobID: String) throws -> ModelRunRecord?   // newest attempt, for the result line
+    @discardableResult func recoverRunningJobs() throws -> Int   // running -> waiting at start; returns how many
     func nextRunnable(now: Date) throws -> AnalysisJobRecord? // waiting, not_before passed, oldest first
     func nextWakeUp(now: Date) throws -> Date?                // earliest future not_before
     func markRunning(id: String, now: Date) throws
@@ -198,6 +207,7 @@ public struct RetryPolicy: Sendable, Equatable {
 public struct QueueProgress: Sendable, Equatable {
     public let counts: JobCounts
     public let paused: Bool
+    public static func holdingReason(for status: ServerStatus) -> String?
     public let holdingReason: String?         // mapped from ServerStatus: notReachable/timedOut -> "Ollama not reachable"; noVisionModel/modelMissing -> "model not installed"; noModelChosen -> "choose a model"
 }
 
@@ -208,7 +218,8 @@ public actor AnalysisQueue {
                 time: any TimeSource = SystemTimeSource(), sleeper: any QueueSleeping)
     public func start() async                 // recovers running jobs, then runs the loop
     public func stop() async
-    public func enqueueTest(imageID: String?) throws          // nil = built-in sample
+    @discardableResult public func enqueueTest(imageID: String?) throws -> String   // nil = built-in sample; returns the job id
+    public func progress() -> QueueProgress
     public func nudge()                       // wake the loop (settings changed, resume, retry)
     public func pause(_ paused: Bool)
     public func retryFailed() throws
@@ -217,6 +228,7 @@ public actor AnalysisQueue {
 }
 
 public protocol QueueSleeping: Sendable { func sleep(for: Duration) async throws }   // real and fake
+public struct RealQueueSleeper: QueueSleeping { public init() }
 
 /// Exact menu texts (FR-016). Pure.
 public enum AnalysisLine {
@@ -225,7 +237,13 @@ public enum AnalysisLine {
 
 // MARK: The test job and the built-in picture
 
+/// The line under "Test the model": `Answer valid in 12.4 s: "…"` or `Failed: <reason>`; nil while unfinished.
+public enum ModelTestResultLine {
+    public static func text(job: AnalysisJobRecord, run: ModelRunRecord?) -> String?
+}
+
 public enum ModelTestJob {
+    public static let thinkingMarker = "\n\n[thinking]\n"    // separates the answer from thinking text in raw_answer
     public static let promptVersion = "test-v1"
     public static let schemaVersion = "test-v1"
     public static let schema: JSONValue       // { description: string, contains_text: boolean, text_sample: string }, all required
@@ -237,15 +255,29 @@ public struct ModelTestJobRunner: AnalysisJobRunning {
                 settings: OllamaSettings, time: any TimeSource)
 }
 
+public struct StoredPicture: Sendable, Equatable {
+    public let data: Data; public let width: Int; public let height: Int
+    public var longEdge: Int { max(width, height) }
+}
+
 public protocol AnalysisPictureProviding: Sendable {
-    /// The analysis copy of a stored picture, or nil when it is no longer stored.
-    func analysisPicture(imageID: String) throws -> (data: Data, longEdge: Int, width: Int, height: Int)?
+    /// The analysis copy of a stored picture (HEIC), or nil when it is no longer stored.
+    func analysisPicture(imageID: String) throws -> StoredPicture?
+}
+
+/// Reads analysis copies from the capture folder; lives in the core package, not in the app.
+public struct StoredPictureProvider: AnalysisPictureProviding { public init(paths: AppPaths, store: CaptureStore) }
+
+/// The server rejects HEIC (spike), so stored copies are sent as JPEG 0.9.
+public enum PictureConverter {
+    public static func jpegData(from data: Data) throws -> Data
+    public static func jpegData(from image: CGImage) throws -> Data
 }
 
 public enum SamplePicture {
     /// A synthetic calendar-like picture with known texts ("Team sync", "10:00"), drawn in code (R10).
     public static func make(longEdge: Int) -> CGImage
-    public static let knownTexts: [String]
+    public static let knownTexts: [String]     // the five weekdays, "Team sync" and "10:00"
 }
 ```
 

@@ -1,6 +1,6 @@
 # 11. One network component, loopback addresses only
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-30
 - Related: spec 003 (FR-002, FR-019), constitution principle I, ADR 0005
 

@@ -1,6 +1,6 @@
 # 13. How the app asks the model: request format and defaults from the spike
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-30
 - Related: spec 003 (FR-008 to FR-010, FR-018, `specs/003-ollama-connector/spike-report.md`), ADR 0005, ADR 0004
 
