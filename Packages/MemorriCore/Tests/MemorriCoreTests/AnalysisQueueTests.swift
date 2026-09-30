@@ -266,4 +266,28 @@ import Testing
         #expect(job.imageId == "image-7" && job.kind == "test")
         await rig.queue.stop()
     }
+
+    // MARK: job kinds (spec 004)
+
+    @Test func enqueueWithAKindCreatesAWaitingJobOfThatKindAndWakesTheLoop() async throws {
+        let rig = try makeRig(); defer { rig.temp.cleanUp() }
+        await rig.queue.start()
+        try await Task.sleep(for: .milliseconds(50))              // the loop is idle and waiting for a wake
+        let id = try await rig.queue.enqueue(kind: "analyse", imageID: "image-9")
+        #expect(await waitUntil { (try? rig.store.counts().finished) == 1 })
+        let job = try #require(try rig.store.job(id: id))
+        #expect(job.kind == "analyse" && job.imageId == "image-9")
+        #expect(rig.runner.order == [id])
+        await rig.queue.stop()
+    }
+
+    @Test func enqueueAnalysisCreatesOneAnalyseJobPerPictureInOrder() async throws {
+        let runner = FakeJobRunner(latch: FakeLatch())             // closed: jobs stay waiting
+        let rig = try makeRig(runner: runner); defer { rig.temp.cleanUp() }
+        let enqueuer: any AnalysisEnqueuing = rig.queue
+        await enqueuer.enqueueAnalysis(imageIDs: ["a", "b", "c"])
+        #expect(try rig.store.counts().waiting == 3)
+        let first = try #require(try rig.store.nextRunnable(now: Date(timeIntervalSinceReferenceDate: 1e9)))
+        #expect(first.kind == "analyse" && first.imageId == "a")
+    }
 }

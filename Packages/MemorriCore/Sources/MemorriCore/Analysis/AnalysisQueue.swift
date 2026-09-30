@@ -11,6 +11,12 @@ public struct RealQueueSleeper: QueueSleeping {
     public func sleep(for duration: Duration) async throws { try await Task.sleep(for: duration) }
 }
 
+/// What the capture step needs to put pictures in the queue, so it does not depend on the queue itself.
+public protocol AnalysisEnqueuing: Sendable {
+    /// One `analyse` job per picture, in the order given.
+    func enqueueAnalysis(imageIDs: [String]) async
+}
+
 /// Three attempts per job; after the first failure wait 10 s, after the second 60 s (ADR 0012).
 public struct RetryPolicy: Sendable, Equatable {
     public static let standard = RetryPolicy(maxAttempts: 3, waits: [10, 60])
@@ -55,7 +61,7 @@ public struct QueueProgress: Sendable, Equatable {
 
 /// Runs the durable jobs one at a time (ADR 0012). One long-lived loop does all the work, so two
 /// jobs can never run together. Jobs live in the database, so a quit or a crash loses nothing.
-public actor AnalysisQueue {
+public actor AnalysisQueue: AnalysisEnqueuing {
     /// How often a closed gate is asked again.
     public static let recheckInterval: Duration = .seconds(30)
 
@@ -116,6 +122,16 @@ public actor AnalysisQueue {
         return job.id
     }
 
+    /// A job of any kind; the runner registered for the kind does the work. Returns the job id.
+    @discardableResult
+    public func enqueue(kind: String, imageID: String?) throws -> String {
+        let job = AnalysisJobRecord(kind: kind, imageId: imageID, createdAt: time.now())
+        try store.enqueue(job)
+        publish()
+        Task { await wake.fire() }
+        return job.id
+    }
+
     /// Wakes the loop: settings changed, resume, retry.
     public func nudge() {
         Task { await wake.fire() }
@@ -140,6 +156,25 @@ public actor AnalysisQueue {
     public func clearFinished() throws {
         try store.clearFinished()
         publish()
+    }
+
+    public func enqueueAnalysis(imageIDs: [String]) {
+        var added = 0
+        for id in imageIDs {
+            // Jobs are created one after another; a fixed clock would give them one creation time, and the
+            // store orders equal times by id, so nudge the time to keep the given order.
+            if (try? enqueueOrdered(kind: "analyse", imageID: id, offset: added)) != nil { added += 1 }
+        }
+        if added > 0 {
+            Self.logger.info("enqueued analyse=\(added) reason=capture")
+            publish()
+            Task { await wake.fire() }
+        }
+    }
+
+    private func enqueueOrdered(kind: String, imageID: String?, offset: Int) throws {
+        let job = AnalysisJobRecord(kind: kind, imageId: imageID, createdAt: time.now().addingTimeInterval(Double(offset) * 0.001))
+        try store.enqueue(job)
     }
 
     public func progress() -> QueueProgress {
