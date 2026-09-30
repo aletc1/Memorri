@@ -73,7 +73,9 @@ public enum DateResolver {
 
     /// `field` is `start`, `end`, `due` or `remind`. An empty `remind` text asks for the deadline reminder rule.
     public static func resolve(text: String, field: String, draft: FindingDraft, in context: ResolutionContext) -> ResolvedValue {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // In a month view a bare number is the label of the entry's cell (the model often gives it as the date), not a date.
+        if !context.cells.isEmpty, trimmed.count <= 2, Int(trimmed) != nil { trimmed = "" }
         if trimmed.isEmpty {
             if field == "remind" { return deadlineReminder(draft, context) }
             // An all-day banner in a week view, or an entry without a time in a month cell, has no text of its own for its

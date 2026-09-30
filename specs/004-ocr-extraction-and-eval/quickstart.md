@@ -98,3 +98,25 @@ How to see that the feature works end to end. Most steps run from a terminal on 
 | Tags, context | not built yet (0) |
 
 Checks through the app (Debug switch, isolated home): the week case and the email case were analysed, every finding cited existing lines (`select count(*) from findings where cited_lines_json = '[]'` was 0, SC-004), and the model runs were stored (`classify`, `extract`). With the fake server, `extract-bad-citation` discards the finding that cites line 9999 and keeps the rest, and `extract-empty` gives an analysed result with no findings.
+
+### Final run (2026-09-30, tasks T078, T083, T100): dates, durations, tags, contexts
+
+`memorri-eval run` on the 27 synthetic cases, `qwen3.8:27b-mlx`, think off, size 2048, `classify-v2` and `extract-<kind>-v4`, then `run --replay` of the same model answers with the last code change (a lone day number in a month cell). Mean 23.8 s per case with the model.
+
+| Measure | Value | Target |
+|---|---|---|
+| Findings precision / recall | 0.92 / 0.98 | at least 0.85 (SC-001) |
+| Field accuracy | 0.94 | at least 0.90 (SC-002) |
+| Classification accuracy | 0.96 (26 of 27; `other-empty-window` came back as a month calendar) | at least 0.90 |
+| Reading: exact / box overlap | 0.95 / 0.95 | 0.95 (SC-003) |
+| Context accuracy | 1.00 | SC-007 |
+| Tags | application 1.00, clock style 1.00, platform look 0.95, theme 0.96, remote session 1.00, language 0.52 | application, platform look, clock style at least 0.90 (SC-012) |
+| Wrong tags with high confidence | 2 in 27 cases (a Linux remote desktop called macOS, a drawn desktop called dark) | at most 1 in 20: **missed narrowly** |
+
+How the run got here (same set, each step measured): the first run resolved every date in the Mac's zone (precision 0.36, recall 0.43); using the context's zone gave 0.59 and 0.72; new extract prompts 0.76 and 0.80; month cells and tag scoring 0.88 and 0.93; block heights measured from the fill inside the title box 0.90 and 0.96, field accuracy 0.83 to 0.95. See research "Changes made after the real runs".
+
+- **Dates (SC-005):** every relative-date and header-date case resolves to the expected instant in the expected zone, including the capture at 23:40 UTC read in New York (`chat-teams-midnight-zone`) and the week, day and month views. The one date that was still missing in the live run, an all-day entry in a month cell whose date the model gave as a bare `19`, is fixed and covered by tests (the replay above).
+- **Durations (SC-006):** every guessed end is flagged inferred with its reason (`block-height`, `default-60`, `end-of-day`) and no read value is flagged, except that the model sometimes takes an end time from the hour scale at the side (`calendar-day-teams-es-24h` in an earlier run, `chat-teams-tomorrow` in this one), which then counts as read. Measured from the drawn pictures, block heights give the exact minutes in 25 of 25 blocks; the pictures are drawn, so real calendars may differ.
+- **Contexts (Scenario 4, isolated home, SC-007):** two contexts with `window_title` hints were each assigned by their window title with `matched_json`; a picture with both titles is `none` with `{"tie":true,"contextIds":[...]}`; the picture's context chosen in the picker is `user`, survived **Reanalyse** and its zone (Asia/Tokyo) was used (`timezone_source = context`); deleting a context left its pictures unassigned and their findings intact. Each finding's `tags_json` equals its picture's rows in `capture_tags` (9 of 9). Typing into the Contexts fields cannot be automated (AX does not reach SwiftUI text fields): to be tried by hand.
+- **Window capture (T090):** a real capture of 3 displays stored 1, 5 and 2 windows (counts only were read) and finished in 503 ms; the capture data was deleted afterwards.
+- **What is still wrong and known:** the model adds a dateless task for polite requests in two cases (`Read the brief`, `Confirm your attendance`), paraphrases a title in three (`Send the report`, `Submit the expense report`, `Comida con Ana`), puts the message's sender in `people` in four, and the language tag is missing on pictures with few sentences. Visual tags reuse the classification's one confidence number, so a wrong guess looks confident; a per-tag confidence from the model is the obvious next step.
