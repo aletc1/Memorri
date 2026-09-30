@@ -43,10 +43,6 @@
   "screenKind" : "other",
   "tags" : [
     {
-      "key" : "platform_look",
-      "value" : "Windows"
-    },
-    {
       "key" : "language",
       "value" : "en"
     },

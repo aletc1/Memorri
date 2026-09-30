@@ -59,7 +59,8 @@ enum SyntheticChrome {
 
         var tags: [ExpectedTag] = []
         if let application = setup.application { tags.append(ExpectedTag(key: "application", value: application)) }
-        tags.append(ExpectedTag(key: "platform_look", value: setup.platform))
+        // Only a picture with some window frame or application look shows which operating system it is from.
+        if setup.look != .plain { tags.append(ExpectedTag(key: "platform_look", value: setup.platform)) }
         tags.append(ExpectedTag(key: "language", value: setup.language.rawValue))
         tags.append(ExpectedTag(key: "theme", value: setup.palette.dark ? "dark" : "light"))
         if let clock24 = setup.clock24 { tags.append(ExpectedTag(key: "clock_style", value: clock24 ? "24h" : "12h")) }

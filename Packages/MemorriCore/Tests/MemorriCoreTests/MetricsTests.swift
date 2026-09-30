@@ -161,4 +161,14 @@ import Testing
         #expect(s.tagResults["application"]?.correct == 1 && s.tagResults["remote_session"]?.correct == 1 && s.tagResults["theme"]?.wrong == 1)
         #expect(s.tagProblems?.count == 1 && s.tagProblems?.first?.contains("theme") == true)
     }
+
+    @Test func aStringJoinedToItsNeighbourByTheRecogniserStillCountsAsReadButShortOnesMustStandAlone() {
+        let g = golden(lines: [ExpectedLine(text: "Elena Mora", box: [10, 10, 100, 20]), ExpectedLine(text: "9:44 AM", box: [120, 10, 70, 20]),
+                               ExpectedLine(text: "1 PM", box: [0, 50, 40, 20]), ExpectedLine(text: "1", box: [0, 80, 10, 20])])
+        let r = result(lines: [FoundLine(text: "Elena Mora 9:44 AM", box: [10, 10, 180, 20]), FoundLine(text: "1PM", box: [0, 50, 40, 20]),
+                               FoundLine(text: "10:00", box: [0, 80, 40, 20])])
+        let s = score(g, r)
+        #expect(s.ocrExact == 3 && s.ocrExpected == 4)                 // the lone "1" is not found inside "10:00"
+        #expect(s.ocrOverlap == 3)
+    }
 }

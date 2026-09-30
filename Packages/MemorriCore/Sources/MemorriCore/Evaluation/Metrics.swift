@@ -271,7 +271,10 @@ public enum Metrics {
     private static func scoreLines(_ expected: [ExpectedLine], _ found: [FoundLine]) -> (exact: Int, expected: Int, overlap: Int, boxed: Int) {
         var exact = 0, overlap = 0, boxed = 0
         for line in expected {
-            let matches = found.filter { readable($0.text) == readable(line.text) }
+            let wanted = compact(line.text)
+            // A drawn string counts as read when a recognised line has it, alone or as part of a longer line (the recogniser joins
+            // strings that sit side by side, such as a sender's name and the time). Short strings must be a line of their own.
+            let matches = found.filter { compact($0.text) == wanted || (wanted.count >= 4 && compact($0.text).contains(wanted)) }
             if !matches.isEmpty { exact += 1 }
             if let box = line.box, box.count == 4 {
                 boxed += 1
@@ -280,6 +283,9 @@ public enum Metrics {
         }
         return (exact, expected.count, overlap, boxed)
     }
+
+    /// Spaces carry nothing for reading (`1 PM` and `1PM`), so they are left out when texts are compared.
+    static func compact(_ text: String) -> String { readable(text).filter { !$0.isWhitespace } }
 
     /// Reading is exact up to surrounding spaces and the kind of dash: the recogniser writes every dash as a hyphen.
     static func readable(_ text: String) -> String {
