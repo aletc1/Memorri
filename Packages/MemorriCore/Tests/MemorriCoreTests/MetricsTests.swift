@@ -152,4 +152,13 @@ import Testing
         #expect(Metrics.band(forConfidence: 0.85) == "mid")
         #expect(Metrics.band(forConfidence: 0.851) == "high")
     }
+
+    @Test func applicationNamesMatchWhenOneContainsTheOtherButOtherTagsNeedToBeEqual() {
+        let g = golden(tags: [ExpectedTag(key: "application", value: "Teams"), ExpectedTag(key: "remote_session", value: "Citrix"), ExpectedTag(key: "theme", value: "dark")])
+        let r = result(tags: [FoundTag(key: "application", value: "Microsoft Teams", confidence: 0.9), FoundTag(key: "remote_session", value: "citrix workspace", confidence: 0.9),
+                              FoundTag(key: "theme", value: "dar", confidence: 0.9)])
+        let s = score(g, r)
+        #expect(s.tagResults["application"]?.correct == 1 && s.tagResults["remote_session"]?.correct == 1 && s.tagResults["theme"]?.wrong == 1)
+        #expect(s.tagProblems?.count == 1 && s.tagProblems?.first?.contains("theme") == true)
+    }
 }

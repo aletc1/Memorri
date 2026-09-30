@@ -80,6 +80,8 @@ public struct CaseScore: Sendable, Equatable, Codable {
     public let disagreements: [FoundFinding]
     public let foundDetails: [FoundDetail]
     public let seconds: Double
+    /// Each wrong or missing tag in words (`theme: expected dark, found light (0.93)`), for reading what went wrong.
+    public var tagProblems: [String]? = nil
 
     public struct FoundDetail: Sendable, Equatable, Codable { public let confidence: Double; public let matched: Bool }
 
@@ -153,6 +155,7 @@ public enum Metrics {
         }
 
         let (tagResults, wrongHigh) = scoreTags(golden.expected.tags ?? [], result.tags)
+        let tagProblems = describeTagProblems(golden.expected.tags ?? [], result.tags)
         let contextCorrect = golden.expected.context.map { $0.lowercased() == (result.contextName ?? "").lowercased() }
         let ocr = scoreLines(golden.expected.lines ?? [], result.lines)
 
@@ -168,7 +171,7 @@ public enum Metrics {
                          contextCorrect: contextCorrect, tagResults: tagResults, wrongHighConfidenceTags: wrongHigh,
                          ocrExact: ocr.exact, ocrExpected: ocr.expected, ocrOverlap: ocr.overlap, ocrBoxed: ocr.boxed,
                          missed: match.unmatchedExpected.map { expected[$0] }, unexpected: unexpected,
-                         disagreements: disagreements, foundDetails: details, seconds: result.seconds)
+                         disagreements: disagreements, foundDetails: details, seconds: result.seconds, tagProblems: tagProblems.isEmpty ? nil : tagProblems)
     }
 
     public static func summarise(_ scores: [(GoldenCase, CaseScore)]) -> Summary {
@@ -217,18 +220,36 @@ public enum Metrics {
         return (compared, equal)
     }
 
+    /// Names of applications and sessions vary in how much they say (`Teams`, `Microsoft Teams`): one containing the other is the
+    /// same. Every other tag must be equal.
+    static func sameTag(_ key: String, _ a: String, _ b: String) -> Bool {
+        let x = a.lowercased().trimmingCharacters(in: .whitespaces), y = b.lowercased().trimmingCharacters(in: .whitespaces)
+        if x == y { return true }
+        guard ["application", "remote_session", "calendar_name"].contains(key), !x.isEmpty, !y.isEmpty else { return false }
+        return x.contains(y) || y.contains(x)
+    }
+
     private static func scoreTags(_ expected: [ExpectedTag], _ found: [FoundTag]) -> ([String: TagScore], Int) {
         var results: [String: TagScore] = [:], wrongHigh = 0
         for tag in expected {
             let same = found.filter { $0.key == tag.key }
             if same.isEmpty { results[tag.key, default: TagScore()].missing += 1 }
-            else if same.contains(where: { $0.value.lowercased() == tag.value.lowercased() }) { results[tag.key, default: TagScore()].correct += 1 }
+            else if same.contains(where: { sameTag(tag.key, $0.value, tag.value) }) { results[tag.key, default: TagScore()].correct += 1 }
             else {
                 results[tag.key, default: TagScore()].wrong += 1
                 if same.contains(where: { $0.confidence >= highConfidence }) { wrongHigh += 1 }
             }
         }
         return (results, wrongHigh)
+    }
+
+    private static func describeTagProblems(_ expected: [ExpectedTag], _ found: [FoundTag]) -> [String] {
+        expected.compactMap { tag in
+            let same = found.filter { $0.key == tag.key }
+            if same.isEmpty { return "\(tag.key): expected \(tag.value), none found" }
+            if same.contains(where: { sameTag(tag.key, $0.value, tag.value) }) { return nil }
+            return "\(tag.key): expected \(tag.value), found " + same.map { "\($0.value) (\(String(format: "%.2f", $0.confidence)))" }.joined(separator: ", ")
+        }
     }
 
     private static func scoreLines(_ expected: [ExpectedLine], _ found: [FoundLine]) -> (exact: Int, expected: Int, overlap: Int, boxed: Int) {

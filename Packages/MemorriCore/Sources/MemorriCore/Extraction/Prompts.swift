@@ -2,20 +2,22 @@ import Foundation
 
 /// The instructions sent to the model (ADR 0014). Changing one changes its version.
 public enum ExtractionPrompts {
-    public static let classifyVersion = "classify-v1"
+    public static let classifyVersion = "classify-v2"
     /// More lines than this are cut before they go to the model; the smallest boxes go first (research R4).
     public static let maxLines = 600
 
     public static func classifyPrompt() -> String {
         let kinds = ScreenKind.allCases.map(\.rawValue).joined(separator: ", ")
         return "Look at this screenshot. Say which kind of screen it is (\(kinds)), how sure you are (0 to 1), "
-            + "the application, whether it looks like macos, windows or linux, "
+            + "the application as people call it, such as Outlook, Teams, Apple Mail or Slack (say Web calendar or Web mail for a page in a browser), "
+            + "whether the operating system it shows looks like macos, windows or linux "
+            + "(for a remote or virtual desktop, the system of the desktop inside the window, not of the Mac around it), "
             + "whether it is shown inside a remote or virtual desktop (and which client), "
             + "the theme (light or dark) and the calendar name if one is visible. "
             + "Use empty strings for what you cannot tell."
     }
 
-    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v2" }
+    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v3" }
 
     private static func description(of kind: ScreenKind) -> String {
         switch kind {
@@ -72,6 +74,8 @@ public enum ExtractionPrompts {
             + "leave out headlines, newsletters and text about other things. "
             + "For each one give the numbers of the lines that show it in cited_lines. "
             + "The title is a short name for it made of words from those lines: no line numbers, no labels like (L5) and no dates. "
+            + "Keep the wording of the text: from \"Submit the grant proposal by 2026-11-06.\" the title is \"Submit the grant proposal\"; "
+            + "from \"Please send me the report by tomorrow\" it is \"Send the report\". "
             + "Copy dates and times exactly as written into start_text, end_text, date_text, due_text and remind_text. "
             + "A sentence like \"Maria needs the budget figures by Friday 23 October\" is a task: title \"Budget figures\", "
             + "people [\"Maria\"], due_text \"Friday 23 October\". "

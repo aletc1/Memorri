@@ -18,8 +18,10 @@ import Testing
         var n = 1
         if let title { lines.append(RecognisedLine(n: n, text: title, box: PixelBox(x: 20, y: 10, width: 200, height: 24), confidence: 0.9)); n += 1 }
         for (i, number) in numbers.enumerated() {
-            let x = (i % 7) * 200 + (rightAligned ? 150 : 10), y = 60 + (i / 7) * 150
-            lines.append(RecognisedLine(n: n, text: "\(number)", box: PixelBox(x: x, y: y, width: 22, height: 18), confidence: 0.9)); n += 1
+            // One digit is narrower than two, so the edge a label is aligned to is the one that stays put.
+            let width = number >= 10 ? 22 : 11
+            let x = (i % 7) * 200 + (rightAligned ? 172 - width : 10), y = 60 + (i / 7) * 150
+            lines.append(RecognisedLine(n: n, text: "\(number)", box: PixelBox(x: x, y: y, width: width, height: 18), confidence: 0.9)); n += 1
         }
         return lines
     }
@@ -37,7 +39,7 @@ import Testing
     @Test func everyDayLabelGetsItsDateAndTheSpillDaysBelongToTheNeighbouringMonths() {
         let lines = grid()
         let headers = cells(lines)
-        #expect(headers.count == 36)
+        #expect(headers.count == 42 && headers.filter { $0.line > 0 }.count == 36)
         #expect(dayOf(lines, headers, row: 0, column: 0) == "2026-9-28")
         #expect(dayOf(lines, headers, row: 0, column: 3) == "2026-10-1")
         #expect(dayOf(lines, headers, row: 1, column: 0) == "2026-10-5")
@@ -74,7 +76,7 @@ import Testing
         let lines = grid() + [RecognisedLine(n: 99, text: "09:30 Budget", box: PixelBox(x: 10, y: 90, width: 100, height: 18), confidence: 0.9),
                               RecognisedLine(n: 100, text: "2026", box: PixelBox(x: 10, y: 20, width: 40, height: 18), confidence: 0.9),
                               RecognisedLine(n: 101, text: "45", box: PixelBox(x: 10, y: 20, width: 40, height: 18), confidence: 0.9)]
-        #expect(cells(lines).count == 36)
+        #expect(cells(lines).filter { $0.line > 0 }.count == 36)
     }
 
     @Test func fewerThanSevenLabelsIsNotAMonthGrid() {
@@ -90,16 +92,34 @@ import Testing
         FindingDraft(kind: .appointment, title: "Budget meeting", citedLines: cited, startText: start, dateText: date, allDay: allDay, columnLine: column)
     }
 
-    @Test func theCellTheModelNamesGivesTheDay() {
+    @Test func theCellTheEntrySitsInGivesTheDayEvenWhenTheModelNamesAnotherLabel() {
         var lines = grid()
         let eventLine = lines.count + 1
-        lines.append(RecognisedLine(n: eventLine, text: "09:00 Budget meeting", box: PixelBox(x: 10, y: 60 + 150 + 30, width: 160, height: 18), confidence: 0.9))
+        lines.append(RecognisedLine(n: eventLine, text: "09:00 Budget meeting", box: PixelBox(x: 10, y: 60 + 150 + 30, width: 160, height: 18), confidence: 0.9))   // Monday 5
         let labelForThe6th = lines.first { $0.text == "6" }!.n
         let result = DateResolver.resolve(text: "09:00", field: "start", draft: draft(cited: [eventLine], start: "09:00", column: labelForThe6th), in: resolver(lines))
-        #expect(result.date == at(2026, 10, 6, 9, 0) && result.provenance == FieldProvenance(origin: .read, rule: "month-cell"))
+        #expect(result.date == at(2026, 10, 5, 9, 0) && result.provenance == FieldProvenance(origin: .read, rule: "month-cell"))
     }
 
-    @Test func withoutTheModelsCellTheLabelAboveTheLineInItsColumnIsUsed() {
+    @Test func theModelsLabelIsUsedForALineWithoutAPosition() {
+        let lines = grid()
+        let label = lines.first { $0.text == "6" }!.n
+        let result = DateResolver.resolve(text: "09:00", field: "start", draft: draft(cited: [999], start: "09:00", column: label), in: resolver(lines))
+        #expect(result.date == at(2026, 10, 6, 9, 0) && result.provenance?.rule == "month-cell")
+    }
+
+    @Test func aDayLabelTheReadingMissedStillHasItsCell() {
+        // The reading drops single digits ("6", "8", "1" and "3" here); the cells are still there with the right dates.
+        var lines = grid().filter { !["6", "8", "3"].contains($0.text) || $0.box.y > 60 + 4 * 150 }
+        lines = lines.enumerated().map { RecognisedLine(n: $0.offset + 1, text: $0.element.text, box: $0.element.box, confidence: 0.9) }
+        let eventLine = lines.count + 1
+        lines.append(RecognisedLine(n: eventLine, text: "10:00 Budget meeting", box: PixelBox(x: 210, y: 60 + 150 + 30, width: 160, height: 18), confidence: 0.9))  // Tuesday 6
+        let result = DateResolver.resolve(text: "10:00", field: "start", draft: draft(cited: [eventLine], start: "10:00"), in: resolver(lines))
+        #expect(result.date == at(2026, 10, 6, 10, 0))
+        #expect(cells(lines).count == 42)
+    }
+
+    @Test func theLabelAboveTheLineInItsColumnGivesTheDay() {
         var lines = grid()
         let eventLine = lines.count + 1
         // Row 3 (from 0), column 1: Tuesday 20 October.
@@ -108,12 +128,11 @@ import Testing
         #expect(result.date == at(2026, 10, 20, 14, 30) && result.provenance?.rule == "month-cell")
     }
 
-    @Test func aLabelAtTheRightOfItsCellStillFindsItsCellWhenTheModelNamesIt() {
+    @Test func aLabelAtTheRightOfItsCellStillFindsItsCell() {
         var lines = grid(rightAligned: true)
         let eventLine = lines.count + 1
         lines.append(RecognisedLine(n: eventLine, text: "16:00 Workshop", box: PixelBox(x: 410, y: 60 + 2 * 150 + 30, width: 140, height: 18), confidence: 0.9))
-        let label = lines.first { $0.text == "14" }!.n                     // row 2, column 2: Wednesday 14
-        let result = DateResolver.resolve(text: "16:00", field: "start", draft: draft(cited: [eventLine], start: "16:00", column: label), in: resolver(lines))
+        let result = DateResolver.resolve(text: "16:00", field: "start", draft: draft(cited: [eventLine], start: "16:00"), in: resolver(lines))   // row 2, column 2
         #expect(result.date == at(2026, 10, 14, 16, 0))
     }
 

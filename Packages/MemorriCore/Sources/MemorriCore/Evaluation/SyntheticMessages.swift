@@ -94,6 +94,11 @@ enum SyntheticMessages {
             ("IT support", "Password expiry", "Your password will expire"), ("Newsletter", "Weekly digest", "Top stories this week"),
         ]
 
+        let bandeja: [(sender: String, subject: String, preview: String)] = [
+            ("Finanzas", "Factura 4471", "Adjunto la factura de"), ("Recursos Humanos", "Novedades de beneficios", "Pronto empieza la inscripción"),
+            ("Soporte TI", "Caducidad de contraseña", "Su contraseña va a caducar"), ("Boletín", "Resumen semanal", "Las noticias de esta semana"),
+        ]
+
         // Email
         var s = SyntheticSetup(name: "email-apple-mail-invite", look: .appleMail, application: "Apple Mail", platform: "macOS", palette: .mac,
                                zone: mac, capturedAt: capture, windowTitle: "Inbox", features: [])
@@ -133,7 +138,7 @@ enum SyntheticMessages {
         s = SyntheticSetup(name: "email-web-es-relative", look: .web, application: "Web mail", platform: "macOS", language: .es, clock24: nil,
                            palette: .light, zone: mac, capturedAt: capture, windowTitle: "Bandeja de entrada - Correo", features: ["relative-date"])
         out.append(try SyntheticChrome.make(s) { c, a in
-            email(c, a, s, others: inbox, from: "Marta Vidal", subject: "Informe", dateLine: "Fecha: miércoles, 14 de octubre de 2026, 09:12",
+            email(c, a, s, others: bandeja, from: "Marta Vidal", subject: "Informe", dateLine: "Fecha: miércoles, 14 de octubre de 2026, 09:12",
                   body: ["Hola,", "Necesito el informe para el viernes.", "Gracias,", "Marta"],
                   findings: [task("Informe", due: SyntheticTime.date(2026, 10, 16, zone: mac))])
         })

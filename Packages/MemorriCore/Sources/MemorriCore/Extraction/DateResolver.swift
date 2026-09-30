@@ -6,11 +6,13 @@ public struct DateHeader: Sendable, Equatable {
     public let midX: Double
     /// Only month views use it: the vertical centre of a day label.
     public let midY: Double
+    /// Only month views use it: how wide the cell is (`midX` is then the cell's centre, not the label's).
+    public let cellWidth: Double
     /// Year, month and day only.
     public let date: DateComponents
 
-    public init(line: Int, midX: Double, midY: Double = 0, date: DateComponents) {
-        self.line = line; self.midX = midX; self.midY = midY; self.date = date
+    public init(line: Int, midX: Double, midY: Double = 0, cellWidth: Double = 0, date: DateComponents) {
+        self.line = line; self.midX = midX; self.midY = midY; self.cellWidth = cellWidth; self.date = date
     }
 }
 
@@ -48,7 +50,7 @@ public struct ResolvedValue: Sendable, Equatable {
 /// (research R6): `explicit-date`, `header-column`, `relative-day`, `end-of-week`, `weekday-only`, `time-only`,
 /// `deadline-reminder`. What no rule settles stays as written.
 public enum DateResolver {
-    private struct Day: Equatable {
+    private struct Day: Hashable {
         var year: Int, month: Int, day: Int
     }
 
@@ -76,8 +78,9 @@ public enum DateResolver {
             if field == "remind" { return deadlineReminder(draft, context) }
             // An all-day banner in a week view, or an entry without a time in a month cell, has no text of its own for its
             // day: the header above its column, or the label of its cell, gives it.
-            let monthEntry = !context.cells.isEmpty && draft.allDay != false
-            if field == "start", draft.allDay == true || monthEntry, draft.startText == nil, draft.dateText == nil,
+            // The model often puts the month's title in date_text; a text without a day does not date anything.
+            let calendarEntry = (!context.cells.isEmpty || !context.headers.isEmpty) && draft.allDay != false
+            if field == "start", draft.allDay == true || calendarEntry, draft.startText.map(isBlank) ?? true, !nameDay(draft.dateText, context),
                let header = headerDay(draft: draft, context: context), let date = makeDate(header.day, hour: nil, minute: nil, zone: context.timezone) {
                 return ResolvedValue(date: date, allDay: true, provenance: FieldProvenance(origin: .read, rule: header.rule), unresolvedText: nil)
             }
@@ -157,6 +160,14 @@ public enum DateResolver {
         return Base(day: today, rule: "time-only", reason: nil)
     }
 
+    private static func isBlank(_ text: String) -> Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    /// True when the text names a day of its own: a date, a weekday or a relative word.
+    private static func nameDay(_ text: String?, _ context: ResolutionContext) -> Bool {
+        guard let text, !isBlank(text), let parsed = DateParser.parse(text, locales: context.locales, order: context.dateOrder) else { return false }
+        return parsed.day != nil || parsed.weekday != nil || parsed.relative != nil
+    }
+
     /// The header above the finding's column: the model's own `column_line` when it is a header, else the header whose
     /// horizontal centre is nearest to the centre of the first cited line. In a month view the headers are the day labels of
     /// the cells, and without the model's pick the nearest label above the line in its column is used.
@@ -167,12 +178,12 @@ public enum DateResolver {
         }
         let first = draft.citedLines.first.flatMap { n in context.lines.first { $0.n == n } }
         if !context.cells.isEmpty {
-            if let column = draft.columnLine, let cell = context.cells.first(where: { $0.line == column }), let found = day(cell) { return (found, "month-cell") }
-            guard let line = first else { return nil }
-            // Labels sit near a cell's left edge as often as at its centre: compare with the line's left edge, and weigh a
-            // sideways miss three times a vertical one, because a neighbouring column is worse than a row above.
+            // The cell the line sits in decides the day; the model's pick is only used for a line that has no position.
+            guard let line = first else {
+                return draft.columnLine.flatMap { column in context.cells.first { $0.line == column } }.flatMap(day).map { ($0, "month-cell") }
+            }
             func distance(_ cell: DateHeader) -> Double {
-                let sideways = abs(cell.midX - Double(line.box.x))
+                let sideways = abs(cell.midX - cell.cellWidth / 2 - Double(line.box.x))
                 let upwards = line.box.midY - cell.midY
                 return sideways * 3 + upwards
             }
@@ -255,9 +266,11 @@ public enum DateResolver {
 
     // MARK: Month cells
 
-    /// The day labels of a month view: lines that are only a number from 1 to 31. The month and year come from a title line
-    /// (`October 2026`), else from the capture. Days before the 1st and after the last belong to the neighbouring months,
-    /// which shows as the numbers dropping back (`30`, then `1`). `[]` when fewer than seven labels are found.
+    /// The cells of a month view, each with the date it shows. The day labels (lines that are only a number from 1 to 31) fix
+    /// the grid; a label the reading missed still has its cell, because a cell's date follows from its place (row and column),
+    /// and the dates come from the labels that were read, so the days before the 1st and after the last belong to the
+    /// neighbouring months on their own. The month comes from a title line (`October 2026`), else from the capture.
+    /// A cell has the line number of its label, or a negative number when no label was read. `[]` for fewer than seven labels.
     public static func monthCells(in lines: [RecognisedLine], locales: [Locale], reference: Date, timezone: TimeZone) -> [DateHeader] {
         let labels = lines.filter { line in
             let text = line.text.trimmingCharacters(in: .whitespaces)
@@ -265,18 +278,57 @@ public enum DateResolver {
         }
         guard labels.count >= 7 else { return [] }
 
-        // Reading order: rows by height, then left to right.
-        let heights = labels.map(\.box.height).sorted()
-        let rowGap = Double(max(1, heights[heights.count / 2]))
-        let byHeight = labels.sorted { $0.box.midY < $1.box.midY }
-        var rows: [[RecognisedLine]] = []
-        for label in byHeight {
-            if let last = rows.last?.first, abs(label.box.midY - last.box.midY) <= rowGap { rows[rows.count - 1].append(label) } else { rows.append([label]) }
+        func spacing(_ values: [Double]) -> Double? {
+            let gaps = zip(values, values.dropFirst()).map { $1 - $0 }.filter { $0 > 1 }
+            guard let smallest = gaps.min() else { return nil }
+            let single = gaps.filter { $0 <= smallest * 1.5 }.sorted()
+            return single[single.count / 2]
         }
-        let ordered = rows.flatMap { $0.sorted { $0.box.midX < $1.box.midX } }
-        let numbers = ordered.map { Int($0.text.trimmingCharacters(in: .whitespaces)) ?? 0 }
+        // Columns and rows, from the labels' centres.
+        let xs = Array(Set(labels.map { ($0.box.midX / 4).rounded() * 4 })).sorted()
+        let heights = labels.map(\.box.height).sorted()
+        let sameRow = Double(max(1, heights[heights.count / 2]))
+        var rowCentres: [Double] = []
+        for y in labels.map(\.box.midY).sorted() {
+            if let last = rowCentres.last, y - last <= sameRow { continue }
+            rowCentres.append(y)
+        }
+        var columnCentres: [Double] = []
+        for x in labels.map(\.box.midX).sorted() {
+            if let last = columnCentres.last, x - last <= sameRow { continue }
+            columnCentres.append(x)
+        }
+        guard let width = spacing(columnCentres) ?? spacing(xs), width > 0 else { return [] }
+        let height = spacing(rowCentres) ?? width
+        let minX = xs[0], minY = rowCentres[0]
+        struct Placed { let line: RecognisedLine; let number: Int; let row: Int; let column: Int }
+        let placed = labels.map { line in
+            Placed(line: line, number: Int(line.text.trimmingCharacters(in: .whitespaces)) ?? 0,
+                   row: Int(((line.box.midY - minY) / height).rounded()), column: Int(((line.box.midX - minX) / width).rounded()))
+        }
+        guard placed.allSatisfy({ (0...6).contains($0.column) }) else { return [] }
 
-        // The shown month: a title line with a month name, else the month of the reference.
+        // Where a label sits in its cell: the alignment whose edge varies least from one column to the next.
+        func spread(_ anchor: (RecognisedLine) -> Double) -> Double {
+            Dictionary(grouping: placed, by: \.column).values.reduce(0.0) { total, group in
+                let values = group.map { anchor($0.line) }
+                return total + (values.max() ?? 0) - (values.min() ?? 0)
+            }
+        }
+        let offsets: [(Double, (RecognisedLine) -> Double)] = [
+            (width / 2, { Double($0.box.x) }), (0, { $0.box.midX }), (-width / 2, { Double($0.box.x + $0.box.width) })]
+        let offset = offsets.min { spread($0.1) < spread($1.1) }!
+        var centreOfColumn: [Int: Double] = [:]
+        for (column, group) in Dictionary(grouping: placed, by: \.column) {
+            let anchors = group.map { offset.1($0.line) }.sorted()
+            centreOfColumn[column] = anchors[anchors.count / 2] + offset.0
+        }
+        func columnCentre(_ column: Int) -> Double {
+            centreOfColumn[column] ?? ((centreOfColumn.min { abs($0.key - column) < abs($1.key - column) }).map { $0.value + Double(column - $0.key) * width } ?? 0)
+        }
+        func rowCentre(_ row: Int) -> Double { minY + Double(row) * height }
+
+        // The month shown: a title line with a month name, else the month of the reference.
         let today = day(of: reference, zone: timezone)
         var month = today.month, year = today.year
         for line in lines {
@@ -287,36 +339,34 @@ public enum DateResolver {
             break
         }
 
-        // Split where the numbers drop back; decide which segment is the shown month.
-        var segments: [[Int]] = [[]]      // indexes into `ordered`
-        for index in numbers.indices {
-            if index > 0, numbers[index] < numbers[index - 1] { segments.append([]) }
-            segments[segments.count - 1].append(index)
-        }
-        var offsets = Array(repeating: 0, count: segments.count)            // months from the shown one
-        switch segments.count {
-        case 1: break
-        case 2:
-            let leading = numbers[segments[0][0]] >= 20 && numbers[segments[0].last!] >= 25
-            offsets = leading ? [-1, 0] : [0, 1]
-        default:
-            offsets = (0..<segments.count).map { $0 - 1 }
-        }
-
-        var result: [DateHeader] = []
-        for (segment, offset) in zip(segments, offsets) {
-            var m = month + offset, y = year
-            while m < 1 { m += 12; y -= 1 }
-            while m > 12 { m -= 12; y += 1 }
-            for index in segment {
-                let cell = Day(year: y, month: m, day: numbers[index])
-                guard valid(cell, zone: timezone) else { continue }
-                let box = ordered[index].box
-                result.append(DateHeader(line: ordered[index].n, midX: box.midX, midY: box.midY,
-                                         date: DateComponents(year: cell.year, month: cell.month, day: cell.day)))
+        // The date of the first cell: every label votes for the day that would put its number where it is, in the shown month
+        // or a neighbouring one; ties go to the start nearest the 1st of the shown month.
+        var votes: [Day: Int] = [:]
+        for item in placed {
+            for shift in -1...1 {
+                var m = month + shift, y = year
+                while m < 1 { m += 12; y -= 1 }
+                while m > 12 { m -= 12; y += 1 }
+                let label = Day(year: y, month: m, day: item.number)
+                guard valid(label, zone: timezone) else { continue }
+                votes[adding(-(item.row * 7 + item.column), to: label, zone: timezone), default: 0] += 1
             }
         }
-        return result
+        let firstOfMonth = noon(Day(year: year, month: month, day: 1), zone: timezone)
+        guard let start = votes.max(by: { a, b in
+            a.value != b.value ? a.value < b.value
+                : abs(noon(a.key, zone: timezone).timeIntervalSince(firstOfMonth)) > abs(noon(b.key, zone: timezone).timeIntervalSince(firstOfMonth))
+        })?.key else { return [] }
+
+        let rows = (placed.map(\.row).max() ?? 0) + 1
+        var byPlace: [Int: Placed] = [:]
+        for item in placed { byPlace[item.row * 7 + item.column] = item }
+        return (0..<rows * 7).map { index in
+            let cell = adding(index, to: start, zone: timezone)
+            let row = index / 7, column = index % 7
+            return DateHeader(line: byPlace[index]?.line.n ?? -(index + 1), midX: columnCentre(column), midY: byPlace[index]?.line.box.midY ?? rowCentre(row),
+                              cellWidth: width, date: DateComponents(year: cell.year, month: cell.month, day: cell.day))
+        }
     }
 
     // MARK: Calendar arithmetic

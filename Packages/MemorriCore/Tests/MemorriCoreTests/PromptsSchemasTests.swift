@@ -15,7 +15,7 @@ import Testing
 
     @Test func everyKindHasVersionedPromptAndSchema() {
         for kind in ScreenKind.allCases {
-            #expect(ExtractionPrompts.version(for: kind) == "extract-\(kind.rawValue)-v2")
+            #expect(ExtractionPrompts.version(for: kind) == "extract-\(kind.rawValue)-v3")
             #expect(ExtractionSchemas.schemaVersion(for: kind) == "schema-\(kind.rawValue)-\(kind == .calendarMonth ? "v2" : "v1")")
         }
     }

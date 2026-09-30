@@ -123,7 +123,7 @@ import Testing
         #expect(recorded.map(\.step) == ["classify", "extract"])
         let run = try #require(recorded.first)
         #expect(run.step == "classify" && run.outcome == "success" && run.attempt == 2 && run.jobId == queued.id)
-        #expect(run.imageId == rig.fixture.imageID && run.promptVersion == "classify-v1" && run.temperature == 0)
+        #expect(run.imageId == rig.fixture.imageID && run.promptVersion == "classify-v2" && run.temperature == 0)
         #expect(run.rawAnswer?.contains("calendar_week") == true)
         #expect(!run.requestJson.contains("base64"))
         // The stored analysis copy is 600 x 300, smaller than 1024: it is not enlarged.
@@ -174,7 +174,7 @@ import Testing
         let outcome = await rig.runner.run(try job(rig), attempt: 1)
         #expect(outcome == .success)
         let extract = try #require(try runs(rig).first { $0.step == "extract" })
-        #expect(extract.promptVersion == "extract-calendar_week-v2" && extract.imageLongEdge == 600)
+        #expect(extract.promptVersion == "extract-calendar_week-v3" && extract.imageLongEdge == 600)
         let stored = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
         #expect(stored.kind == .calendarWeek && stored.findingCount == 1 && stored.extractRunID == extract.id && stored.model == "qwen3.8:27b-mlx")
         let findings = try rig.results.findings(imageID: rig.fixture.imageID)

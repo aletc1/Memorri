@@ -9,6 +9,8 @@ public enum TagExtractor {
     private static let remoteClientNames = ["citrix viewer", "citrix workspace", "microsoft remote desktop", "windows app", "vmware horizon",
                                             "parallels", "jump desktop"]
     private static let remoteClientBundlePrefixes = ["com.citrix.", "com.microsoft.rdc", "com.vmware.horizon", "com.parallels.", "com.p5sys.jump"]
+    /// A language the recogniser is less sure of is not recorded: a wrong `language` would put the wrong names first when reading dates.
+    static let minimumLanguageConfidence = 0.85
     static let maximumKeywords = 12
     static let maximumAddresses = 10
     private static let unknownAnswers: Set<String> = ["", "unknown", "none", "n/a", "na"]
@@ -68,32 +70,36 @@ public enum TagExtractor {
 
     private static func language(of texts: [String]) -> CaptureTag? {
         let text = texts.joined(separator: "\n")
-        guard text.filter(\.isLetter).count >= 30 else { return nil }
+        guard text.filter(\.isLetter).count >= 12 else { return nil }
         let recogniser = NLLanguageRecognizer()
         recogniser.processString(text)
-        guard let best = recogniser.languageHypotheses(withMaximum: 1).first, best.value >= 0.6 else { return nil }
+        guard let best = recogniser.languageHypotheses(withMaximum: 1).first, best.value >= minimumLanguageConfidence else { return nil }
         return CaptureTag(key: "language", value: best.key.rawValue, confidence: best.value, source: "code")
     }
 
     private static let twelveHour = try! NSRegularExpression(pattern: #"\b\d{1,2}(?::\d{2})?\s?[AaPp]\.?[Mm]\b"#)
     private static let bareTime = try! NSRegularExpression(pattern: #"\b(\d{1,2}):\d{2}\b(?!\s?[AaPp]\.?[Mm])"#)
 
-    /// 12 h: times with am or pm. 24 h: times without it that only a 24 hour clock writes (a leading zero, or 13 to 23).
-    /// A bare `9:00` proves nothing. The more frequent style wins; a tie says nothing.
+    /// 12 h: times with am or pm. 24 h: times without it that only a 24 hour clock writes (a leading zero, or 13 to 23). Other bare
+    /// times (`10:12`) point to 24 h only weakly, and only when nothing in the picture has am or pm, because 12 hour clocks
+    /// write it nearly everywhere. The more frequent style wins; a tie says nothing.
     private static func clockStyle(of texts: [String]) -> CaptureTag? {
-        var twelve = 0, twentyFour = 0
+        var twelve = 0, twentyFour = 0, bare = 0
         for text in texts {
             let range = NSRange(text.startIndex..., in: text)
             twelve += twelveHour.numberOfMatches(in: text, range: range)
             for match in bareTime.matches(in: text, range: range) {
                 guard let hourRange = Range(match.range(at: 1), in: text), let hour = Int(text[hourRange]) else { continue }
-                if hour >= 13 && hour <= 23 || (text[hourRange].count == 2 && text[hourRange].hasPrefix("0")) { twentyFour += 1 }
+                if hour >= 13 && hour <= 23 || (text[hourRange].count == 2 && text[hourRange].hasPrefix("0")) { twentyFour += 1 } else { bare += 1 }
             }
         }
+        if twelve == 0, twentyFour == 0, bare > 0 { return CaptureTag(key: "clock_style", value: "24h", confidence: weakClockConfidence, source: "code") }
         guard twelve != twentyFour else { return nil }
         let style = twelve > twentyFour ? "12h" : "24h"
         return CaptureTag(key: "clock_style", value: style, confidence: Double(max(twelve, twentyFour)) / Double(twelve + twentyFour), source: "code")
     }
+    /// Below `CaptureTag.lowConfidence`, so a weak guess is never "wrong with high confidence".
+    static let weakClockConfidence = 0.55
 
     private static let email = try! NSRegularExpression(pattern: #"[A-Za-z0-9._%+\-]+@([A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,})"#)
     private static let website = try! NSRegularExpression(pattern: #"https?://([A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+)"#, options: .caseInsensitive)

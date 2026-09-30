@@ -24,28 +24,28 @@
       "box" : [
         20,
         54,
-        61,
+        69,
         19
       ],
-      "text" : "Finance"
+      "text" : "Finanzas"
     },
     {
       "box" : [
         20,
         78,
-        87,
+        90,
         18
       ],
-      "text" : "Invoice 4471"
+      "text" : "Factura 4471"
     },
     {
       "box" : [
         20,
         102,
-        168,
+        135,
         17
       ],
-      "text" : "Attached is the invoice for"
+      "text" : "Adjunto la factura de"
     },
     {
       "box" : [
@@ -78,28 +78,28 @@
       "box" : [
         20,
         238,
-        67,
+        150,
         19
       ],
-      "text" : "HR team"
+      "text" : "Recursos Humanos"
     },
     {
       "box" : [
         20,
         262,
-        109,
+        174,
         18
       ],
-      "text" : "Benefits update"
+      "text" : "Novedades de beneficios"
     },
     {
       "box" : [
         20,
         286,
-        180,
+        190,
         17
       ],
-      "text" : "Open enrolment starts soon"
+      "text" : "Pronto empieza la inscripción"
     },
     {
       "box" : [
@@ -108,52 +108,52 @@
         81,
         19
       ],
-      "text" : "IT support"
+      "text" : "Soporte TI"
     },
     {
       "box" : [
         20,
         354,
-        112,
+        176,
         18
       ],
-      "text" : "Password expiry"
+      "text" : "Caducidad de contraseña"
     },
     {
       "box" : [
         20,
         378,
-        163,
+        179,
         17
       ],
-      "text" : "Your password will expire"
+      "text" : "Su contraseña va a caducar"
     },
     {
       "box" : [
         20,
         422,
-        86,
+        55,
         19
       ],
-      "text" : "Newsletter"
+      "text" : "Boletín"
     },
     {
       "box" : [
         20,
         446,
-        97,
+        125,
         18
       ],
-      "text" : "Weekly digest"
+      "text" : "Resumen semanal"
     },
     {
       "box" : [
         20,
         470,
-        136,
+        182,
         17
       ],
-      "text" : "Top stories this week"
+      "text" : "Las noticias de esta semana"
     },
     {
       "box" : [

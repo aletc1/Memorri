@@ -38,7 +38,7 @@ import Testing
         for word in ["application", "macos", "windows", "linux", "remote", "theme", "calendar name"] {
             #expect(prompt.lowercased().contains(word), Comment(rawValue: word))
         }
-        #expect(ExtractionPrompts.classifyVersion == "classify-v1")
+        #expect(ExtractionPrompts.classifyVersion == "classify-v2")
     }
 
     @Test func anAnswerBecomesAClassification() throws {

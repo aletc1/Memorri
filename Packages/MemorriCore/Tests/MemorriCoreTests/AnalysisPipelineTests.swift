@@ -54,7 +54,7 @@ import Testing
         let step = try #require(result.steps.first)
         #expect(result.steps.map(\.step) == ["classify", "extract"] && step.step == "classify")
         #expect(step.failure == nil && step.rawAnswer?.contains("calendar_week") == true)
-        #expect(step.promptVersion == "classify-v1")
+        #expect(step.promptVersion == "classify-v2")
         #expect(step.request.contains("[picture 1024x512]"))
         #expect(!step.request.contains(Data("jpeg-bytes".utf8).base64EncodedString()))
     }
@@ -122,7 +122,7 @@ import Testing
         #expect(request.schema == ExtractionSchemas.extractSchema(for: .calendarWeek))
         #expect(request.picture == Data("analysis-bytes".utf8))
         let step = try #require(result.steps.last)
-        #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v2" && step.schemaVersion == "schema-calendar_week-v1")
+        #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v3" && step.schemaVersion == "schema-calendar_week-v1")
         #expect(result.findings.count == 1 && result.findings[0].title == "Team sync" && result.findings[0].citedLines == [1])
         #expect(result.findings[0].kind == .appointment && result.findings[0].confidence == 0.5)   // the end is guessed, so at most 0.5
         #expect(result.model == "m" && result.pictureLongEdge == 2048 && !result.lineCapApplied)

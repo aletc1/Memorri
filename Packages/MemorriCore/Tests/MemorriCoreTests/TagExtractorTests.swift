@@ -80,8 +80,12 @@ import Testing
         #expect(value(TagExtractor.fromLines(lines(["Team sync", "Room 4"])), "clock_style") == nil)
     }
 
-    @Test func aBareTimeWithoutALeadingZeroIsNotEvidenceOfAnything() {
-        #expect(value(TagExtractor.fromLines(lines(["9:00", "10:00", "11:00"])), "clock_style") == nil)
+    @Test func bareTimesOnlyHintAtA24HourClockAndOnlyWhenNothingHasAmPm() {
+        let weak = TagExtractor.fromLines(lines(["9:00", "10:00", "11:00"])).first { $0.key == "clock_style" }
+        #expect(weak?.value == "24h" && weak?.confidence == TagExtractor.weakClockConfidence && weak!.confidence < CaptureTag.lowConfidence)
+        // With am/pm anywhere in the picture a bare hour proves nothing.
+        #expect(value(TagExtractor.fromLines(lines(["9:00", "10:00", "2 PM", "3 PM"])), "clock_style") == "12h")
+        #expect(value(TagExtractor.fromLines(lines(["9:00", "10:00", "2 PM"])), "clock_style") == "12h")
     }
 
     @Test func dateOrderComesFromUnambiguousDatesOnly() {
