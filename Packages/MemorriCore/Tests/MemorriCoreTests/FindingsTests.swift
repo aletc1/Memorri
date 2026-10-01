@@ -22,6 +22,20 @@ import Testing
         #expect(draft.sentText == "Tue 13 Oct 09:12" && draft.messageTimeText == "11:48")
     }
 
+    @Test func aStartWrittenAsARangeIsSplitIntoStartAndEnd() {
+        func split(_ text: String, end: String? = nil) -> (String?, String?) {
+            let d = FindingDraft(kind: .appointment, title: "Review", citedLines: [1], startText: text, endText: end).splittingTimeRange()
+            return (d.startText, d.endText)
+        }
+        #expect(split("14:00-15:30") == ("14:00", "15:30"))
+        #expect(split("10:00 - 11:00") == ("10:00", "11:00"))
+        #expect(split("Thursday, 15 October 2026 14:00–15:00") == ("Thursday, 15 October 2026 14:00", "15:00"))
+        #expect(split("9:30am-10:30am") == ("9:30am", "10:30am"))
+        #expect(split("14:00-15:30", end: "15:30") == ("14:00-15:30", "15:30"))          // the model already gave an end
+        #expect(split("14:00") == ("14:00", nil) && split("2026-10-14") == ("2026-10-14", nil))
+        #expect(FindingDraft(kind: .task, title: "T", citedLines: [1]).splittingTimeRange().startText == nil)
+    }
+
     @Test func asAppointmentKeepsEverythingButTheKind() {
         let draft = FindingDraft(kind: .deadline, title: "Standup", citedLines: [4], startText: "10:00", dueText: "10:00", people: ["Ana"], place: "Room 2", columnLine: 3)
         let appointment = draft.asAppointment()

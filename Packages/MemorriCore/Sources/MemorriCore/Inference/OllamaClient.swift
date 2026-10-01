@@ -59,10 +59,13 @@ public struct ChatRequest: Sendable {
     public let think: ThinkWireValue
     public let temperature: Double
     public let timeout: TimeInterval
+    /// A limit on the answer's length (`num_predict`). A model that falls into a loop ends at it instead of at the timeout.
+    public let maxTokens: Int?
 
     public init(model: String, systemPrompt: String?, prompt: String, picture: Data, picturePlaceholder: String,
                 schema: JSONValue, useNativeFormat: Bool, think: ThinkWireValue, temperature: Double,
-                timeout: TimeInterval) {
+                timeout: TimeInterval, maxTokens: Int? = nil) {
+        self.maxTokens = maxTokens
         self.model = model
         self.systemPrompt = systemPrompt
         self.prompt = prompt
@@ -172,7 +175,8 @@ public struct OllamaClient: Sendable {
             "model": .string(request.model),
             "stream": .bool(false),
             "messages": .array(messages),
-            "options": .object(["temperature": .double(request.temperature)]),
+            "options": .object(request.maxTokens.map { ["temperature": .double(request.temperature), "num_predict": .int($0)] }
+                               ?? ["temperature": .double(request.temperature)]),
         ]
         if request.useNativeFormat { body["format"] = request.schema }
         switch request.think {

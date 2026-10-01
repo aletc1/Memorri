@@ -81,6 +81,20 @@ public struct FindingDraft: Sendable, Equatable {
                      columnLine: columnLine, sentText: sentText, messageTimeText: messageTimeText)
     }
 
+    private static let timeRange = try! NSRegularExpression(
+        pattern: #"^(.*?)(\d{1,2}[:.]\d{2}(?:\s?[ap]\.?m\.?)?)\s*[-–—]\s*(\d{1,2}[:.]\d{2}(?:\s?[ap]\.?m\.?)?)\s*$"#, options: .caseInsensitive)
+
+    /// A start written as a range ("14:00-15:30", "Oct 22 14:00 - 15:30") is split into the start and the end the model left out.
+    func splittingTimeRange() -> FindingDraft {
+        guard endText == nil, let text = startText?.trimmingCharacters(in: .whitespaces),
+              let match = Self.timeRange.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let prefix = Range(match.range(at: 1), in: text), let first = Range(match.range(at: 2), in: text),
+              let second = Range(match.range(at: 3), in: text) else { return self }
+        return FindingDraft(kind: kind, title: title, citedLines: citedLines, startText: String(text[prefix]) + String(text[first]), endText: String(text[second]),
+                            dateText: dateText, dueText: dueText, remindText: remindText, allDay: allDay, people: people, place: place, notes: notes,
+                            columnLine: columnLine, sentText: sentText, messageTimeText: messageTimeText)
+    }
+
     /// The same finding as an appointment: everything a calendar view shows is one, whatever kind the model wrote.
     func asAppointment() -> FindingDraft {
         FindingDraft(kind: .appointment, title: title, citedLines: citedLines, startText: startText, endText: endText, dateText: dateText,

@@ -15,7 +15,7 @@ import Testing
 
     @Test func everyKindHasVersionedPromptAndSchema() {
         for kind in ScreenKind.allCases {
-            #expect(ExtractionPrompts.version(for: kind) == "extract-\(kind.rawValue)-v7")
+            #expect(ExtractionPrompts.version(for: kind) == "extract-\(kind.rawValue)-v11")
             #expect(ExtractionSchemas.schemaVersion(for: kind) == "schema-\(kind.rawValue)-\(kind == .calendarMonth ? "v2" : "v1")")
         }
     }
@@ -67,14 +67,21 @@ import Testing
         for kind in ScreenKind.allCases {
             let (prompt, capped) = ExtractionPrompts.extractPrompt(kind: kind, lines: lines, pictureSize: (1000, 500))
             let lower = prompt.lowercased()
-            #expect(lower.contains("only what is on screen"), Comment(rawValue: "\(kind)"))
+            #expect(lower.contains("never invent anything"), Comment(rawValue: "\(kind)"))
             #expect(lower.contains("cited_lines"))
             #expect(lower.contains("exactly as written"))
-            #expect(prompt.contains("Maria needs the budget figures by Friday 23 October") && lower.contains("is a task"))
-            #expect(lower.contains("no line numbers") && lower.contains("leave out headlines"))
-            #expect(prompt.contains("L1 (10%,10%) Mon 12") && prompt.contains("L2 (10%,10%) Team sync"))
+            #expect(lower.contains("2 to 5 words") && lower.contains("no dates, times or line numbers"))
+            #expect(lower.contains("skip everything else") && lower.contains("never a sentence"))
+            #expect(prompt.contains("start_text") && prompt.contains("due_text") && prompt.contains("date_text"))
+            #expect(prompt.contains("Lines:\nL1 (10%,10%) Mon 12\nL2 (10%,10%) Team sync"))
             #expect(!capped)
         }
+    }
+
+    @Test func theExamplesAreForScreensWhoseDatesAreWrittenInText() {
+        func prompt(_ kind: ScreenKind) -> String { ExtractionPrompts.extractPrompt(kind: kind, lines: [line(1)], pictureSize: (100, 100)).prompt }
+        for kind in [ScreenKind.document, .email, .chat, .other] { #expect(prompt(kind).contains("Examples (lines, then the answer)"), Comment(rawValue: "\(kind)")) }
+        for kind in [ScreenKind.calendarWeek, .calendarDay, .calendarMonth] { #expect(!prompt(kind).contains("Examples"), Comment(rawValue: "\(kind)")) }
     }
 
     @Test func kindSpecificHintsAreOnlyInTheirPrompts() {
@@ -96,7 +103,7 @@ import Testing
         lines[9] = line(10, w: 1, h: 1, text: "tiny")          // the smallest box
         let (prompt, capped) = ExtractionPrompts.extractPrompt(kind: .document, lines: lines, pictureSize: (1000, 500))
         #expect(capped)
-        let numbered = prompt.split(separator: "\n").filter { $0.hasPrefix("L") && $0.contains("%,") }
+        let numbered = (prompt.components(separatedBy: "Lines:\n").last ?? "").split(separator: "\n").filter { $0.hasPrefix("L") && $0.contains("%,") }
         #expect(numbered.count == ExtractionPrompts.maxLines)
         #expect(!prompt.contains(") tiny"))
         #expect(prompt.contains("L650 "))

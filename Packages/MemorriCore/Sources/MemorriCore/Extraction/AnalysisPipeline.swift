@@ -179,7 +179,8 @@ public struct AnalysisPipeline: Sendable {
             let extraction = await ModelStep.call(using: model, settings: extractSettings, step: "extract", prompt: prompt, picture: input.analysisJPEG,
                                                   placeholder: placeholder, schema: ExtractionSchemas.extractSchema(for: resolved.kind),
                                                   promptVersion: ExtractionPrompts.version(for: resolved.kind),
-                                                  schemaVersion: ExtractionSchemas.schemaVersion(for: resolved.kind), startedAt: time.now())
+                                                  schemaVersion: ExtractionSchemas.schemaVersion(for: resolved.kind), startedAt: time.now(),
+                                                  maxTokens: Self.answerLimit(lines: shown.count, modelThinks: settings.modelThinks))
             let items: [JSONValue]
             switch extraction {
             case .failure(let failure):
@@ -192,7 +193,7 @@ public struct AnalysisPipeline: Sendable {
             for item in items {
                 if let draft = FindingDraft.parse(item) {
                     let inCalendar = resolved.kind == .calendarMonth || calendarKind
-                    let appointment = inCalendar && draft.kind != .appointment ? draft.asAppointment() : draft
+                    let appointment = (inCalendar && draft.kind != .appointment ? draft.asAppointment() : draft).splittingTimeRange()
                     drafts.append(resolved.kind == .calendarMonth ? Self.withRowTime(appointment, lines: lines, cells: cells, locales: locales) : appointment)
                 }
                 else { discards.append(CitationCheck.Discard(title: item["title"]?.stringValue ?? "", reason: "unreadable finding", citedLines: [])) }
@@ -256,6 +257,11 @@ public struct AnalysisPipeline: Sendable {
 
     private static let leadingClock = try! NSRegularExpression(pattern: #"^\d{1,2}:\d{2}(?:\s?[ap]\.?m\.?)?(?=\s|$)"#, options: .caseInsensitive)
     private static let trailingClock = try! NSRegularExpression(pattern: #"\b\d{1,2}:\d{2}(?:\s?[ap]\.?m\.?)?$"#, options: .caseInsensitive)
+
+    /// The most tokens the extract answer may have: about 20 per line shown, at least 3072, at most 16384, and 4096 more for a model that
+    /// thinks (its thinking counts, and some models think whatever the setting says). A real answer is far shorter; a model that falls
+    /// into a loop (a title that repeats the whole screen) ends here and fails, instead of running to the timeout.
+    static func answerLimit(lines: Int, modelThinks: Bool) -> Int { min(16384, max(3072, 20 * lines) + (modelThinks ? 4096 : 0)) }
 
     /// A week view with a month picker beside it reads as a month view to the model. When date headers (a weekday name with its day
     /// number) run across the picture, much wider than any grid of day labels, the picture is a week view (or a day view).

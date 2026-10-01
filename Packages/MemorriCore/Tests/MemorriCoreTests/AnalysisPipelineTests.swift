@@ -122,7 +122,7 @@ import Testing
         #expect(request.schema == ExtractionSchemas.extractSchema(for: .calendarWeek))
         #expect(request.picture == Data("analysis-bytes".utf8))
         let step = try #require(result.steps.last)
-        #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v7" && step.schemaVersion == "schema-calendar_week-v1")
+        #expect(step.step == "extract" && step.promptVersion == ExtractionPrompts.version(for: .calendarWeek) && step.schemaVersion == "schema-calendar_week-v1")
         #expect(result.findings.count == 1 && result.findings[0].title == "Team sync" && result.findings[0].citedLines == [1])
         #expect(result.findings[0].kind == .appointment && result.findings[0].confidence == 0.5)   // the end is guessed, so at most 0.5
         #expect(result.model == "m" && result.pictureLongEdge == 2048 && !result.lineCapApplied)
@@ -154,6 +154,11 @@ import Testing
             #expect(failure.error == .transient("invalid answer"))
             #expect(failure.steps.map(\.step) == ["classify", "extract"] && failure.steps[1].failure == "invalid answer")
         }
+    }
+
+    @Test func theAnswerLengthLimitGrowsWithTheLinesShownBetweenTheBounds() {
+        #expect(AnalysisPipeline.answerLimit(lines: 5, modelThinks: false) == 3072 && AnalysisPipeline.answerLimit(lines: 400, modelThinks: false) == 8000)
+        #expect(AnalysisPipeline.answerLimit(lines: 5, modelThinks: true) == 7168 && AnalysisPipeline.answerLimit(lines: 5000, modelThinks: true) == 16384)
     }
 
     @Test func aNeedsSentenceArrivesAsATaskForThatPerson() async throws {

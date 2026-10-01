@@ -17,6 +17,19 @@ import Testing
                     think: think, temperature: 0, timeout: timeout)
     }
 
+    @Test func aLengthLimitIsSentAsNumPredictAndOtherwiseNothingIsLimited() async throws {
+        let transport = FakeOllamaTransport()
+        transport.set("/api/chat", .json(chatAnswer))
+        var limited = chatRequest()
+        limited = ChatRequest(model: limited.model, systemPrompt: nil, prompt: limited.prompt, picture: picture, picturePlaceholder: limited.picturePlaceholder,
+                              schema: testSchema, useNativeFormat: true, think: .bool(false), temperature: 0, timeout: 60, maxTokens: 1500)
+        _ = try await OllamaClient(transport: transport).chat(limited)
+        _ = try await OllamaClient(transport: transport).chat(chatRequest())
+        let sent = transport.requests(to: "/api/chat")
+        #expect((try body(of: sent[0])["options"] as? [String: Any])?["num_predict"] as? Int == 1500)
+        #expect((try body(of: sent[1])["options"] as? [String: Any])?["num_predict"] == nil)
+    }
+
     private func body(of request: OllamaHTTPRequest) throws -> [String: Any] {
         let data = try #require(request.body)
         return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])

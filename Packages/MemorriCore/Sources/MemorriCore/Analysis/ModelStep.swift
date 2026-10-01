@@ -90,12 +90,12 @@ public enum ModelStep {
     /// One model call with a picture, a required schema and temperature 0, validated against the schema.
     public static func call(using chat: any ModelChatting, settings: ModelStepSettings, step: String, prompt: String,
                             picture: Data, placeholder: String, schema: JSONValue, promptVersion: String,
-                            schemaVersion: String, startedAt: Date = Date()) async -> Result<ModelStepResult, ModelStepFailure> {
+                            schemaVersion: String, startedAt: Date = Date(), maxTokens: Int? = nil) async -> Result<ModelStepResult, ModelStepFailure> {
         let wire = ThinkWireValue.make(setting: settings.think, modelThinks: settings.modelThinks,
                                        acceptsLevels: ThinkWireValue.acceptsLevels(modelName: settings.model))
         let request = ChatRequest(model: settings.model, systemPrompt: nil, prompt: prompt, picture: picture,
                                   picturePlaceholder: placeholder, schema: schema, useNativeFormat: true,
-                                  think: wire, temperature: 0, timeout: settings.timeout)
+                                  think: wire, temperature: 0, timeout: settings.timeout, maxTokens: maxTokens)
         let requestJSON = chat.requestJSON(for: request)
         let clock = ContinuousClock()
         let begin = clock.now
