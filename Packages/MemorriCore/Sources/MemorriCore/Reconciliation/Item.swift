@@ -54,7 +54,7 @@ public struct Item: Sendable, Equatable, Identifiable {
 }
 
 /// One sighting of one field of an item: the value as found, with where it came from.
-public struct Observation: Sendable, Equatable {
+public struct ItemObservation: Sendable, Equatable {
     public let id: String
     public let itemID: String
     /// Nil for a value the user set.

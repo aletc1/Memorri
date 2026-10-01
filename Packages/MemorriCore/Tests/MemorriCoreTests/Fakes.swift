@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 @testable import MemorriCore
 
 /// In-memory `SettingsStore` for tests.
@@ -681,4 +682,8 @@ final class ReconcileFixture {
     func count(_ table: String) throws -> Int {
         try database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM \(table)") ?? -1 }
     }
+
+    // Plain, non-async wrappers: inside an async test `pool.read` would pick the async overload.
+    func read<T>(_ body: (GRDB.Database) throws -> T) throws -> T { try withoutActuallyEscaping(body) { try database.pool.read($0) } }
+    func write<T>(_ body: (GRDB.Database) throws -> T) throws -> T { try withoutActuallyEscaping(body) { try database.pool.write($0) } }
 }

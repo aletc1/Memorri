@@ -20,7 +20,7 @@ public struct Item: Sendable, Equatable, Identifiable {
     public var family: KindFamily { get }
 }
 
-public struct Observation: Sendable, Equatable { public let id, itemID: String; public let sightingID: String?
+public struct ItemObservation: Sendable, Equatable { public let id, itemID: String; public let sightingID: String?
     public let field: ItemField; public let value: JSONValue; public let source: ObservationSource
     public let confidence: Double; public let observedAt: Date }
 ```
@@ -46,14 +46,14 @@ public struct MatchScores: Sendable, Equatable, Codable { public var text: Doubl
 
 public enum MatchDecision: Sendable, Equatable { case merge(rule: String), new(rule: String), uncertain }
 
-public struct MatchThresholds: Sendable, Equatable {           // research R7 start values; final ones recorded in ADR 0020
-    public static let `default`: MatchThresholds
+public struct ReconcileThresholds: Sendable, Equatable {           // research R7 start values; final ones recorded in ADR 0020
+    public static let `default`: ReconcileThresholds
     public var mergeText = 0.9, minTime = 0.5, newText = 0.5, newCosine = 0.88, rerankYes = 0.5, undatedMergeText = 0.9, undatedRerankText = 0.7
 }
 
 public enum MatchScorer {
-    public static func decide(_ scores: MatchScores, undated: Bool, thresholds: MatchThresholds) -> MatchDecision   // before the reranker
-    public static func decideAfterRerank(_ scores: MatchScores, thresholds: MatchThresholds) -> MatchDecision      // rerank nil → .new(rule: "judge-unavailable")
+    public static func decide(_ scores: MatchScores, undated: Bool, thresholds: ReconcileThresholds) -> MatchDecision   // before the reranker
+    public static func decideAfterRerank(_ scores: MatchScores, thresholds: ReconcileThresholds) -> MatchDecision      // rerank nil → .new(rule: "judge-unavailable")
 }
 ```
 
@@ -80,7 +80,7 @@ public struct NoMeaningJudge: MeaningJudging   // text and time only
 
 ```swift
 public enum FieldResolver {
-    public static func resolve(_ observations: [Observation], locks: [ItemField: String]) -> ResolvedFields   // research R9
+    public static func resolve(_ observations: [ItemObservation], locks: [ItemField: String]) -> ResolvedFields   // research R9
 }
 public struct ResolvedFields: Sendable, Equatable { /* one value per ItemField plus the chosen observation id per field, the aliases */ }
 ```
@@ -95,7 +95,7 @@ public struct ReconcilePlan: Sendable, Equatable {
 }
 
 public struct Reconciler: Sendable {
-    public init(database: StorageDatabase, judge: any MeaningJudging, thresholds: MatchThresholds = .default, now: @Sendable () -> Date)
+    public init(database: StorageDatabase, judge: any MeaningJudging, thresholds: ReconcileThresholds = .default, now: @Sendable () -> Date)
     public func plan(imageID: String) async throws -> ReconcilePlan                  // reads; may call the judge
     public func apply(_ plan: ReconcilePlan) throws -> ReconcileSummary              // one write transaction, research R1, R2
     public func reconcile(imageID: String) async -> ReconcileSummary                 // plan + apply; never throws, records reconcile_error

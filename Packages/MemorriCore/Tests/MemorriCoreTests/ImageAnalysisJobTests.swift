@@ -14,6 +14,7 @@ import Testing
         let jobs: AnalysisStore
         let settings: OllamaSettings
         let contexts: ContextStore
+        let reconciler: FakeReconciler
     }
 
     private func sampleLines() -> [RecognisedLine] {
@@ -22,7 +23,7 @@ import Testing
     }
 
     private func makeRig(lines: [RecognisedLine]? = nil, failWith error: Error? = nil, model modelName: String? = "qwen3.8:27b-mlx",
-                         windows: [WindowInfo] = []) throws -> Rig {
+                         windows: [WindowInfo] = [], reconcileSummary: ReconcileSummary = ReconcileSummary()) throws -> Rig {
         let fixture = try makePipelineFixture(windows: windows)
         let recogniser = FakeTextRecogniser(lines: lines ?? sampleLines(), failWith: error)
         let model = FakeModelChatting()
@@ -40,11 +41,14 @@ import Testing
         let provider = StoredPictureProvider(paths: fixture.paths, store: fixture.captures)
         let jobs = AnalysisStore(database: fixture.database)
         let pipeline = AnalysisPipeline(recogniser: recogniser, model: model, time: time)
+        let reconciler = FakeReconciler(summary: reconcileSummary)
+        reconciler.database = fixture.database
         let runner = ImageAnalysisJobRunner(service: service, pipeline: pipeline, pictures: provider, fullPictures: provider, ocr: ocr,
                                             results: results, jobs: jobs, settings: settings, time: time,
-                                            contexts: ContextStore(database: fixture.database), windows: fixture.captures)
+                                            contexts: ContextStore(database: fixture.database), windows: fixture.captures,
+                                            reconciler: reconciler)
         return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, results: results, jobs: jobs, settings: settings,
-                   contexts: ContextStore(database: fixture.database))
+                   contexts: ContextStore(database: fixture.database), reconciler: reconciler)
     }
 
     private func job(_ rig: Rig, kind: String = "analyse", imageID: String? = nil, nilImage: Bool = false) throws -> AnalysisJobRecord {
@@ -266,5 +270,57 @@ import Testing
         try rig.contexts.delete(id: a.id)
         #expect(try rig.contexts.decision(imageID: rig.fixture.imageID)?.contextID == nil)
         #expect(try rig.results.findings(imageID: rig.fixture.imageID).count == 1)
+    }
+
+    // MARK: Reconcile (spec 005)
+
+    @Test func theAnalysisIsReconciledOnceAfterItIsStored() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome == .success)
+        #expect(rig.reconciler.imageIDs == [rig.fixture.imageID])
+        // it is asked after the analysis is in the database
+        #expect(rig.reconciler.analysisWasStoredWhenAsked == [true])
+    }
+
+    @Test func aReconcileErrorLeavesTheJobSucceededAndTheAnalysisStored() async throws {
+        let rig = try makeRig(reconcileSummary: ReconcileSummary(error: "database error")); defer { rig.fixture.cleanUp() }
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome == .success)
+        #expect(try rig.results.analysis(imageID: rig.fixture.imageID) != nil)
+    }
+
+    @Test func aJobThatFailsBeforeStoringDoesNotReconcile() async throws {
+        let rig = try makeRig(failWith: CocoaError(.fileReadUnknown)); defer { rig.fixture.cleanUp() }
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome != .success)
+        #expect(rig.reconciler.imageIDs.isEmpty)
+    }
+
+    @Test func eachNewAnalysisOfThePictureIsReconciledAgain() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
+        #expect(rig.reconciler.imageIDs.count == 2)
+    }
+}
+
+/// Records the pictures it is asked to reconcile, and whether their analysis was already stored by then.
+final class FakeReconciler: ImageReconciling, @unchecked Sendable {
+    private let lock = NSLock()
+    private let summary: ReconcileSummary
+    private var asked: [String] = []
+    private var stored: [Bool] = []
+    var database: StorageDatabase?
+
+    init(summary: ReconcileSummary = ReconcileSummary()) { self.summary = summary }
+
+    var imageIDs: [String] { lock.withLock { asked } }
+    var analysisWasStoredWhenAsked: [Bool] { lock.withLock { stored } }
+
+    func reconcile(imageID: String) async -> ReconcileSummary {
+        let analysed = database.flatMap { (try? AnalysisResultStore(database: $0).analysis(imageID: imageID)) ?? nil } != nil
+        lock.withLock { asked.append(imageID); stored.append(analysed) }
+        return summary
     }
 }

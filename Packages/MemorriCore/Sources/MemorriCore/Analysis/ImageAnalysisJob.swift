@@ -22,11 +22,12 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
     private let recogniserName: String
     private let contexts: ContextStore?
     private let windows: (any WindowProviding)?
+    private let reconciler: (any ImageReconciling)?
 
     public init(service: OllamaService, pipeline: AnalysisPipeline, pictures: any AnalysisPictureProviding,
                 fullPictures: any FullPictureProviding, ocr: OCRStore, results: AnalysisResultStore, jobs: any AnalysisJobStoring,
                 settings: OllamaSettings, time: any TimeSource, recogniserName: String = VisionTextRecogniser.descriptor,
-                contexts: ContextStore? = nil, windows: (any WindowProviding)? = nil) {
+                contexts: ContextStore? = nil, windows: (any WindowProviding)? = nil, reconciler: (any ImageReconciling)? = nil) {
         self.service = service
         self.pipeline = pipeline
         self.pictures = pictures
@@ -39,6 +40,7 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         self.recogniserName = recogniserName
         self.contexts = contexts
         self.windows = windows
+        self.reconciler = reconciler
     }
 
     private static let gone = JobOutcome.permanent("picture no longer stored")
@@ -126,6 +128,9 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         do { try results.save(analysis, imageID: imageID, runID: runIDs["extract"], at: time.now()) }
         catch { return .transient("could not store the analysis") }
         Self.logger.info("analysis stored image=\(imageID, privacy: .public)")
+        // Reconciliation turns the findings into items. It never fails the job: a failure is stored on the picture and retried with
+        // the next analysis (ADR 0020).
+        _ = await reconciler?.reconcile(imageID: imageID)
         return .success
     }
 

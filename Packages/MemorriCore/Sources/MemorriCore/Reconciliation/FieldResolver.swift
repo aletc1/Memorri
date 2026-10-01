@@ -13,7 +13,7 @@ public struct ResolvedFields: Sendable, Equatable {
 public enum FieldResolver {
     static let confidenceGap = 0.1
 
-    public static func resolve(_ observations: [Observation], locks: [ItemField: String]) -> ResolvedFields {
+    public static func resolve(_ observations: [ItemObservation], locks: [ItemField: String]) -> ResolvedFields {
         var result = ResolvedFields()
         let byID = Dictionary(observations.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let allDayBySighting = Dictionary(observations.filter { $0.field == .allDay }.compactMap { o in
@@ -58,7 +58,7 @@ public enum FieldResolver {
         return result
     }
 
-    private static func peopleUnion(_ newestFirst: [Observation]) -> [String] {
+    private static func peopleUnion(_ newestFirst: [ItemObservation]) -> [String] {
         var seen: Set<String> = []
         var names: [String] = []
         for observation in newestFirst.reversed() {
@@ -70,7 +70,7 @@ public enum FieldResolver {
         return names
     }
 
-    private static func isBetter(_ a: Observation, than b: Observation, field: ItemField, allDay: [String: Bool]) -> Bool {
+    private static func isBetter(_ a: ItemObservation, than b: ItemObservation, field: ItemField, allDay: [String: Bool]) -> Bool {
         let aRead = a.source == .read, bRead = b.source == .read
         if aRead != bRead { return aRead }
         // A time of day is more specific than "all day", whatever the confidence (edge case in the spec).
@@ -83,7 +83,7 @@ public enum FieldResolver {
         return isMoreComplete(a, than: b, field: field, allDay: allDay)
     }
 
-    private static func isMoreComplete(_ a: Observation, than b: Observation, field: ItemField, allDay: [String: Bool]) -> Bool {
+    private static func isMoreComplete(_ a: ItemObservation, than b: ItemObservation, field: ItemField, allDay: [String: Bool]) -> Bool {
         switch field {
         case .title, .place, .notes:
             guard let x = a.value.asString, let y = b.value.asString else { return false }

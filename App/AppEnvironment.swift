@@ -66,7 +66,9 @@ final class AppEnvironment {
             let analyseRunner = ImageAnalysisJobRunner(
                 service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                 results: AnalysisResultStore(database: database), jobs: jobs, settings: ollamaSettings, time: SystemTimeSource(),
-                contexts: ContextStore(database: database), windows: CaptureStore(database: database))
+                contexts: ContextStore(database: database), windows: CaptureStore(database: database),
+                reconciler: Reconciler(database: database, judge: LiveMeaningJudge(service: ollama, settings: ollamaSettings, database: database,
+                                                                                   time: SystemTimeSource())))
             let runner = CompositeJobRunner(runners: [
                 "test": testRunner,
                 ImageAnalysisJobRunner.analyseKind: analyseRunner,

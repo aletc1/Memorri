@@ -6,12 +6,12 @@ import Testing
     private func at(_ minutes: Int) -> Date { Date(timeIntervalSince1970: 1_791_900_000 + Double(minutes) * 60) }
 
     private func obs(_ id: String, _ field: ItemField, _ value: JSONValue, _ source: ObservationSource = .read, _ confidence: Double = 0.8,
-                     sighting: String? = nil, seen: Int = 0) -> Observation {
-        Observation(id: id, itemID: "i", sightingID: sighting ?? (source == .user ? nil : "s-\(id)"), field: field, value: value,
+                     sighting: String? = nil, seen: Int = 0) -> ItemObservation {
+        ItemObservation(id: id, itemID: "i", sightingID: sighting ?? (source == .user ? nil : "s-\(id)"), field: field, value: value,
                     source: source, confidence: confidence, observedAt: at(seen))
     }
 
-    private func resolve(_ observations: [Observation], locks: [ItemField: String] = [:]) -> ResolvedFields {
+    private func resolve(_ observations: [ItemObservation], locks: [ItemField: String] = [:]) -> ResolvedFields {
         FieldResolver.resolve(observations, locks: locks)
     }
 
