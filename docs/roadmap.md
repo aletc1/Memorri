@@ -14,6 +14,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 008 | reprocessing | Not started |
 | 009 | eventkit-sync | Not started |
 | 010 | hardening | Not started |
+| 011 | window-aware-analysis | Specified (next, by request on 2026-10-01; numbered 011 so 007 to 010 keep their places) |
 
 ## Prompts
 
@@ -46,3 +47,6 @@ Request Calendar and Reminders access, pick a target calendar and a target remin
 
 ### 010 hardening
 Detect cancellations from calendar range coverage (missing items become possibly cancelled and go to the Inbox), notifications for new and review-needed items, launch at login, backup and export, and diagnostic logs.
+
+### 011 window-aware-analysis
+Read each window of a capture on its own: split the capture into its visible windows by the stored stack, decide which can hold events, extract each on its own with the date context taken only from that window, read the nearest clock (the window's own surroundings, else the screen, else the capture time) for relative dates, flag every date whose month or year nothing names, and keep one list of items across windows and captures. Starts from the stop-gap that shipped with spec 006 (month title and label reading, guess flag, window-scoped date context; see `docs/postmortems/2026-10-01-month-view-read-as-the-capture-month.md`).
