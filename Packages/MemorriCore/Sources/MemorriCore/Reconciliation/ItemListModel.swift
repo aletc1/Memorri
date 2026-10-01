@@ -12,7 +12,7 @@ public enum ItemKindFilter: String, Sendable, Equatable, CaseIterable {
     }
 }
 
-public enum ItemContextFilter: Sendable, Equatable {
+public enum ItemContextFilter: Sendable, Hashable {
     case all
     /// Items that have no context.
     case none
@@ -163,5 +163,52 @@ public enum ItemListModel {
             valueText(detail.fields.first { $0.field == field }?.current, field: field, timezone: detail.item.timezone)
         }
         return fields.map { LockChoice(field: $0, keepItem: keep.item.id, keepValue: text(keep, $0), otherItem: other.item.id, otherValue: text(other, $0)) }
+    }
+
+    // MARK: Words for the detail
+
+    /// `read`, `guessed` or `you`.
+    public static func sourceText(_ source: ObservationSource) -> String {
+        switch source {
+        case .read: "read"
+        case .inferred: "guessed"
+        case .user: "you"
+        }
+    }
+
+    /// The field's current value and where it comes from.
+    public static func fieldText(_ field: FieldHistory, timezone: String) -> (value: String, source: String?) {
+        let chosen = field.entries.first { $0.observationID == field.chosenObservationID } ?? field.entries.first
+        return (valueText(field.current, field: field.field, timezone: timezone), chosen.map { sourceText($0.source) })
+    }
+
+    /// Why a sighting joined its item or started a new one, from the stored decision: `text-time (text 1.00, time 1.00)`.
+    public static func whyText(decisionJSON: String) -> String {
+        guard let object = (try? JSONSerialization.jsonObject(with: Data(decisionJSON.utf8))) as? [String: Any] else { return "" }
+        let rule = (object["rule"] as? String) ?? "unknown"
+        var parts: [String] = []
+        if let scores = object["scores"] as? [String: Any] {
+            for key in ["text", "time", "cosine", "rerank"] {
+                if let value = scores[key] as? Double { parts.append(String(format: "%@ %.2f", key, value)) }
+            }
+        }
+        return parts.isEmpty ? rule : "\(rule) (\(parts.joined(separator: ", ")))"
+    }
+
+    /// What an operation of the history was, in words.
+    public static func operationText(_ kind: String) -> String {
+        switch kind {
+        case "auto_merge": "Merged automatically"
+        case "merge": "Merged"
+        case "split": "Split"
+        case "dismiss": "Dismissed"
+        case "restore": "Restored"
+        case "edit": "Edited"
+        case "unlock": "Unlocked"
+        case "context": "Context changed"
+        case "different": "Marked as different"
+        case "undo": "Undone"
+        default: kind
+        }
     }
 }

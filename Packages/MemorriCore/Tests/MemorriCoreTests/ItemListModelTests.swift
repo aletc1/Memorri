@@ -131,4 +131,26 @@ import Testing
         #expect(ItemListModel.valueText(nil, field: .notes, timezone: "UTC") == "none")
         #expect(ItemListModel.valueText(.null, field: .end, timezone: "UTC") == "none")
     }
+
+    @Test func sourceWordsAndFieldText() {
+        #expect(ItemListModel.sourceText(.read) == "read" && ItemListModel.sourceText(.inferred) == "guessed" && ItemListModel.sourceText(.user) == "you")
+        let entry = FieldHistory.Entry(observationID: "o1", value: .string("Standup"), source: .inferred, confidence: 0.7, observedAt: Date(), sightingID: nil, imageID: nil, citedLines: [])
+        let field = FieldHistory(field: .title, current: .string("Standup"), chosenObservationID: "o1", locked: false, entries: [entry])
+        let text = ItemListModel.fieldText(field, timezone: "UTC")
+        #expect(text.value == "Standup" && text.source == "guessed")
+    }
+
+    @Test func whyTextShowsTheRuleAndScores() {
+        #expect(ItemListModel.whyText(decisionJSON: #"{"rule":"text-time","scores":{"text":1,"time":0.8},"kind":"appointment"}"#) == "text-time (text 1.00, time 0.80)")
+        #expect(ItemListModel.whyText(decisionJSON: #"{"rule":"sticky"}"#) == "sticky")
+        #expect(ItemListModel.whyText(decisionJSON: #"{"rule":"rerank-yes","scores":{"text":0.3,"time":1,"rerank":0.99}}"#) == "rerank-yes (text 0.30, time 1.00, rerank 0.99)")
+        #expect(ItemListModel.whyText(decisionJSON: "not json") == "")
+    }
+
+    @Test func operationWordsCoverEveryKind() {
+        for kind in ["auto_merge", "merge", "split", "dismiss", "restore", "edit", "unlock", "context", "different", "undo"] {
+            #expect(ItemListModel.operationText(kind) != kind)
+        }
+        #expect(ItemListModel.operationText("new_kind") == "new_kind")
+    }
 }

@@ -20,6 +20,9 @@ struct OllamaSettingsView: View {
     @State private var isTesting = false
     @State private var testToken = UUID()
     @State private var failures: [AnalysisJobRecord] = []
+    @State private var matchingModels: [String] = []
+    @State private var embeddingChoice: ModelChoice = .unset
+    @State private var rerankerChoice: ModelChoice = .unset
 
     var body: some View {
         ScrollView {
@@ -30,6 +33,8 @@ struct OllamaSettingsView: View {
             chosenModel = environment.ollamaSettings.model
             think = environment.ollamaSettings.think
             timeoutText = String(environment.ollamaSettings.timeoutSeconds)
+            embeddingChoice = environment.ollamaSettings.embeddingChoice
+            rerankerChoice = environment.ollamaSettings.rerankerChoice
             runCheck()
             loadModels()
         }
@@ -42,6 +47,8 @@ struct OllamaSettingsView: View {
             modelSection
             Divider()
             tuningSection
+            Divider()
+            matchingSection
             Divider()
             testSection
             Divider()
@@ -160,6 +167,46 @@ struct OllamaSettingsView: View {
         timeoutText = String(environment.ollamaSettings.timeoutSeconds)      // keep the previous value when rejected
     }
 
+    // MARK: Matching models (spec 005)
+
+    private static let noneTag = "\u{0}none"
+
+    private var matchingSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Matching models").font(.headline)
+            matchingPicker("Meaning (embeddings)", choice: embeddingChoice, defaultName: OllamaSettings.defaultEmbeddingModel) { name in
+                environment.ollamaSettings.setEmbeddingModel(name)
+                embeddingChoice = environment.ollamaSettings.embeddingChoice
+            }
+            matchingPicker("Same-event judge (reranker)", choice: rerankerChoice, defaultName: OllamaSettings.defaultRerankerModel) { name in
+                environment.ollamaSettings.setRerankerModel(name)
+                rerankerChoice = environment.ollamaSettings.rerankerChoice
+            }
+            Text("With None, Memorri matches on text and time only and flags unclear pairs as possible duplicates.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The installed models that do not read images, plus None. An unset choice shows the default when it is installed.
+    private func matchingPicker(_ title: String, choice: ModelChoice, defaultName: String, set: @escaping (String?) -> Void) -> some View {
+        let selected: String
+        switch choice {
+        case .unset: selected = matchingModels.contains(defaultName) ? defaultName : Self.noneTag
+        case .none: selected = Self.noneTag
+        case .named(let name): selected = name
+        }
+        return HStack {
+            Text(title).frame(width: 190, alignment: .leading)
+            Picker(title, selection: Binding(get: { selected }, set: { set($0 == Self.noneTag ? nil : $0) })) {
+                Text("None").tag(Self.noneTag)
+                if case .named(let name) = choice, !matchingModels.contains(name) { Text(name).tag(name) }      // kept even when it is gone
+                ForEach(matchingModels, id: \.self) { Text($0).tag($0) }
+            }
+            .labelsHidden().frame(width: 320)
+            .accessibilityLabel(title)
+        }
+    }
+
     // MARK: Test the model and the queue (user story 4)
 
     private var testSection: some View {
@@ -256,6 +303,7 @@ struct OllamaSettingsView: View {
         Task {
             await service.applyDefaultModelIfNeeded()
             chosenModel = environment.ollamaSettings.model
+            if let installed = try? await service.client().models() { matchingModels = installed.filter { !$0.readsImages }.map(\.name) }
             do {
                 models = try await service.modelList()
                 modelsFailed = false

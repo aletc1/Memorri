@@ -37,6 +37,8 @@ final class AppEnvironment {
     /// The list of items and what the user can do to them; `nil` when the storage is unavailable.
     let items: ItemStore?
     let itemOperations: ItemOperations?
+    /// Every operation on items, for `Undo last`; `nil` when the storage is unavailable.
+    let operationLog: OperationLog?
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -84,6 +86,7 @@ final class AppEnvironment {
             contexts = ContextStore(database: database)
             items = ItemStore(database: database)
             itemOperations = ItemOperations(database: database, reconciler: reconciler)
+            operationLog = OperationLog(database: database)
         } else {
             analysis = nil
             analysisJobs = nil
@@ -91,6 +94,7 @@ final class AppEnvironment {
             contexts = nil
             items = nil
             itemOperations = nil
+            operationLog = nil
         }
         captureService = CaptureRequestService(
             runner: Self.makeCaptureRunner(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings),
@@ -270,6 +274,7 @@ final class AppEnvironment {
     /// The SwiftUI content of each window.
     private func content(for id: WindowID) -> AnyView {
         switch id {
+        case .items: AnyView(ItemsView(environment: self))
         case .inbox: AnyView(PlaceholderView.inbox)
         case .search: AnyView(PlaceholderView.search)
         case .settings: AnyView(SettingsView(environment: self))
