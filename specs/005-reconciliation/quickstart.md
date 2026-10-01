@@ -33,3 +33,14 @@ Delete all captures in Settings → Storage. Expected: items with no sightings d
 
 ## 9. Old captures
 On a database from spec 004 with stored findings, launch the new build. Expected: the Items window is empty until a capture is analysed or reanalysed (clarification 4).
+
+## Results (2026-10-01)
+
+Run with the Debug build, `CFFIXED_USER_HOME` set to a scratch folder, Ollama with `qwen3-vl:8b-instruct` and the matching models, and pictures from `eval/golden/synthetic` only.
+
+- **1 Core tests**: all pass, including the off-mode gate on the tracked sequences.
+- **2 Duplicates across captures**: `--ingest-case eval/golden/synthetic/calendar-week-web-12h` twice and `calendar-month-web-24h` once. Log lines: `reconciled findings=3 created=3 merged=0 ... ms=51`, then `findings=3 created=0 merged=3 ... ms=7` for the repeat, then `findings=4 created=4 ... judged=1 ms=150` for the month view (first use of the matching models). The Items window listed 7 appointments; items seen twice show `2 sightings`; two different meetings at the same time stayed separate items. As expected.
+- **Window actions**: selecting an item showed its fields with `read` / `guessed`, its sightings with `why: text-time (text 1.00, time 1.00)` and its History (`Merged automatically (automatic)`). `Dismiss` hid the item and `Undo last` brought it back, with the dismissal struck through in History. As expected. One difference found and fixed: after `Dismiss` the item stayed selected but its `Restore` button did not show, because the buttons only looked at visible rows.
+- **3 Reanalysis (SC-003)**, **4 fields**, **5 user rules**, **6 merge, split, undo**, **8 cleanup**, **9 old captures**: not driven through the app window. Memorri never becomes the frontmost app, so keystrokes and text fields cannot be automated, and buttons could only be pressed by screen position (done for Dismiss and Undo last above). They are covered by tests instead: `ReconcilerTests` and `run --reconcile` (3), `ReconcilerFieldTests` (4), `ItemOperationsTests`, `ReconcilerTests` and the sequence cases (5), `ItemMergeSplitTests` and `UndoTests` (6), `CleanupServiceTests` (8), `StorageDatabaseTests` (9, migration v5 adds `reconciled_at` and `reconcile_error` as nullable columns, so earlier analyses are not reconciled).
+- **7 Eval**: `reconcile --models on`: recall 1.000, wrong merges 0.000, judged share 0.083, 22 ms per capture; `--models off`: recall 1.000 without translations, translated pairs flagged 1.00, wrong merges 0.000, 3 ms; `compare` shows only the translated case changing (0/3 to 3/3 merged). `run --reconcile`: 48 findings, 46 items, 46 expected events, 0 new items after the second analysis.
+

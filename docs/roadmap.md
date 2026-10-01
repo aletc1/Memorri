@@ -8,7 +8,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 002 | capture-and-storage | Done |
 | 003 | ollama-connector | Done |
 | 004 | ocr-extraction-and-eval | Done |
-| 005 | reconciliation | In progress |
+| 005 | reconciliation | Done |
 | 006 | items-ui-evidence | Not started |
 | 007 | search | Not started |
 | 008 | reprocessing | Not started |

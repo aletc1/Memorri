@@ -85,3 +85,21 @@ Decisions for [plan.md](plan.md). Each one has a decision, the reason and what e
 
 - **Decision**: `memorri-eval reconcile [--cases eval/golden/synthetic-sequences] [--models off|on]` reads sequence cases (findings per capture plus the expected event of each finding, see [contracts/eval-cli.md](contracts/eval-cli.md)), runs the reconciler on an in-memory database, and reports pairwise merge recall (share of same-event finding pairs that ended in one item, SC-001), wrong-merge rate (share of items holding findings of two events, SC-002), reranker share (SC-006) and time per capture. `--models off` uses only text and time (deterministic, runs in `swift test`); `on` calls the local models. `memorri-eval run --reconcile` runs the 27 synthetic captures twice through the full pipeline and counts items against distinct events (SC-007). The generator `SyntheticSequences` writes truncations, view changes, translations, near-identical different meetings, recurring meetings on different days, contexts and dismissals.
 - **Rationale**: the vision model is not needed to measure matching, and a deterministic set can gate every change (Constitution VI).
+
+## Results (T044, T051, T052; 2026-10-01)
+
+Measured on the tracked synthetic sequences (11 cases, 37 captures), the 27 synthetic pictures through the real pipeline (`qwen3-vl:8b-instruct`) and the Debug app with an isolated home. Thresholds are the ones in ADR 0020.
+
+| Criterion | Evidence | Result |
+|---|---|---|
+| SC-001 merge recall at least 95% | `memorri-eval reconcile --models on`: 1.000 (translated pairs included). `--models off`: 1.000 on the pairs without translations, and every translated pair flagged as a possible duplicate | Met, on a set that was also used for tuning (ADR 0020) |
+| SC-002 wrong merges at most 2% | Both modes: 0.000 of 28 (on) and 31 (off) items. Before tuning, `on` gave 0.12 (research R4) | Met |
+| SC-003 a second analysis creates no item | `run --reconcile`, real model: after the second analysis 46 items, 0 of them new. Unit and sequence tests: `ReconcilerTests` (reanalysis), `ReconcileRunnerTests` | Met |
+| SC-004 undo restores everything | `UndoTests`: snapshot equality of every item, observation, lock, alias, keep-apart and possible-duplicate row after undoing merge, split, edit, unlock, dismiss, restore, different, automatic merge and context change | Met |
+| SC-005 user values and dismissals stick | Sequence cases `edited-title-stays` and `dismissed-stays-dismissed`: 0 overwritten titles, 0 recreated dismissals, in both modes | Met |
+| SC-006 under 2 s per capture; judge for under 10% of pairs | 3.3 ms per capture off, 22 ms on (first call after loading the models about 150 ms in the app); 8.3% of compared pairs judged; a 250-finding capture among 5,000 items in 20 contexts plans in 0.3 s (`ReconcilerScaleTests`) | Met |
+| SC-007 no more items than events; two actions to see a source | `run --reconcile`: 48 findings became 46 items for 46 expected events (the analysis found 8 unexpected findings and missed 6, see its report; reconciliation merged two across pictures). In the app: select a row, and the Sightings list shows date, time and display | Met |
+| SC-008 a merge explains itself, every field shows its sightings | `ItemStoreTests` detail tests; the window's `why` line shows the stored rule and scores | Met |
+
+Known gaps: the tuning set and the measuring set are the same invented sequences, so the figures are optimistic and should be rechecked on the first weeks of real use; two different events with near-identical titles at exactly the same start can be merged by the reranker (R4), and the user can split them; the small reranker is order-sensitive, which is why both orders are asked.
+

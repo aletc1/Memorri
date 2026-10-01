@@ -31,7 +31,8 @@ final class ItemsViewModel {
     // MARK: Reading
 
     var visibleRows: [ItemRow] { ItemListModel.visible(rows, filter: filter) }
-    var selectedRows: [ItemRow] { visibleRows.filter { selection.contains($0.item.id) } }
+    /// All rows, not only the visible ones: a dismissed item stays selected (and can be restored) after the filter hides it.
+    var selectedRows: [ItemRow] { rows.filter { selection.contains($0.item.id) } }
     var canMerge: Bool { ItemListModel.canMerge(selectedRows) }
     var statusAction: ItemListModel.StatusAction? { ItemListModel.statusAction(for: selectedRows) }
     var isAvailable: Bool { environment.items != nil }

@@ -45,7 +45,7 @@ Decisions are in [research.md](research.md); the architecture is ADR 0020 (Propo
 | III. Idempotent, no duplicates | Pass | Reanalysis replaces the picture's sightings in one transaction and scores against items as they were, so item ids survive; merges are logged and reversible. SC-003 is a test. |
 | IV. The user wins | Pass | Edits become locked user observations; dismissed items are kept as tombstones and still match; a split writes `keep_apart`. Nothing syncs in this spec. |
 | V. Raw data kept, under user control | Pass | Sightings cascade with their capture; items are recomputed after cleanup; user-touched items and tombstones remain. Storage figures unchanged in form. |
-| VI. Test-first core, measured prompts | Pass | All matching and resolution code is pure and test-first. The reranker instruction is versioned (`rerank-v1`) and measured by `memorri-eval reconcile`; thresholds are set on the synthetic set and recorded. |
+| VI. Test-first core, measured prompts | Pass | All matching and resolution code is pure and test-first. The reranker instruction is versioned (`rerank-v2`) and measured by `memorri-eval reconcile`; thresholds are set on the synthetic set and recorded. |
 | VII. Incremental, always runnable | Pass | Ends with a runnable app (items appear in the Items window after analysis) and a runnable eval. No sync. |
 | VIII. Decisions recorded | Pass | ADR 0020 (reconciliation: sightings, field observations, operation log, scoring with an optional reranker). ADR 0014 relied on. |
 
