@@ -140,11 +140,31 @@ public struct AnalysisPipeline: Sendable {
         }
         let resolved = classification.resolved()
 
+        // What the picture's surroundings say: tags from the capture, the text and the first call. They feed the context choice,
+        // and the context decides the time zone the dates are read in, so both are settled before the dates are resolved.
+        let tags = TagExtractor.tags(width: input.image.width, height: input.image.height, scale: input.displayScale, windows: input.windows,
+                                     lines: lines, classification: resolved)
+        let decision = input.userChoice.flatMap { $0.source == .user ? $0 : nil }
+            ?? ContextMatcher.decide(contexts: input.contexts, windows: input.windows, tags: tags, lines: lines)
+        let (zone, zoneSource) = Self.zone(for: input.contexts.first { $0.id == decision.contextID }, mac: input.macTimezone)
+        let locales = Self.locales(input.locales, preferring: tags.first { $0.key == "language" }?.value)
+        let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
+        let headers = calendarKind ? DateResolver.headers(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
+        let cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
+        let order = tags.first { $0.key == "date_order" }.flatMap { DateOrder(rawValue: $0.value) }
+        let base = ResolutionContext(captureTime: input.captureTime, timezone: zone, headers: headers, lines: lines, dateOrder: order,
+                                     locales: locales, cells: cells)
+
         // Extract: the model lists what the picture shows, with literal texts and the lines they come from.
-        let (prompt, capped) = ExtractionPrompts.extractPrompt(kind: resolved.kind, lines: lines,
+        // Only the calendar's own grid goes to the model when other windows share the picture.
+        let shown = SubjectRegion.lines(lines, kind: resolved.kind, headers: headers, cells: cells)
+        let (prompt, capped) = ExtractionPrompts.extractPrompt(kind: resolved.kind, lines: shown,
                                                               pictureSize: (input.image.width, input.image.height))
+        // A long list takes the model longer to write out: wait in proportion, never less than the configured time.
+        let extractSettings = ModelStepSettings(model: settings.model, think: settings.think,
+                                                timeout: max(settings.timeout, min(900, 90 + 1.5 * Double(shown.count))), modelThinks: settings.modelThinks)
         let placeholder = "[picture \(input.analysisSize.width)x\(input.analysisSize.height)]"
-        let extraction = await ModelStep.call(using: model, settings: settings, step: "extract", prompt: prompt, picture: input.analysisJPEG,
+        let extraction = await ModelStep.call(using: model, settings: extractSettings, step: "extract", prompt: prompt, picture: input.analysisJPEG,
                                               placeholder: placeholder, schema: ExtractionSchemas.extractSchema(for: resolved.kind),
                                               promptVersion: ExtractionPrompts.version(for: resolved.kind),
                                               schemaVersion: ExtractionSchemas.schemaVersion(for: resolved.kind), startedAt: time.now())
@@ -165,20 +185,6 @@ public struct AnalysisPipeline: Sendable {
         }
         let checked = CitationCheck.apply(drafts, lineCount: lines.count)
         discards += checked.discarded
-        // What the picture's surroundings say: tags from the capture, the text and the first call. They feed the context choice,
-        // and the context decides the time zone the dates are read in, so both are settled before the dates are resolved.
-        let tags = TagExtractor.tags(width: input.image.width, height: input.image.height, scale: input.displayScale, windows: input.windows,
-                                     lines: lines, classification: resolved)
-        let decision = input.userChoice.flatMap { $0.source == .user ? $0 : nil }
-            ?? ContextMatcher.decide(contexts: input.contexts, windows: input.windows, tags: tags, lines: lines)
-        let (zone, zoneSource) = Self.zone(for: input.contexts.first { $0.id == decision.contextID }, mac: input.macTimezone)
-        let locales = Self.locales(input.locales, preferring: tags.first { $0.key == "language" }?.value)
-        let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
-        let headers = calendarKind ? DateResolver.headers(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
-        let cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
-        let order = tags.first { $0.key == "date_order" }.flatMap { DateOrder(rawValue: $0.value) }
-        let base = ResolutionContext(captureTime: input.captureTime, timezone: zone, headers: headers, lines: lines, dateOrder: order,
-                                     locales: locales, cells: cells)
         let geometry = calendarKind ? Geometry(image: input.image, columnWidth: Self.columnWidth(headers: headers, imageWidth: input.image.width,
                                                                                                   kind: resolved.kind)) : nil
         let findings = checked.kept.map { Self.assemble($0, lines: lines, context: base, geometry: geometry, tags: tags) }

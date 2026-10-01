@@ -61,7 +61,7 @@ final class AppEnvironment {
             let pictures = StoredPictureProvider(paths: context.paths, store: captures)
             let testRunner = ModelTestJobRunner(
                 service: ollama, store: jobs, pictures: pictures, settings: ollamaSettings, time: SystemTimeSource())
-            let pipeline = AnalysisPipeline(recogniser: VisionTextRecogniser(), model: ServiceModelChatting(service: ollama),
+            let pipeline = AnalysisPipeline(recogniser: TiledTextRecogniser(base: VisionTextRecogniser()), model: ServiceModelChatting(service: ollama),
                                             time: SystemTimeSource())
             let analyseRunner = ImageAnalysisJobRunner(
                 service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),

@@ -181,12 +181,15 @@ private struct ContextsBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Contexts").font(.headline)
-            Text("A context is a customer, remote session or workspace. Memorri picks it for a picture from its hints; the context's time zone is the one its dates are read in. Reanalyse a picture after changing a context.")
+            Text("A context is a customer, a remote session or a workspace. Memorri gives a picture to a context when it finds one of the context's hints in it, "
+                 + "and reads the picture's dates in that context's time zone. Window title and application hints count the most. "
+                 + "Choose Reanalyse on a picture after changing a context.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if contexts.isEmpty { Text("No contexts yet.").foregroundStyle(.secondary) }
             ForEach(contexts) { context in
                 ContextEditor(context: context, store: environment.contexts, onChange: { reload(); onChange() }).id(context.id)
             }
-            Button("Add context") { add() }.disabled(environment.contexts == nil)
+            Button { add() } label: { Label("Add context", systemImage: "plus") }.disabled(environment.contexts == nil)
         }
         .onAppear(perform: reload)
     }
@@ -229,46 +232,54 @@ private struct ContextEditor: View {
 
     private func label(_ kind: ContextHint.Kind) -> String {
         switch kind {
-        case .windowTitle: "Window title"
-        case .app: "Application"
-        case .domain: "Domain"
-        case .keyword: "Keyword"
+        case .windowTitle: "Window title contains"
+        case .app: "Application is"
+        case .domain: "Web or mail domain"
+        case .keyword: "Text on screen contains"
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                TextField("Name", text: $name).textFieldStyle(.roundedBorder).frame(maxWidth: 220)
-                    .focused($focused, equals: "name").onSubmit(save)
-                Picker("Time zone", selection: $timezone) {
-                    Text("Mac's time zone").tag(String?.none)
-                    ForEach(Self.zones, id: \.self) { Text($0).tag(String?.some($0)) }
+        VStack(alignment: .leading, spacing: 10) {
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                GridRow {
+                    Text("Name").foregroundStyle(.secondary)
+                    TextField("Customer or workspace name", text: $name).textFieldStyle(.roundedBorder)
+                        .focused($focused, equals: "name").onSubmit(save)
+                    Button(role: .destructive) { try? store?.delete(id: context.id); onChange() } label: { Label("Delete", systemImage: "trash") }
                 }
-                .fixedSize()
-                .onChange(of: timezone) { save() }
-                Spacer()
-                Button("Delete", role: .destructive) { try? store?.delete(id: context.id); onChange() }
-            }
-            ForEach($hints) { $hint in
-                HStack {
-                    Picker("Hint", selection: $hint.kind) {
-                        ForEach(ContextHint.Kind.allCases, id: \.self) { Text(label($0)).tag($0) }
+                GridRow {
+                    Text("Time zone").foregroundStyle(.secondary)
+                    Picker("Time zone", selection: $timezone) {
+                        Text("Mac's time zone").tag(String?.none)
+                        ForEach(Self.zones, id: \.self) { Text($0).tag(String?.some($0)) }
                     }
-                    .labelsHidden().fixedSize()
-                    .onChange(of: hint.kind) { save() }
-                    TextField("Text to look for", text: $hint.value).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
-                        .focused($focused, equals: hint.id.uuidString).onSubmit(save)
-                    Button { hints.removeAll { $0.id == hint.id }; save() } label: { Image(systemName: "minus.circle") }
-                        .buttonStyle(.borderless).help("Remove this hint")
+                    .labelsHidden()
+                    .onChange(of: timezone) { save() }
+                    .gridCellColumns(2)
                 }
             }
-            HStack {
-                Button("Add hint") { hints.append(HintDraft(kind: .windowTitle, value: "")) }.buttonStyle(.link)
-                if let message { Text(message).foregroundStyle(.red).font(.callout) }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Recognise its pictures by").font(.subheadline).foregroundStyle(.secondary)
+                ForEach($hints) { $hint in
+                    HStack(spacing: 8) {
+                        Picker("Hint", selection: $hint.kind) {
+                            ForEach(ContextHint.Kind.allCases, id: \.self) { Text(label($0)).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 190)
+                        .onChange(of: hint.kind) { save() }
+                        TextField("Text to look for", text: $hint.value).textFieldStyle(.roundedBorder)
+                            .focused($focused, equals: hint.id.uuidString).onSubmit(save)
+                        Button { hints.removeAll { $0.id == hint.id }; save() } label: { Image(systemName: "minus.circle") }
+                            .buttonStyle(.borderless).help("Remove this hint")
+                    }
+                }
+                Button { hints.append(HintDraft(kind: .windowTitle, value: "")) } label: { Label("Add hint", systemImage: "plus.circle") }
+                    .buttonStyle(.borderless)
             }
+            if let message { Text(message).foregroundStyle(.red).font(.callout) }
         }
-        .padding(10)
+        .padding(12)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.07)))
         .onChange(of: focused) { old, new in if old != nil, old != new { save() } }
     }

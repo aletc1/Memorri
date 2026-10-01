@@ -29,7 +29,7 @@ struct CLIAnalyser: CaseAnalysing {
             case .failure: throw EvalRefusal.serverUnavailable(ServerStatus.noModelChosen.message)
             }
         }
-        let analyser = PipelineCaseAnalyser(recogniser: VisionTextRecogniser(), model: ServiceModelChatting(service: service),
+        let analyser = PipelineCaseAnalyser(recogniser: TiledTextRecogniser(base: VisionTextRecogniser()), model: ServiceModelChatting(service: service),
                                             settings: stepSettings, size: size, contexts: contexts)
         return try await analyser.analyse(golden, replaying: steps)
     }

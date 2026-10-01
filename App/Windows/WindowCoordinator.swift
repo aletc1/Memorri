@@ -15,9 +15,14 @@ enum WindowID: String, CaseIterable {
         }
     }
 
+    /// Settings holds long lists (pictures, contexts), so it can be resized.
+    var isResizable: Bool { self == .settings }
+
+    var minimumContentSize: NSSize { NSSize(width: 560, height: 420) }
+
     var contentSize: NSSize {
         switch self {
-        case .settings: NSSize(width: 680, height: 600)
+        case .settings: NSSize(width: 760, height: 680)
         case .onboarding: NSSize(width: 460, height: 340)
         case .inbox, .search: NSSize(width: 420, height: 220)
         }
@@ -57,11 +62,16 @@ final class WindowCoordinator {
 
     private func makeWindow(for id: WindowID) -> NSWindow {
         let controller = NSHostingController(rootView: contentProvider(id))
+        if id.isResizable { controller.sizingOptions = [] }      // the window's size is the user's, not the content's
         let window = NSWindow(contentViewController: controller)
         window.title = id.title
-        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.styleMask = id.isResizable ? [.titled, .closable, .miniaturizable, .resizable] : [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
         window.setContentSize(id.contentSize)
+        if id.isResizable {
+            window.contentMinSize = id.minimumContentSize
+            window.setFrameAutosaveName("Memorri.\(id.rawValue)")      // remembers the size the user chose
+        }
         return window
     }
 

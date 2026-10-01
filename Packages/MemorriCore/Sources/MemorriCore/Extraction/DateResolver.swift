@@ -271,7 +271,7 @@ public enum DateResolver {
             }
             if chosen == nil || !valid(chosen!, zone: timezone) { chosen = nearestDay(weekday: weekday, day: dayNumber, reference: today, zone: timezone) }
             guard let day = chosen, valid(day, zone: timezone) else { return nil }
-            return DateHeader(line: item.line.n, midX: item.line.box.midX, date: DateComponents(year: day.year, month: day.month, day: day.day))
+            return DateHeader(line: item.line.n, midX: item.line.box.midX, midY: item.line.box.midY, date: DateComponents(year: day.year, month: day.month, day: day.day))
         }
         return found.sorted { $0.midX < $1.midX }
     }

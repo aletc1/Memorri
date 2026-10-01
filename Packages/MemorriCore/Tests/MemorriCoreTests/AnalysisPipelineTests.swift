@@ -122,7 +122,7 @@ import Testing
         #expect(request.schema == ExtractionSchemas.extractSchema(for: .calendarWeek))
         #expect(request.picture == Data("analysis-bytes".utf8))
         let step = try #require(result.steps.last)
-        #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v4" && step.schemaVersion == "schema-calendar_week-v1")
+        #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v5" && step.schemaVersion == "schema-calendar_week-v1")
         #expect(result.findings.count == 1 && result.findings[0].title == "Team sync" && result.findings[0].citedLines == [1])
         #expect(result.findings[0].kind == .appointment && result.findings[0].confidence == 0.5)   // the end is guessed, so at most 0.5
         #expect(result.model == "m" && result.pictureLongEdge == 2048 && !result.lineCapApplied)
@@ -365,6 +365,25 @@ import Testing
         #expect(result.findings[0].start == SyntheticTime.date(2026, 10, 5, 9, 0, zone: "Europe/Madrid"))
         #expect(result.findings[0].provenance["start"] == FieldProvenance(origin: .read, rule: "month-cell"))
         #expect(result.findings[1].start == SyntheticTime.date(2026, 10, 21, zone: "Europe/Madrid") && result.findings[1].allDay)
+    }
+
+    @Test func textOfOtherWindowsOutsideAMonthGridIsNotSentToTheModel() async throws {
+        var lines: [RecognisedLine] = []
+        for (i, number) in (Array(28...30) + Array(1...31) + [1, 2]).enumerated() {
+            lines.append(RecognisedLine(n: i + 1, text: "\(number)", box: PixelBox(x: 1000 + (i % 7) * 200 + 10, y: 60 + (i / 7) * 150, width: 22, height: 18), confidence: 0.9))
+        }
+        lines.append(RecognisedLine(n: 37, text: "09:00 Budget meeting", box: PixelBox(x: 1010, y: 60 + 150 + 30, width: 160, height: 18), confidence: 0.9))
+        lines.append(RecognisedLine(n: 38, text: "text of another window", box: PixelBox(x: 20, y: 300, width: 300, height: 18), confidence: 0.9))
+        let (rig, base) = dateInput(lines: lines)
+        rig.model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer.replacingOccurrences(of: "calendar_week", with: "calendar_month"))
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Budget meeting","cited_lines":[37],"start_text":"09:00"}]}"#)
+        let input = PipelineInput(image: makeTestImage(width: 3400, height: 1000), classificationJPEG: base.classificationJPEG, classificationSize: base.classificationSize,
+                                  analysisJPEG: base.analysisJPEG, analysisSize: base.analysisSize, macTimezone: madrid, captureTime: captureTime, locales: base.locales)
+        let result = try await rig.pipeline.analyse(input, settings: settings)
+        let prompt = try #require(rig.model.requests(whereSchemaHas: "findings").first).prompt
+        #expect(prompt.contains("Budget meeting") && !prompt.contains("another window"))
+        #expect(result.findings.first?.start == SyntheticTime.date(2026, 10, 5, 9, 0, zone: "Europe/Madrid"))
+        #expect(result.lines.count == 38)                       // the stored lines are all of them
     }
 
     // MARK: Durations
