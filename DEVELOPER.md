@@ -29,7 +29,7 @@ Do these once per Mac.
    brew install xcodegen
    specify --version && xcodegen --version
    ```
-2. Install Ollama and pull the model the app uses: `ollama pull qwen3.8:27b-mlx`.
+2. Install Ollama and pull the model the app uses: `ollama pull qwen3-vl:8b-instruct` (about 6 GB; `qwen3.8:27b-mlx` is the slower, more accurate alternative).
 3. Create the local signing certificate. Without it, macOS forgets the Screen Recording permission on every rebuild:
    ```bash
    scripts/create-signing-certificate.sh
@@ -76,7 +76,7 @@ staging/                             captures being written; emptied at every st
 
 The app talks to a local Ollama server (spec 003). It cannot read screenshots yet; it only tests the model and runs test jobs.
 
-- **Install**: `brew install ollama` (or the Ollama app), start it, then `ollama pull qwen3.8:27b-mlx`. The app chooses that model by itself on first use when it is installed. Settings → Ollama shows the connection status, the model picker (vision models only), thinking, the timeout, **Test the model** and the queue.
+- **Install**: `brew install ollama` (or the Ollama app), start it, then `ollama pull qwen3-vl:8b-instruct`. The app chooses that model by itself on first use when it is installed. Settings → Ollama shows the connection status, the model picker (vision models only), thinking, the timeout, **Test the model** and the queue.
 - **Local only**: the address must be `localhost`, `127.0.0.1` or `::1`; anything else is rejected. `OllamaURLSessionTransport.swift` is the only file allowed to use URLSession, so captured content cannot leave the Mac by accident. `NoNetworkTests` fails if any other file names it, including in a comment. See ADR 0011.
 - **Fake server**: `python3 scripts/fake-ollama.py --port 11999 --mode ok|invalid|slow|error|flaky|hang [--delay 5] [--no-vision] [--no-capabilities] [--thinking]` stands in for Ollama when you need failure cases. Point Settings at `http://localhost:11999` (or `defaults write com.aletc1.memorri memorri.ollama.address http://localhost:11999` and relaunch; the model is `fake-vision:1b`). Reset with `http://localhost:11434`.
 - **Logs**: categories `ollama` (`check …`, `request …`) and `analysis` (`job started/finished/failed`, `queue holding/resumed/paused`, `recovered running=<n>`). Info lines need `--level info`: `/usr/bin/log stream --level info --predicate 'subsystem == "com.aletc1.memorri" AND category == "analysis"'`.

@@ -1,6 +1,6 @@
 # Memorri
 
-Native macOS menu-bar app. It captures screenshots of every display (local apps, remote desktops and other sessions the user is permitted to capture), runs Apple Vision OCR plus a local Ollama vision model (`qwen3.8:27b-mlx`) to infer appointments, tasks and reminders, and stores them in a local SQLite index with cropped evidence and full-text search. The last step syncs them to a chosen macOS Calendar and Reminders list through EventKit.
+Native macOS menu-bar app. It captures screenshots of every display (local apps, remote desktops and other sessions the user is permitted to capture), runs Apple Vision OCR plus a local Ollama vision model (`qwen3-vl:8b-instruct` by default, ADR 0019) to infer appointments, tasks and reminders, and stores them in a local SQLite index with cropped evidence and full-text search. The last step syncs them to a chosen macOS Calendar and Reminders list through EventKit.
 
 Read `.specify/memory/constitution.md` first. The roadmap is in `docs/roadmap.md`.
 

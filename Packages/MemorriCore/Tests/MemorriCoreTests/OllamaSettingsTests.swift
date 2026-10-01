@@ -15,7 +15,7 @@ import Testing
         #expect(settings.think == .off)
         #expect(settings.timeoutSeconds == 300)
         #expect(settings.analysisPaused == false)
-        #expect(OllamaSettings.recommendedModel == "qwen3.8:27b-mlx")
+        #expect(OllamaSettings.recommendedModel == "qwen3-vl:8b-instruct")
     }
 
     @Test func aLocalAddressIsAcceptedAndStoredCleanly() {

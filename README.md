@@ -33,7 +33,7 @@ The full list is in the [constitution](.specify/memory/constitution.md).
 ## Requirements (planned)
 
 - macOS 26 or later
-- [Ollama](https://ollama.com) with a vision model (developed against `qwen3.8:27b-mlx`)
+- [Ollama](https://ollama.com) with a vision model (`qwen3-vl:8b-instruct` by default; `qwen3.8:27b-mlx` is more accurate and about twice as slow)
 - Screen Recording permission, plus Calendar and Reminders access for sync
 
 Memorri is not signed or notarized. It is built and run locally only.

@@ -15,7 +15,9 @@ public struct OllamaSettings: Sendable {
     public static let timeoutKey = "memorri.ollama.timeoutSeconds"
     public static let pausedKey = "memorri.analysis.paused"
 
-    public static let recommendedModel = "qwen3.8:27b-mlx"
+    /// `qwen3-vl:8b-instruct`: on the 27 synthetic cases it scored 0.83 precision and 0.87 recall at 9 seconds a picture, against 0.89 and 0.89
+    /// at 21 seconds for `qwen3.8:27b-mlx`, which stays a good choice for the most accurate answers (ADR 0019).
+    public static let recommendedModel = "qwen3-vl:8b-instruct"
     public static let defaultTimeoutSeconds = 300
     public static let timeoutRange = 10...1800
     public static let defaultThink = ThinkSetting.off

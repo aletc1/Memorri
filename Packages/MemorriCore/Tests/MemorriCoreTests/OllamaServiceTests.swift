@@ -152,7 +152,8 @@ import Testing
     // MARK: model list and default choice (user story 2)
 
     private let sixModels = """
-    {"models":[{"name":"qwen3.8:27b-mlx","capabilities":["completion","vision","tools","thinking"]},
+    {"models":[{"name":"qwen3-vl:8b-instruct","capabilities":["completion","vision","tools"]},
+               {"name":"qwen3.8:27b-mlx","capabilities":["completion","vision","tools","thinking"]},
                {"name":"qwen3.6:35b-mlx","capabilities":["completion","vision","thinking","tools"]},
                {"name":"qwen3-coder:30b","capabilities":["completion","tools"]},
                {"name":"rerank-a","capabilities":["tools","thinking","completion"]},
@@ -164,10 +165,10 @@ import Testing
         let rig = makeRig()
         script(rig.transport, models: sixModels)
         let list = try await rig.service.modelList()
-        #expect(list.usable.map(\.name) == ["qwen3.8:27b-mlx", "qwen3.6:35b-mlx"])
+        #expect(list.usable.map(\.name) == ["qwen3-vl:8b-instruct", "qwen3.8:27b-mlx", "qwen3.6:35b-mlx"])
         #expect(list.usable.allSatisfy { $0.readsImages })
         #expect(list.hiddenCount == 4)
-        #expect(list.usable.first?.thinks == true)
+        #expect(list.usable.first?.thinks == false && list.usable.dropFirst().first?.thinks == true)
     }
 
     @Test func aFailingServerMakesTheListThrow() async {
@@ -194,7 +195,7 @@ import Testing
         let rig = makeRig(model: nil)
         script(rig.transport, models: sixModels)
         await rig.service.applyDefaultModelIfNeeded()
-        #expect(rig.settings.model == "qwen3.8:27b-mlx")
+        #expect(rig.settings.model == "qwen3-vl:8b-instruct")
     }
 
     @Test func nothingIsChosenWhenTheRecommendedModelIsNotInstalled() async {

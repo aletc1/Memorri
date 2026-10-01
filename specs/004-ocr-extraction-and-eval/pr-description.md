@@ -38,6 +38,8 @@ The last column re-scores the stored model answers without calling the model (`m
 - [x] Branch `004-ocr-extraction-and-eval`, Conventional Commits.
 
 ## Known gaps
+- The default model is now `qwen3-vl:8b-instruct` (ADR 0019): 0.83 precision / 0.87 recall / 0.90 field accuracy at 9 s a picture on the synthetic set, against 0.89 / 0.89 / 0.98 at 21 s for `qwen3.8:27b-mlx`. Email is its weak screen (0.40 / 0.40). The prompts were tuned on the same cases.
+- Month views are read by code, not by the model (ADR 0018, still Proposed).
 - SC-012's clause "a wrong tag is rarely reported with high confidence" is missed narrowly (2 in 27 against 1 in 20): visual tags reuse the classification's single confidence. Noted in `spec.md`.
 - The model adds a dateless task for polite requests in two cases, paraphrases a title in three, puts a message's sender in `people` in four; `language` is missing on pictures with few sentences.
 - Real-picture runs (a month view on a 3440 px display, a chat) were done by hand and are not in the golden set. On the month view 169 of 173 findings got a date before the last fix; the model still repeats a recurring entry for each day, extraction of a full month takes about 5 minutes (SC-008's 3 minutes is missed there), and a chat's dateless to-dos arrive as tasks with an unresolved date text.

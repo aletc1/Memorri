@@ -140,3 +140,13 @@ A real capture (a chat client, a small display, a month calendar on a 3440 x 144
 - **Week views that stack the day number over the weekday name** (Teams) are read: `DateResolver.headers` pairs the number with the name under it and fills a column whose number was not read. A picture the model calls month whose date headers run across it, much wider than any grid of day labels, is a week view (`AnalysisPipeline.corrected`).
 - **The visual tags are doubted when the windows disagree** (a calendar in Teams read as Thunderbird on Linux over VNC): the tag is kept at low confidence.
 - **Month views are read by geometry, not by the model** (ADR 0018, Proposed): complete, exact and under a minute; the model's extract call took 5 to 6 minutes and returned 70% of the entries.
+
+## Prompt tuning and the default model (2026-10-01)
+
+Six models were run on the 27 synthetic cases (table in ADR 0019). What the tuning showed:
+- **The extract prompt is numbered rules, a field contract and examples** (`extract-<kind>-v11`). The earlier paragraph prompts let `qwen3.8:27b-mlx` fall into a loop on dark Teams pictures (a title that repeated the whole screen) and made the small models write a sentence in a date field. v9 moved `qwen3-vl:8b-instruct` from 0.73 / 0.80 to 0.83 / 0.87; v10 and v11 (sharper kind, place, advice and message-list rules) changed nothing on that set, so the 8B model is at its plateau there.
+- **A time range is split in code.** The models leave "14:00-15:30" whole in `start_text`; `FindingDraft.splittingTimeRange` makes the start and the end.
+- **The answer length is capped** (`num_predict`), with room for thinking tokens on models that think: a runaway fails at once, not at the timeout. A first cap that ignored thinking made `qwen3-vl:8b` fail 20 of 27 cases, which was the cap's fault, not the model's.
+- **`think: false` does not reach every model.** The field is sent (stored requests show it), but Ollama ignores it for `qwen3-vl:8b`; `qwen3.8` and `gemma4` honour it, `minicpm-v4.5` never thinks. `/no_think` in the prompt does nothing for `qwen3-vl:8b` either. The instruct variant is the non-thinking one.
+- **Tuned on the cases that score it.** The numbers are optimistic for real captures. Local web pictures (Apple Calendar, Google Calendar, Teams, open-source calendars; `eval/out/web-pictures/`, git-ignored) are collected for labelled local cases.
+
