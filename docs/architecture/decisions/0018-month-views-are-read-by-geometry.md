@@ -1,6 +1,6 @@
 # 18. Month views are read from their lines and cells, not by the model
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-01
 - Related: spec 004, ADR 0014 (one pipeline, the model returns literal text), `specs/004-ocr-extraction-and-eval/research.md` "Changes made after a real three-display capture"
 

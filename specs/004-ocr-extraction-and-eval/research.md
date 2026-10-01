@@ -139,7 +139,7 @@ A real capture (a chat client, a small display, a month calendar on a 3440 x 144
 - **Lines joined across cells are split** (`LineSplitter`): the coloured bar of an entry is read as `|`, which joined "12:00 | Daily standup" from two cells into one line.
 - **Week views that stack the day number over the weekday name** (Teams) are read: `DateResolver.headers` pairs the number with the name under it and fills a column whose number was not read. A picture the model calls month whose date headers run across it, much wider than any grid of day labels, is a week view (`AnalysisPipeline.corrected`).
 - **The visual tags are doubted when the windows disagree** (a calendar in Teams read as Thunderbird on Linux over VNC): the tag is kept at low confidence.
-- **Month views are read by geometry, not by the model** (ADR 0018, Proposed): complete, exact and under a minute; the model's extract call took 5 to 6 minutes and returned 70% of the entries.
+- **Month views are read by geometry, not by the model** (ADR 0018): complete, exact and under a minute; the model's extract call took 5 to 6 minutes and returned 70% of the entries.
 - **The window in front is known.** The capturer records each window's place in the front-to-back order (`WindowInfo.stack`, `capture_windows.stack`, migration v4; empty for captures stored before it). `SubjectRegion` drops the lines that lie inside a window in front of the calendar window, so a popup or a file manager over the calendar is not read as entries. Memorri's own windows are left out of the picture (`SCContentFilter` excluding them).
 
 ## Prompt tuning and the default model (2026-10-01)

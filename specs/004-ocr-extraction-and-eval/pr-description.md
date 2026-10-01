@@ -1,15 +1,15 @@
 # feat: read captures, find appointments and tasks, and measure it (spec 004)
 
-Spec: `specs/004-ocr-extraction-and-eval/` (results in `quickstart.md`, numbers and decisions in `research.md` "Changes made after the real runs"). ADRs: 0014 (one pipeline, literal text), 0015 (eval harness in the core package, synthetic golden set), 0016 (tags and contexts), 0017 (picture size stays 2048).
+Spec: `specs/004-ocr-extraction-and-eval/` (results in `quickstart.md`, numbers and decisions in `research.md` "Changes made after the real runs"). ADRs: 0014 (one pipeline, literal text), 0015 (eval harness in the core package, synthetic golden set), 0016 (tags and contexts), 0017 (picture size stays 2048), 0018 (month views read by geometry), 0019 (default model `qwen3-vl:8b-instruct`).
 
 ## What changed and why
 - Each capture is read with Apple Vision (lines and boxes stored), classified into seven kinds and analysed by the local model with a prompt and schema per kind; the model returns literal texts and cited line numbers, and code resolves dates (capture time, the context's zone, headers, month cells), durations (block height, else one hour, flagged inferred), tags and contexts.
-- Contexts with hints, automatic choice, user override, and the context's time zone; windows are recorded at capture (20 per display, largest first).
+- Contexts with hints, automatic choice, user override, and the context's time zone; windows are recorded at capture (20 per display, largest first) with their front-to-back order, and Memorri's own windows are left out of the pictures; text from a window in front of a calendar is dropped before extraction.
 - Settings → Analysis: automatic analysis switch, analyse stored captures, recent pictures with state, kind, context picker, tags, findings and Reanalyse, and the Contexts block.
 - `memorri-eval` (`run`, `compare`, `generate-synthetic`, `sweep-size`) over a tracked synthetic golden set of 27 drawn cases; real cases stay untracked.
 
 ## How it was verified
-- `swift test`: 674 tests pass. Clean Debug build without warnings; Release build has no debug ingest switches; network connections only to `localhost:11434`; fresh clone builds and tests (51 s with cached dependencies).
+- `swift test`: 714 tests pass. Clean Debug build without warnings; Release build has no debug ingest switches; network connections only to `localhost:11434`; fresh clone builds and tests (51 s with cached dependencies).
 - Real model (`qwen3.8:27b-mlx`, size 2048) on the 27 synthetic cases: see the table. Quickstart scenarios 1 to 4 and part of 5 were run in the app in an isolated home.
 
 | Measure | First full run | Live run of the final code | Replay of those answers with the last code |
@@ -33,13 +33,13 @@ The last column re-scores the stored model answers without calling the model (`m
 - [x] `swift test` passes.
 - [x] The app builds and runs.
 - [x] No real captured data is committed (`git ls-files eval` lists only the README and `synthetic/`).
-- [x] New architecture decisions have ADRs (0014 to 0017).
+- [x] New architecture decisions have ADRs (0014 to 0019).
 - [x] `docs/roadmap.md` shows 004 as Done (revert that line if the open checks above should come first).
 - [x] Branch `004-ocr-extraction-and-eval`, Conventional Commits.
 
 ## Known gaps
 - The default model is now `qwen3-vl:8b-instruct` (ADR 0019): 0.83 precision / 0.87 recall / 0.90 field accuracy at 9 s a picture on the synthetic set, against 0.89 / 0.89 / 0.98 at 21 s for `qwen3.8:27b-mlx`. Email is its weak screen (0.40 / 0.40). The prompts were tuned on the same cases.
-- Month views are read by code, not by the model (ADR 0018, still Proposed).
+- Month views are read by code, not by the model (ADR 0018).
 - SC-012's clause "a wrong tag is rarely reported with high confidence" is missed narrowly (2 in 27 against 1 in 20): visual tags reuse the classification's single confidence. Noted in `spec.md`.
 - The model adds a dateless task for polite requests in two cases, paraphrases a title in three, puts a message's sender in `people` in four; `language` is missing on pictures with few sentences.
 - Real-picture runs (a month view on a 3440 px display, a chat) were done by hand and are not in the golden set. On the month view 169 of 173 findings got a date before the last fix; the model still repeats a recurring entry for each day, extraction of a full month takes about 5 minutes (SC-008's 3 minutes is missed there), and a chat's dateless to-dos arrive as tasks with an unresolved date text.
