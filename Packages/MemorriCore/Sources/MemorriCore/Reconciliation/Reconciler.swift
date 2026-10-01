@@ -130,6 +130,7 @@ public struct Reconciler: ImageReconciling {
         var usedEarlier: Set<String> = []
         var extra: [Candidate.Key: Candidate] = [:]            // what decided findings added to a candidate
         var created: [Candidate] = []                          // items this plan makes
+        var claimed: Set<Candidate.Key> = []                   // what earlier findings of this picture already joined or made
 
         for (index, finding) in snapshot.findings.enumerated() {
             let span = Self.span(of: finding)
@@ -140,6 +141,7 @@ public struct Reconciler: ImageReconciling {
             if let earlier = snapshot.earlier.first(where: { !usedEarlier.contains($0.sightingID) && $0.itemContext == snapshot.context
                                                              && TitleNormaliser.normalise($0.title) == normal && Self.sameInstant($0.when, span.start) }) {
                 usedEarlier.insert(earlier.sightingID)
+                claimed.insert(.item(earlier.itemID))
                 steps.append(.init(findingID: finding.id, target: .existing(itemID: earlier.itemID), scores: nil, rule: "same-picture", candidate: earlier.itemID))
                 Self.remember(.item(earlier.itemID), finding: finding, span: span, into: &extra)
                 continue
@@ -193,6 +195,11 @@ public struct Reconciler: ImageReconciling {
                 step = .init(findingID: finding.id, target: Self.target(of: hit.candidate), scores: hit.scores, rule: rule, candidate: hit.candidate.itemID)
             } else {
                 let uncertain = scored.filter { $0.decision == .uncertain }
+                // A picture shows each event once: when another finding of this picture already joined or made a candidate, a finding with
+                // another title is a different event and is not sent to the judge (the small reranker says yes to "Sprint review" and
+                // "Sprint retrospective" at the same time). Equal or truncated titles still merge by text.
+                let judgeable = uncertain.filter { !claimed.contains($0.candidate.key) }
+                let sameFrame = !uncertain.isEmpty && judgeable.isEmpty
                 var outcome: ReconcilePlan.Step?
                 var asked = 0
                 var lastAnswer: MatchScores?
@@ -200,7 +207,7 @@ public struct Reconciler: ImageReconciling {
                 // an undated pair in the uncertain band is flagged for the user instead (research R7).
                 let undated = span.start == nil
                 if canJudge && !undated {
-                    for entry in uncertain.prefix(Self.maxJudgedPerFinding) {
+                    for entry in judgeable.prefix(Self.maxJudgedPerFinding) {
                         guard let p = try? await judge.sameEvent(Self.judged(finding, span, context: snapshot.contextName), Self.judged(entry.candidate, context: snapshot.contextName)) else { break }
                         asked += 1
                         var withRerank = entry.scores; withRerank.rerank = p
@@ -213,12 +220,12 @@ public struct Reconciler: ImageReconciling {
                 }
                 judged += asked
                 if let outcome { step = outcome }
-                else if let best = uncertain.first {
+                else if let best = (sameFrame ? uncertain : judgeable).first {
                     // Judged "no" (a new item) or could not be judged (a new item flagged as a possible duplicate).
                     let answered = canJudge && asked > 0
                     let scores = answered ? (lastAnswer ?? best.scores) : best.scores
-                    let rule = answered ? "rerank-no" : (undated ? "undated-uncertain" : "judge-unavailable")
-                    let target: ReconcilePlan.Target = !answered && best.candidate.itemID != nil ? .newWithPossibleDuplicate(of: best.candidate.itemID!) : .newItem
+                    let rule = answered ? "rerank-no" : (undated ? "undated-uncertain" : (sameFrame ? "same-picture-different" : "judge-unavailable"))
+                    let target: ReconcilePlan.Target = !answered && !sameFrame && best.candidate.itemID != nil ? .newWithPossibleDuplicate(of: best.candidate.itemID!) : .newItem
                     step = .init(findingID: finding.id, target: target, scores: scores, rule: rule, candidate: best.candidate.itemID)
                 } else {
                     let rule = scored.first.flatMap { entry -> String? in if case .new(let r) = entry.decision { r } else { nil } } ?? "no-candidate"
@@ -226,6 +233,11 @@ public struct Reconciler: ImageReconciling {
                 }
             }
             steps.append(step)
+            switch step.target {
+            case .existing(let id): claimed.insert(.item(id))
+            case .sameAsStep(let n): claimed.insert(.step(n))
+            case .newItem, .newWithPossibleDuplicate: claimed.insert(.step(index))
+            }
             switch step.target {
             case .existing(let id): Self.remember(.item(id), finding: finding, span: span, into: &extra)
             case .sameAsStep(let n): Self.remember(.step(n), finding: finding, span: span, into: &extra)

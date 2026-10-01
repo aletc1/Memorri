@@ -144,6 +144,7 @@ import Testing
         #expect(report.captures == 2 && report.findingsFirst == 4 && report.itemsFirst == 3)
         #expect(report.itemsSecond == 3 && report.createdBySecond == 0)
         #expect(report.expectedEvents == 3 && report.text.contains("4 findings became 3 items"))
+        #expect(report.joined == ["Sprint review: month, week"] && report.text.contains("joined  Sprint review: month, week"))
     }
 
     @Test func aSecondAnalysisThatReadsAnotherTitleIsCountedAsNewItems() async throws {

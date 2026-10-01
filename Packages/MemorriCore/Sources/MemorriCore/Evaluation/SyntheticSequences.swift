@@ -56,9 +56,18 @@ public enum SyntheticSequences {
         ]),
         sequence("similar-different-meetings", captures: [
             capture("c1", day: 0, hour: 8, context: "a", [timed("design", "Design review", hour: 4), timed("budget", "Budget review", hour: 4), timed("kickoff", "Project kickoff", hour: 6),
-                                                          timed("sync", "Project sync", hour: 6)]),
+                                                          timed("sync", "Project sync", hour: 6), timed("sprint", "Sprint review", hour: 8), timed("retro", "Sprint retrospective", hour: 8),
+                                                          timed("lunch", "Team lunch", hour: 10), timed("meeting", "Team meeting", hour: 10)]),
             capture("c2", day: 0, hour: 9, context: "a", [timed("design", "Design review", hour: 4, length: 1.5), timed("budget", "Budget review", hour: 4, length: 1.5),
-                                                          timed("kickoff", "Project kickoff", hour: 6, length: 1), timed("sync", "Project sync", hour: 6, length: 1)]),
+                                                          timed("kickoff", "Project kickoff", hour: 6, length: 1), timed("sync", "Project sync", hour: 6, length: 1),
+                                                          timed("sprint", "Sprint review", hour: 8, length: 1), timed("retro", "Sprint retrospective", hour: 8, length: 1),
+                                                          timed("lunch", "Team lunch", hour: 10, length: 1), timed("meeting", "Team meeting", hour: 10, length: 1)]),
+        ]),
+        // Two different meetings that two different captures show at the same time: nothing in the pictures says they are not one event renamed.
+        sequence("same-slot-different-captures", captures: [
+            capture("c1", day: 0, hour: 8, context: "a", [timed("sprint", "Sprint review", hour: 3)]),
+            capture("c2", day: 0, hour: 9, context: "a", [timed("sprint", "Sprint review", hour: 3, length: 1), timed("retro", "Sprint retrospective", hour: 3, length: 1)]),
+            capture("c3", day: 0, hour: 10, context: "a", [timed("retro", "Sprint retrospective", hour: 3, length: 1)]),
         ]),
         sequence("recurring-standup", captures: (0..<5).flatMap { d in
             [capture("week\(d)a", day: d - 2, hour: 8, context: "a", [timed("standup-\(d)", "Daily standup", day: d - 2, hour: 1, length: 0.25, inferredEnd: true)]),

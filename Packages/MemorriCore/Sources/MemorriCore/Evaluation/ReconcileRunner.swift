@@ -223,10 +223,21 @@ public struct ReconcileRunner: Sendable {
             return try await scratch.database.pool.read { db in Set(try String.fetchAll(db, sql: "SELECT id FROM items WHERE status != 'merged'")) }
         }
         let one = try await pass(first, tag: "a")
+        // Which findings of which cases ended in one item, to be read against what the cases expect (SC-007).
+        let joined: [String] = try await scratch.database.pool.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT i.title AS title, group_concat(s.finding_id, ' | ') AS sources, COUNT(*) AS n
+                FROM sightings s JOIN items i ON i.id = s.item_id GROUP BY s.item_id HAVING n > 1 ORDER BY i.title
+                """).map { row in
+                let sources = (row["sources"] as String).split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+                    .map { $0.dropFirst(2).split(separator: "#").first.map(String.init) ?? $0 }
+                return "\(row["title"] as String): \(sources.joined(separator: ", "))"
+            }
+        }
         let two = try await pass(second, tag: "b")
         return ReanalysisReport(captures: names.count, findingsFirst: first.values.reduce(0) { $0 + $1.count },
                                 findingsSecond: second.values.reduce(0) { $0 + $1.count }, itemsFirst: one.count, itemsSecond: two.count,
-                                createdBySecond: two.subtracting(one).count, expectedEvents: expectedEvents)
+                                createdBySecond: two.subtracting(one).count, expectedEvents: expectedEvents, joined: joined)
     }
 
     static func finding(from found: FoundFinding, id: String) -> Finding {
@@ -362,10 +373,14 @@ public struct ReanalysisReport: Sendable, Equatable, Codable {
     public let createdBySecond: Int
     /// Findings the golden cases expect, when known: the analysis may find more (its own precision), reconciliation never adds items.
     public let expectedEvents: Int?
+    /// Items that hold findings of more than one picture (or more than one finding), with the cases the findings come from.
+    public let joined: [String]
 
     public var text: String {
         var line = "reconcile: \(captures) captures, \(findingsFirst) findings became \(itemsFirst) items"
         if let expectedEvents { line += " (the cases expect \(expectedEvents) events)" }
-        return line + "; after the second analysis \(itemsSecond) items, \(createdBySecond) of them new"
+        line += "; after the second analysis \(itemsSecond) items, \(createdBySecond) of them new"
+        for item in joined { line += "\n  joined  \(item)" }
+        return line
     }
 }

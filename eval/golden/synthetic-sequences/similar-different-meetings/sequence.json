@@ -66,6 +66,66 @@
           ],
           "start" : "2026-10-14T13:00:00Z",
           "title" : "Project sync"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T16:00:00Z",
+          "event" : "sprint",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T15:00:00Z",
+          "title" : "Sprint review"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T16:00:00Z",
+          "event" : "retro",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T15:00:00Z",
+          "title" : "Sprint retrospective"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T18:00:00Z",
+          "event" : "lunch",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T17:00:00Z",
+          "title" : "Team lunch"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T18:00:00Z",
+          "event" : "meeting",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T17:00:00Z",
+          "title" : "Team meeting"
         }
       ],
       "id" : "c1"
@@ -133,6 +193,66 @@
           ],
           "start" : "2026-10-14T13:00:00Z",
           "title" : "Project sync"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T16:00:00Z",
+          "event" : "sprint",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T15:00:00Z",
+          "title" : "Sprint review"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T16:00:00Z",
+          "event" : "retro",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T15:00:00Z",
+          "title" : "Sprint retrospective"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T18:00:00Z",
+          "event" : "lunch",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T17:00:00Z",
+          "title" : "Team lunch"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T18:00:00Z",
+          "event" : "meeting",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T17:00:00Z",
+          "title" : "Team meeting"
         }
       ],
       "id" : "c2"

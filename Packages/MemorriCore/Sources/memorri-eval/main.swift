@@ -125,11 +125,21 @@ func run(_ options: RunOptions) async -> Int32 {
         print("saved \(out.path)")
         if options.reconcile {
             let first = analyser.findings
-            _ = try await runner.run(cases: cases, only: options.only, replay: nil, allowBusy: true, progress: { print("second pass: " + $0) })
+            _ = try await runner.run(cases: cases, only: options.only, replay: replay, allowBusy: true, progress: { print("second pass: " + $0) })
             let judge = await makeJudge(address: options.address, embeddingModel: nil, rerankerModel: nil)
             let expected = cases.reduce(0) { $0 + $1.expected.findings.count }
             let again = try await ReconcileRunner(judge: judge, modelsOn: true).reanalysis(first: first, second: analyser.findings, expectedEvents: expected, progress: { print($0) })
             print(again.text)
+            // The same, with what the cases expect as the analysis: isolates what reconciliation does from the analysis' own mistakes.
+            var ideal: [String: [FoundFinding]] = [:]
+            for golden in cases {
+                ideal[golden.name] = golden.expected.findings.map { e in
+                    FoundFinding(kind: e.kind, title: e.title, start: e.start, end: e.end, due: e.due, remind: e.remind, allDay: e.allDay ?? false,
+                                 people: e.people ?? [], place: e.place, inferred: e.inferred ?? [])
+                }
+            }
+            let perfect = try await ReconcileRunner(judge: judge, modelsOn: true).reanalysis(first: ideal, second: ideal, expectedEvents: expected)
+            print("with the expected findings as the analysis: " + perfect.text)
         }
         if report.cases.allSatisfy({ $0.foundKind == "failed" }) {
             fail("No case could be analysed (see the saved report for the model's answers).", code: EvalExit.error)

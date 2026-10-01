@@ -213,6 +213,37 @@ import Testing
         #expect(try items(fixture).count == 2)
     }
 
+    @Test func twoFindingsOfOnePictureWithOtherTitlesAreNeverJudgedAgainstEachOther() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let judge = FakeMeaningJudge(defaultAnswer: 1)
+        let r = reconciler(fixture, judge: judge)
+        try await see(fixture, [fixture.finding("Sprint review"), fixture.finding("Sprint retrospective")], with: r, picture: fixture.base.imageID)
+        #expect(judge.judgeCalls.isEmpty)
+        #expect(try items(fixture).count == 2)
+        #expect(try fixture.count("possible_duplicates") == 0)
+    }
+
+    @Test func aFindingDoesNotJoinAnItemThatAnotherFindingOfItsPictureAlreadyJoined() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let judge = FakeMeaningJudge(defaultAnswer: 1)
+        let r = reconciler(fixture, judge: judge)
+        try await see(fixture, [fixture.finding("Sprint review")], with: r, picture: fixture.base.imageID)
+        // the next picture shows the same review and another meeting at the same time: the second one is not the first again
+        try await see(fixture, [fixture.finding("Sprint review"), fixture.finding("Sprint retrospective")], with: r)
+        #expect(judge.judgeCalls.isEmpty)
+        #expect(try items(fixture).count == 2)
+        // a later picture that shows only the other title joins the item made for it, by text
+        try await see(fixture, [fixture.finding("Sprint retrospective")], with: r)
+        #expect(try items(fixture).count == 2)
+    }
+
+    @Test func aTruncatedTitleInTheSamePictureStillJoinsByText() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = reconciler(fixture)
+        try await see(fixture, [fixture.finding("Quarterly planning workshop"), fixture.finding("Quarterly planning work")], with: r, picture: fixture.base.imageID)
+        #expect(try items(fixture).count == 1)
+    }
+
     // MARK: undated
 
     @Test func anAppointmentWithNoResolvedStartIsMatchedLikeAnUndatedTaskAndDoesNotRepeat() async throws {
