@@ -100,4 +100,71 @@ import Testing
         let second = await iterator.next()
         #expect(second?.map(\.item.id) == ["i1"])
     }
+
+    // MARK: detail (spec 005, user story 2)
+
+    private func twoSightingItem(_ fixture: ReconcileFixture) async throws -> String {
+        let r = Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+        try fixture.save([fixture.finding("Daily standup", end: ReconcileFixture.minutes(60), inferredEnd: true, cited: [3, 4])], imageID: fixture.base.imageID)
+        _ = await r.reconcile(imageID: fixture.base.imageID)
+        let second = try fixture.addPicture(at: Date(timeIntervalSince1970: 1_800_003_600), display: "Left display")
+        try fixture.save([fixture.finding("Daily stand…", end: ReconcileFixture.minutes(30), confidence: 0.9, place: "Room 4", cited: [7])], imageID: second)
+        _ = await r.reconcile(imageID: second)
+        return try ItemStore(database: fixture.database).items(status: [.active], kinds: nil, contextID: nil)[0].item.id
+    }
+
+    @Test func detailListsEveryFieldWithItsObservationsAndWhereTheyCameFrom() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await twoSightingItem(fixture)
+        let detail = try ItemStore(database: fixture.database).detail(itemID: id)
+        let end = try #require(detail.fields.first { $0.field == .end })
+        #expect(end.current == .date(ReconcileFixture.minutes(30)) && end.entries.count == 2 && !end.locked)
+        #expect(end.entries.map(\.source).sorted { $0.rawValue < $1.rawValue } == [.inferred, .read])
+        let read = try #require(end.entries.first { $0.source == .read })
+        #expect(read.citedLines == [7] && read.confidence == 0.9 && read.sightingID != nil && read.imageID != nil)
+        #expect(end.chosenObservationID == read.observationID)
+        let inferred = try #require(end.entries.first { $0.source == .inferred })
+        #expect(inferred.citedLines == [3, 4] && inferred.imageID == fixture.base.imageID)
+        let place = try #require(detail.fields.first { $0.field == .place })
+        #expect(place.entries.count == 1 && place.current == .string("Room 4"))
+        #expect(detail.fields.first { $0.field == .notes } == nil)
+    }
+
+    @Test func detailListsTheSightingsWithCaptureDisplayTitleAndTheStoredDecision() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await twoSightingItem(fixture)
+        let detail = try ItemStore(database: fixture.database).detail(itemID: id)
+        #expect(detail.sightings.count == 2)
+        let newest = try #require(detail.sightings.max { $0.capturedAt < $1.capturedAt })
+        #expect(newest.displayName == "Left display" && newest.title == "Daily stand…" && newest.citedLines == [7])
+        #expect(newest.capturedAt == Date(timeIntervalSince1970: 1_800_003_600))
+        #expect(newest.decisionJSON.contains("\"rule\":\"text-time\"") && newest.decisionJSON.contains("\"text\":0.95"))
+        let first = try #require(detail.sightings.min { $0.capturedAt < $1.capturedAt })
+        #expect(first.decisionJSON.contains("\"rule\""))
+    }
+
+    @Test func detailListsOtherTitlesLocksPossibleDuplicatesAndOperations() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await twoSightingItem(fixture)
+        try fixture.write { db in
+            try ItemStore.insert(db, Item.sample(id: "other", title: "Something else"), at: Date(timeIntervalSince1970: 1))
+            try db.execute(sql: "INSERT INTO observations VALUES ('mine', ?, NULL, 'place', '\"Room 9\"', 'user', 1, datetime('now'))", arguments: [id])
+            try db.execute(sql: "INSERT INTO field_locks VALUES (?, 'place', 'mine', datetime('now'))", arguments: [id])
+            let pair = [id, "other"].sorted()
+            try db.execute(sql: "INSERT INTO possible_duplicates VALUES (?, ?, '{}', datetime('now'))", arguments: [pair[0], pair[1]])
+            try db.execute(sql: "INSERT INTO reconcile_ops VALUES ('op1', 'edit', 1, '[]', '[]', '{}', '{}', NULL, '2026-10-02 10:00:00')")
+            try db.execute(sql: "INSERT INTO reconcile_ops VALUES ('op2', 'auto_merge', 0, '[]', '[]', '{}', '{}', 'op3', '2026-10-03 10:00:00')")
+            try db.execute(sql: "INSERT INTO reconcile_op_items VALUES ('op1', ?)", arguments: [id])
+            try db.execute(sql: "INSERT INTO reconcile_op_items VALUES ('op2', ?)", arguments: [id])
+        }
+        let detail = try ItemStore(database: fixture.database).detail(itemID: id)
+        #expect(detail.aliases == ["Daily stand…"])
+        #expect(detail.locks == [.place: "mine"])
+        #expect(detail.possibleDuplicates == ["other"])
+        #expect(detail.operations.map(\.id) == ["op2", "op1"])
+        #expect(detail.operations.map(\.undone) == [true, false] && detail.operations.map(\.byUser) == [false, true])
+        let place = try #require(detail.fields.first { $0.field == .place })
+        #expect(place.locked && place.current == .string("Room 9") && place.chosenObservationID == "mine")
+        #expect(place.entries.contains { $0.source == .user && $0.sightingID == nil })
+    }
 }

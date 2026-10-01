@@ -56,6 +56,12 @@ import Testing
         #expect(resolved.aliases == ["Quarterly planning with the cust…"])
     }
 
+    @Test func aFullTitleBeatsATruncationWhateverTheConfidence() {
+        let observations = [obs("full", .title, .string("Quarterly planning with the customer"), .read, 0.6, seen: 1),
+                            obs("cut", .title, .string("Quarterly planning with the cust…"), .read, 0.95, seen: 9)]
+        #expect(resolve(observations).values[.title] == .string("Quarterly planning with the customer"))
+    }
+
     @Test func aTimedStartBeatsAnAllDayOne() {
         let observations = [obs("d1", .start, .date(at(0)), .read, 0.9, sighting: "all-day", seen: 9),
                             obs("d2", .allDay, .bool(true), .read, 0.9, sighting: "all-day", seen: 9),

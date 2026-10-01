@@ -57,7 +57,7 @@ Decisions for [plan.md](plan.md). Each one has a decision, the reason and what e
 
 ## R9. Fields and observations
 
-- **Decision**: each sighting writes one observation per field it shows (`title`, `start`, `end`, `all_day`, `due`, `remind`, `people`, `place`, `notes`) with value, confidence, `inferred` (from the finding's provenance) and the capture time. A user edit writes an observation with `source = user` and a `field_locks` row. `FieldResolver` picks per field: locked user value; then read over inferred; then a timed start or end over an all-day one (more specific, whatever the confidence); then higher confidence (differences under 0.1 count as equal); then more complete (a longer title that the other is a truncation of; a timed value over all-day); then the more recent capture. Titles not chosen go to `item_aliases`.
+- **Decision**: each sighting writes one observation per field it shows (`title`, `start`, `end`, `all_day`, `due`, `remind`, `people`, `place`, `notes`) with value, confidence, `inferred` (from the finding's provenance) and the capture time. A user edit writes an observation with `source = user` and a `field_locks` row. `FieldResolver` picks per field: locked user value; then read over inferred; then a full title over a truncation of it (FR-008) and a timed start or end over an all-day one (more specific, whatever the confidence); then higher confidence (differences under 0.1 count as equal); then more complete (a longer title that the other is a truncation of; a timed value over all-day); then the more recent capture. Titles not chosen go to `item_aliases`.
 - **Rationale**: FR-006 to FR-009 and the spec's order; ties at near-equal confidence go to recency (User Story 2 scenario 3).
 
 ## R10. Operation log and undo

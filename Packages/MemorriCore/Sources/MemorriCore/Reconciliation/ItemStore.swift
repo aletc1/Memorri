@@ -85,8 +85,67 @@ public struct ItemStore: Sendable {
     public func detail(itemID: String) throws -> ItemDetail {
         try database.pool.read { db in
             guard let item = try Self.item(db, id: itemID) else { throw ItemStoreError.notFound }
-            return ItemDetail(item: item)
+            return try Self.detail(db, item: item)
         }
+    }
+
+    static func detail(_ db: Database, item: Item) throws -> ItemDetail {
+        var detail = ItemDetail(item: item)
+        let decoder = JSONDecoder()
+
+        var locks: [ItemField: String] = [:]
+        for row in try Row.fetchAll(db, sql: "SELECT field, observation_id FROM field_locks WHERE item_id = ?", arguments: [item.id]) {
+            if let field = ItemField(rawValue: row["field"]) { locks[field] = row["observation_id"] }
+        }
+        detail.locks = locks
+
+        struct Source { let observation: ItemObservation; let imageID: String?; let cited: [Int] }
+        let sources: [Source] = try Row.fetchAll(db, sql: """
+            SELECT o.*, s.image_id AS image_id, s.cited_lines_json AS cited
+            FROM observations o LEFT JOIN sightings s ON s.id = o.sighting_id
+            WHERE o.item_id = ? ORDER BY o.observed_at DESC, o.id
+            """, arguments: [item.id]).compactMap { row in
+            guard let field = ItemField(rawValue: row["field"]), let source = ObservationSource(rawValue: row["source"]),
+                  let value = try? decoder.decode(JSONValue.self, from: Data((row["value_json"] as String).utf8)) else { return nil }
+            let cited = (row["cited"] as String?).flatMap { try? decoder.decode([Int].self, from: Data($0.utf8)) } ?? []
+            return Source(observation: ItemObservation(id: row["id"], itemID: item.id, sightingID: row["sighting_id"], field: field, value: value,
+                                                      source: source, confidence: row["confidence"], observedAt: row["observed_at"]),
+                          imageID: row["image_id"], cited: cited)
+        }
+        let resolved = FieldResolver.resolve(sources.map(\.observation), locks: locks)
+        detail.fields = ItemField.allCases.compactMap { field in
+            let own = sources.filter { $0.observation.field == field }
+            guard !own.isEmpty else { return nil }
+            return FieldHistory(field: field, current: resolved.values[field], chosenObservationID: resolved.chosen[field], locked: locks[field] != nil,
+                                entries: own.map { FieldHistory.Entry(observationID: $0.observation.id, value: $0.observation.value, source: $0.observation.source,
+                                                                      confidence: $0.observation.confidence, observedAt: $0.observation.observedAt,
+                                                                      sightingID: $0.observation.sightingID, imageID: $0.imageID, citedLines: $0.cited) })
+        }
+
+        detail.sightings = try Row.fetchAll(db, sql: """
+            SELECT s.*, i.display_name AS display_name FROM sightings s JOIN capture_images i ON i.id = s.image_id
+            WHERE s.item_id = ? ORDER BY s.captured_at DESC, s.id
+            """, arguments: [item.id]).map { row in
+            SightingRow(id: row["id"], imageID: row["image_id"], displayName: row["display_name"], capturedAt: row["captured_at"], title: row["title"],
+                        confidence: row["confidence"], citedLines: (try? decoder.decode([Int].self, from: Data((row["cited_lines_json"] as String).utf8))) ?? [],
+                        decisionJSON: row["decision_json"])
+        }
+
+        let own = TitleNormaliser.normalise(item.title)
+        detail.aliases = try Row.fetchAll(db, sql: "SELECT normalised, title FROM item_aliases WHERE item_id = ? ORDER BY normalised", arguments: [item.id])
+            .filter { ($0["normalised"] as String) != own }.map { $0["title"] as String }
+
+        detail.possibleDuplicates = try Row.fetchAll(db, sql: "SELECT item_a, item_b FROM possible_duplicates WHERE item_a = ?1 OR item_b = ?1 ORDER BY item_a, item_b",
+                                                     arguments: [item.id]).map { ($0["item_a"] as String) == item.id ? $0["item_b"] : $0["item_a"] }
+
+        detail.operations = try Row.fetchAll(db, sql: """
+            SELECT o.id, o.kind, o.by_user, o.created_at, o.undone_by FROM reconcile_ops o JOIN reconcile_op_items oi ON oi.op_id = o.id
+            WHERE oi.item_id = ? ORDER BY o.created_at DESC, o.id DESC
+            """, arguments: [item.id]).map { row in
+            OperationSummary(id: row["id"], kind: row["kind"], byUser: (row["by_user"] as Int) != 0, createdAt: row["created_at"],
+                             undone: (row["undone_by"] as String?) != nil)
+        }
+        return detail
     }
 
     /// The list, again after every change to the tables it reads.

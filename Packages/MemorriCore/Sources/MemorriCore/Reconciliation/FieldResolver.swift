@@ -73,6 +73,12 @@ public enum FieldResolver {
     private static func isBetter(_ a: ItemObservation, than b: ItemObservation, field: ItemField, allDay: [String: Bool]) -> Bool {
         let aRead = a.source == .read, bRead = b.source == .read
         if aRead != bRead { return aRead }
+        // A full title beats a truncation of it whatever the confidence (FR-008).
+        if field == .title, let x = a.value.asString, let y = b.value.asString {
+            let nx = TitleNormaliser.normalise(x), ny = TitleNormaliser.normalise(y)
+            if nx.count > ny.count && nx.hasPrefix(ny) { return true }
+            if ny.count > nx.count && ny.hasPrefix(nx) { return false }
+        }
         // A time of day is more specific than "all day", whatever the confidence (edge case in the spec).
         if field == .start || field == .end {
             let aFlag = a.sightingID.flatMap { allDay[$0] }, bFlag = b.sightingID.flatMap { allDay[$0] }
