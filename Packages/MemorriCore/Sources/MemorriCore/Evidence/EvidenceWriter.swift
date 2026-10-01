@@ -46,18 +46,35 @@ public struct EvidenceWriter: ImageEvidenceWriting {
         }
     }
 
-    /// Cut-outs for the sightings of one item that have none and whose picture is stored.
+    /// Cut-outs for the sightings of one item that have none and whose picture is stored, and new ones for cut-outs of an older shape.
     @discardableResult
     public func backfill(itemID: String) async -> Int {
-        await backfill(where: "s.item_id = ?", arguments: [itemID], limit: nil)
+        let remade = await remake(where: "item_id = ?", arguments: [itemID], limit: nil)
+        return await backfill(where: "s.item_id = ?", arguments: [itemID], limit: nil) + remade
     }
 
     /// The same for the newest sightings of any item, at most `limit` of them (a launch pass).
     @discardableResult
     public func backfill(limit: Int) async -> Int {
-        let written = await backfill(where: "1 = 1", arguments: [], limit: limit)
+        let remade = await remake(where: "1 = 1", arguments: [], limit: limit)
+        let written = await backfill(where: "1 = 1", arguments: [], limit: limit) + remade
         if written > 0 { Self.logger.info("evidence backfill written=\(written)") }
         return written
+    }
+
+    /// Makes the cut-outs of an older shape again, for the pictures that are still stored (a picture that is gone keeps its old cut-out).
+    private func remake(where clause: String, arguments: StatementArguments, limit: Int?) async -> Int {
+        do {
+            let images = try outdatedImages(where: clause, arguments: arguments)
+            var written = 0
+            for image in images.prefix(limit ?? images.count) where (try? pictures.fullPicture(imageID: image)) != nil {
+                written += await write(imageID: image)
+            }
+            return written
+        } catch {
+            Self.logger.error("evidence failed remake reason=\(String(describing: type(of: error)), privacy: .public)")
+            return 0
+        }
     }
 
     private func backfill(where clause: String, arguments: StatementArguments, limit: Int?) async -> Int {
@@ -72,6 +89,16 @@ public struct EvidenceWriter: ImageEvidenceWriting {
         } catch {
             Self.logger.error("evidence failed backfill reason=\(String(describing: type(of: error)), privacy: .public)")
             return 0
+        }
+    }
+
+    /// The pictures with a cut-out of an older shape, newest first. A plain function: inside an async one `pool.read` would pick the async overload.
+    private func outdatedImages(where clause: String, arguments: StatementArguments) throws -> [String] {
+        try database.pool.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT image_id FROM evidence WHERE geometry < ? AND file_path IS NOT NULL AND \(clause)
+                GROUP BY image_id ORDER BY MAX(captured_at) DESC
+                """, arguments: StatementArguments([EvidenceGeometry.version]) + arguments)
         }
     }
 
@@ -129,10 +156,10 @@ public struct EvidenceWriter: ImageEvidenceWriting {
                     let cited = (try? JSONEncoder().encode(row.target.cited)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
                     try db.execute(sql: """
                         INSERT INTO evidence (id, item_id, sighting_id, image_id, captured_at, display_name, title, cited_lines_json, region_json,
-                                              file_path, reason, bytes, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                              file_path, reason, bytes, created_at, geometry)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, arguments: [row.id, row.target.itemID, row.target.sightingID, imageID, row.target.capturedAt, row.target.displayName,
-                                         row.target.title, cited, regionJSON, row.path, row.reason, row.bytes, date])
+                                         row.target.title, cited, regionJSON, row.path, row.reason, row.bytes, date, EvidenceGeometry.version])
                 }
             }
         } catch {

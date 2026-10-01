@@ -51,4 +51,55 @@ import Testing
         #expect(await f.writer().backfill(limit: 2) == 1)
         #expect(try f.evidenceRows().count == 3)
     }
+
+    // MARK: cut-outs of an older shape (geometry version)
+
+    /// Makes the cut-outs look like the ones written before the context was added.
+    private func makeOld(_ f: EvidenceFixture) throws {
+        try f.fixture.write { try $0.execute(sql: "UPDATE evidence SET geometry = 1") }
+    }
+
+    @Test func aCutOutOfAnOlderShapeIsMadeAgainWhileItsPictureIsStored() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        let image = try await f.see([f.fixture.finding("Daily standup", cited: [1])])
+        await f.writer().write(imageID: image)
+        try makeOld(f)
+        let old = try #require(try f.evidenceRows().first)
+        let oldPath = try #require(old["file_path"] as String?)
+        #expect(await f.writer().backfill(itemID: try itemID(f)) == 1)
+        let rows = try f.evidenceRows()
+        let row = try #require(rows.first)
+        #expect(rows.count == 1 && row["id"] as String != old["id"] as String && row["geometry"] as Int == EvidenceGeometry.version)
+        let newPath = try #require(row["file_path"] as String?)
+        #expect(!f.fileExists(oldPath) && f.fileExists(newPath))
+        let region = try JSONDecoder().decode(PixelRegion.self, from: Data((row["region_json"] as String).utf8))
+        #expect(region.width >= 600 && region.height >= 210)                      // half of 1200 and 35% of 600
+        #expect(await f.writer().backfill(itemID: try itemID(f)) == 0)           // made once
+    }
+
+    @Test func anOlderCutOutIsKeptWhenItsPictureIsGone() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        let image = try await f.see([f.fixture.finding("Daily standup", cited: [1])])
+        await f.writer().write(imageID: image)
+        try makeOld(f)
+        let before = try #require(try f.evidenceRows().first)
+        try f.fixture.base.captures.markMissing(imageID: image)
+        #expect(await f.writer().backfill(itemID: try itemID(f)) == 0)
+        let after = try #require(try f.evidenceRows().first)
+        let keptPath = try #require(after["file_path"] as String?)
+        #expect(after["id"] as String == before["id"] as String && f.fileExists(keptPath))
+    }
+
+    @Test func theLaunchPassMakesOlderCutOutsAgainWithinTheLimit() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        for index in 0..<3 {
+            let id = try f.addStoredPicture(at: Date(timeIntervalSince1970: 1_800_100_000 + Double(index) * 86_400))
+            try await f.see([f.fixture.finding("Meeting \(index)", cited: [1])], imageID: id)
+            await f.writer().write(imageID: id)
+        }
+        try makeOld(f)
+        #expect(await f.writer().backfill(limit: 2) == 2)
+        let versions = try f.evidenceRows().map { $0["geometry"] as Int }.sorted()
+        #expect(versions == [1, EvidenceGeometry.version, EvidenceGeometry.version])
+    }
 }

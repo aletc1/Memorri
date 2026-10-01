@@ -58,9 +58,14 @@ struct EvidenceCardView: View {
         if let cutOut {
             Image(decorative: cutOut, scale: 1)
                 .resizable().aspectRatio(contentMode: .fit)
-                .frame(maxWidth: 420, maxHeight: 130, alignment: .leading)
+                .frame(maxWidth: 460, maxHeight: 220, alignment: .leading)
                 .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.secondary.opacity(0.4)))
-                .accessibilityLabel("Cut-out of the capture where \(entry.title) was read")
+                .contentShape(Rectangle())
+                .onTapGesture { onShowWhole() }
+                .onHover { inside in if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
+                .help("Show the whole capture")
+                .accessibilityLabel("Cut-out of the capture where \(entry.title) was read. Opens the whole capture.")
+                .accessibilityAddTraits(.isButton)
         } else if loaded {
             Text(ItemListModel.missingCutOutText(entry.evidence)).font(.callout).foregroundStyle(.secondary)
         } else {

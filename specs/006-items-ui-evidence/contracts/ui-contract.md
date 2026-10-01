@@ -34,3 +34,4 @@ Adds `Evidence: <size>` under the pictures figure. The `Delete everything` confi
 - The title is edited in `Fields` like every other field (the header shows it as text). A field row shows a pencil (or a double-click on the value) and, when more than one value was seen or it is locked, a chevron that lists every value behind it with its source, confidence and time and marks the current one (FR-005). The evidence card of the sighting that gave the current title says `Source of the current title`.
 - Date fields use a date and time picker in the item's zone with `Save`, `Cancel` and, for optional fields, `Clear`; text fields use `parse`, so a rejected value shows its message under the field.
 - The window's `Kind` control is `All · Appointments · Tasks · Reminders`; `Tasks` includes deadlines.
+- Clicking a cut-out opens the whole capture (the same sheet as `Show whole capture`); a cut-out shows the context around the cited lines, not only the lines.

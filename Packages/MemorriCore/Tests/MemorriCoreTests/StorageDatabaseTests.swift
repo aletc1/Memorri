@@ -574,7 +574,7 @@ import Testing
         try db.pool.read { db in
             let evidence = try db.columns(in: "evidence").map(\.name)
             #expect(evidence == ["id", "item_id", "sighting_id", "image_id", "captured_at", "display_name", "title", "cited_lines_json", "region_json",
-                                 "file_path", "reason", "bytes", "created_at"])
+                                 "file_path", "reason", "bytes", "created_at", "geometry"])       // "geometry" arrived with v7
             let needs = try self.column("items", "needs_review", in: db), reasons = try self.column("items", "review_reasons_json", in: db)
             let approved = try self.column("items", "approved_at", in: db), values = try self.column("items", "approved_values_json", in: db)
             #expect(needs.isNotNull && reasons.isNotNull && !approved.isNotNull && !values.isNotNull)

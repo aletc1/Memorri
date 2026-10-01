@@ -351,6 +351,10 @@ enum Migrations {
         migrator.registerMigration("v6-review") { db in
             for id in try String.fetchAll(db, sql: "SELECT id FROM items WHERE status != 'merged'") { try ItemStore.refreshReview(db, itemID: id) }
         }
+        // Cut-outs show the context around the cited lines from now on; the version says which shape a cut-out has, so older ones are made again.
+        migrator.registerMigration("v7") { db in
+            try db.alter(table: "evidence") { t in t.add(column: "geometry", .integer).notNull().defaults(to: 1) }
+        }
         return migrator
     }
 }

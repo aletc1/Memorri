@@ -440,7 +440,8 @@ final class FakeJobRunner: AnalysisJobRunning, @unchecked Sendable {
 }
 
 /// Polls until the condition holds (real time), for tests that wait on a background loop.
-func waitUntil(timeout: Duration = .seconds(5), _ condition: @Sendable () -> Bool) async -> Bool {
+/// Waits for a condition; a passing test returns at once, so the long limit costs nothing. A full parallel run was seen to delay the queue's task by several seconds.
+func waitUntil(timeout: Duration = .seconds(30), _ condition: @Sendable () -> Bool) async -> Bool {
     let deadline = ContinuousClock.now + timeout
     while ContinuousClock.now < deadline {
         if condition() { return true }
