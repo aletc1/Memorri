@@ -35,3 +35,4 @@ Adds `Evidence: <size>` under the pictures figure. The `Delete everything` confi
 - Date fields use a date and time picker in the item's zone with `Save`, `Cancel` and, for optional fields, `Clear`; text fields use `parse`, so a rejected value shows its message under the field.
 - The window's `Kind` control is `All · Appointments · Tasks · Reminders`; `Tasks` includes deadlines.
 - Clicking a cut-out opens the whole capture (the same sheet as `Show whole capture`); a cut-out shows the context around the cited lines, not only the lines.
+- The whole-capture sheet takes 80% of the screen and can be zoomed (buttons `-`, `Fit`, `100%`, `+`, ⌘- and ⌘=, or pinch) and scrolled.
