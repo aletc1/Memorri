@@ -40,6 +40,18 @@ import Testing
         #expect(summary.pictureBytes == 4000)
     }
 
+    @Test func evidenceBytesCountTheCutOutFilesAndNotThePictures() throws {
+        let h = try Harness(); defer { h.temp.cleanUp() }
+        try h.addCapture(id: "a", fullBytes: 1000, modelBytes: 400)
+        #expect(try h.stats.summary().evidenceBytes == 0)
+        let folder = h.context.paths.evidence.appendingPathComponent("2027-01")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data(count: 300).write(to: folder.appendingPathComponent("x.heic"))
+        try Data(count: 200).write(to: folder.appendingPathComponent("y.heic"))
+        let summary = try h.stats.summary()
+        #expect(summary.evidenceBytes == 500 && summary.pictureBytes == 1400)
+    }
+
     @Test func aFileChangedOutsideTheAppIsReflected() throws {
         let h = try Harness(); defer { h.temp.cleanUp() }
         try h.addCapture(id: "a", fullBytes: 1000, modelBytes: 400)

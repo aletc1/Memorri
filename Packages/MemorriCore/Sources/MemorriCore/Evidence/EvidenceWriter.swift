@@ -3,9 +3,14 @@ import Foundation
 import GRDB
 import os
 
+/// What the analyse job calls after reconciling a picture; a fake in tests.
+public protocol ImageEvidenceWriting: Sendable {
+    @discardableResult func write(imageID: String) async -> Int
+}
+
 /// Cuts the proof of each sighting out of the full-size picture and saves it (spec 006, research R1 to R3). Failures are logged and
 /// leave a row that says why there is no cut-out; they never reach the analysis job.
-public struct EvidenceWriter: Sendable {
+public struct EvidenceWriter: ImageEvidenceWriting {
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "evidence")
 
     let paths: AppPaths

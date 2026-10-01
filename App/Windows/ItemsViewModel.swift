@@ -1,6 +1,19 @@
+import CoreGraphics
 import MemorriCore
 import Observation
 import SwiftUI
+
+/// A decoded picture handed across actors; it is never changed after it is made.
+final class ImageBox: @unchecked Sendable {
+    let image: CGImage
+    init(_ image: CGImage) { self.image = image }
+}
+
+/// The whole capture of a sighting with its read lines, for the sheet that outlines the cited ones.
+struct WholeCapture: @unchecked Sendable {
+    let picture: CGImage
+    let lines: [RecognisedLine]
+}
 
 /// The state of the Items window: the list as the store observes it, the selection, the open item and what the user asked for.
 /// The rules (filters, order, which buttons are enabled) are in `ItemListModel`; every change runs in the core off the main actor.
@@ -21,12 +34,18 @@ final class ItemsViewModel {
     private(set) var contexts: [ContextRecord] = []
     var selection: Set<String> = []
     private(set) var detail: ItemDetail?
+    /// The saved cut-outs of the open item, newest first.
+    private(set) var evidence: [EvidenceRecord] = []
+    private let cutOuts = NSCache<NSString, ImageBox>()
     private(set) var undoTarget: OperationSummary?
     var message: String?
     var lockSheet: LockSheet?
     private var observing: Task<Void, Never>?
 
-    init(environment: AppEnvironment) { self.environment = environment }
+    init(environment: AppEnvironment) {
+        self.environment = environment
+        cutOuts.countLimit = 100
+    }
 
     // MARK: Reading
 
@@ -64,14 +83,38 @@ final class ItemsViewModel {
     }
 
     private func loadDetail() async {
-        guard selection.count == 1, let id = selection.first, let store = environment.items else { detail = nil; return }
+        guard selection.count == 1, let id = selection.first, let store = environment.items else { detail = nil; evidence = []; return }
         detail = try? await Task.detached { try store.detail(itemID: id) }.value
+        if let writer = environment.evidenceWriter { _ = await writer.backfill(itemID: id) }
+        if let evidenceStore = environment.evidenceStore {
+            evidence = (try? await Task.detached { try evidenceStore.evidence(itemID: id) }.value) ?? []
+        } else {
+            evidence = []
+        }
     }
 
     private func loadUndoTarget() async {
         guard let log = environment.operationLog else { undoTarget = nil; return }
         let recent = (try? await Task.detached { try log.recent() }.value) ?? []
         undoTarget = ItemListModel.undoTarget(in: recent)
+    }
+
+    // MARK: Evidence images
+
+    /// The saved cut-out, decoded off the main actor and kept in memory (100 images).
+    func cutOut(_ record: EvidenceRecord) async -> CGImage? {
+        let key = record.id as NSString
+        if let hit = cutOuts.object(forKey: key) { return hit.image }
+        guard let store = environment.evidenceStore else { return nil }
+        guard let box = await Task.detached(operation: { store.image(record).map(ImageBox.init) }).value else { return nil }
+        cutOuts.setObject(box, forKey: key)
+        return box.image
+    }
+
+    /// The whole capture, nil once the picture is no longer stored.
+    func wholeCapture(imageID: String) async -> WholeCapture? {
+        guard let store = environment.evidenceStore else { return nil }
+        return await Task.detached { (try? store.capture(imageID: imageID)).flatMap { $0 }.map { WholeCapture(picture: $0.picture, lines: $0.lines) } }.value
     }
 
     // MARK: Changing

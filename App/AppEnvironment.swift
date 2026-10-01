@@ -39,6 +39,9 @@ final class AppEnvironment {
     let itemOperations: ItemOperations?
     /// Every operation on items, for `Undo last`; `nil` when the storage is unavailable.
     let operationLog: OperationLog?
+    /// The saved cut-outs that prove items, and the writer that makes them; `nil` when the storage is unavailable.
+    let evidenceStore: EvidenceStore?
+    let evidenceWriter: EvidenceWriter?
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -70,10 +73,13 @@ final class AppEnvironment {
                                             time: SystemTimeSource())
             let reconciler = Reconciler(database: database, judge: LiveMeaningJudge(service: ollama, settings: ollamaSettings, database: database,
                                                                                    time: SystemTimeSource()))
+            let evidence = EvidenceWriter(paths: context.paths, database: database, pictures: pictures)
+            evidenceWriter = evidence
+            evidenceStore = EvidenceStore(database: database, paths: context.paths, pictures: pictures)
             let analyseRunner = ImageAnalysisJobRunner(
                 service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                 results: AnalysisResultStore(database: database), jobs: jobs, settings: ollamaSettings, time: SystemTimeSource(),
-                contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler)
+                contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler, evidence: evidence)
             let runner = CompositeJobRunner(runners: [
                 "test": testRunner,
                 ImageAnalysisJobRunner.analyseKind: analyseRunner,
@@ -95,6 +101,8 @@ final class AppEnvironment {
             items = nil
             itemOperations = nil
             operationLog = nil
+            evidenceStore = nil
+            evidenceWriter = nil
         }
         captureService = CaptureRequestService(
             runner: Self.makeCaptureRunner(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings),
@@ -129,6 +137,8 @@ final class AppEnvironment {
             #endif
         }
         followAnalysisProgress()
+        // Sightings from before evidence existed get their cut-outs a few at a time, newest first.
+        if let evidenceWriter { Task.detached(priority: .utility) { _ = await evidenceWriter.backfill(limit: 200) } }
         if let storage { StartupAlerts.showIfNeeded(for: storage) }
         startRetention()
     }

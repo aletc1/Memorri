@@ -15,6 +15,7 @@ import Testing
         let settings: OllamaSettings
         let contexts: ContextStore
         let reconciler: FakeReconciler
+        let evidence: FakeEvidenceWriter
     }
 
     private func sampleLines() -> [RecognisedLine] {
@@ -43,12 +44,14 @@ import Testing
         let pipeline = AnalysisPipeline(recogniser: recogniser, model: model, time: time)
         let reconciler = FakeReconciler(summary: reconcileSummary)
         reconciler.database = fixture.database
+        let evidence = FakeEvidenceWriter()
+        evidence.reconciler = reconciler
         let runner = ImageAnalysisJobRunner(service: service, pipeline: pipeline, pictures: provider, fullPictures: provider, ocr: ocr,
                                             results: results, jobs: jobs, settings: settings, time: time,
                                             contexts: ContextStore(database: fixture.database), windows: fixture.captures,
-                                            reconciler: reconciler)
+                                            reconciler: reconciler, evidence: evidence)
         return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, results: results, jobs: jobs, settings: settings,
-                   contexts: ContextStore(database: fixture.database), reconciler: reconciler)
+                   contexts: ContextStore(database: fixture.database), reconciler: reconciler, evidence: evidence)
     }
 
     private func job(_ rig: Rig, kind: String = "analyse", imageID: String? = nil, nilImage: Bool = false) throws -> AnalysisJobRecord {
@@ -283,6 +286,21 @@ import Testing
         #expect(rig.reconciler.analysisWasStoredWhenAsked == [true])
     }
 
+    @Test func evidenceIsWrittenOnceAfterReconciliationAndNeverFailsTheJob() async throws {
+        let rig = try makeRig(reconcileSummary: ReconcileSummary(error: "database error")); defer { rig.fixture.cleanUp() }
+        let outcome = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(outcome == .success)
+        #expect(rig.evidence.imageIDs == [rig.fixture.imageID] && rig.evidence.reconciledFirst == [true])
+        _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
+        #expect(rig.evidence.imageIDs.count == 2)
+    }
+
+    @Test func aJobThatFailsBeforeStoringWritesNoEvidence() async throws {
+        let rig = try makeRig(failWith: CocoaError(.fileReadUnknown)); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(rig.evidence.imageIDs.isEmpty)
+    }
+
     @Test func aReconcileErrorLeavesTheJobSucceededAndTheAnalysisStored() async throws {
         let rig = try makeRig(reconcileSummary: ReconcileSummary(error: "database error")); defer { rig.fixture.cleanUp() }
         let outcome = await rig.runner.run(try job(rig), attempt: 1)
@@ -302,6 +320,25 @@ import Testing
         _ = await rig.runner.run(try job(rig), attempt: 1)
         _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
         #expect(rig.reconciler.imageIDs.count == 2)
+    }
+}
+
+/// Records the pictures it is asked to write evidence for, and whether the picture was reconciled by then.
+final class FakeEvidenceWriter: ImageEvidenceWriting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var asked: [String] = []
+    private var reconciledWhenAsked: [Bool] = []
+    var reconciler: FakeReconciler?
+
+    var imageIDs: [String] { lock.withLock { asked } }
+    var reconciledFirst: [Bool] { lock.withLock { reconciledWhenAsked } }
+
+    func write(imageID: String) async -> Int {
+        lock.withLock {
+            asked.append(imageID)
+            reconciledWhenAsked.append(reconciler?.imageIDs.contains(imageID) ?? false)
+        }
+        return 0
     }
 }
 

@@ -10,3 +10,13 @@ Prerequisites: a Debug build, Ollama with `qwen3-vl:8b-instruct`, an isolated ho
 6. **Inline editing**: change start, place, people and notes of an item; enter an end before the start. Expected: valid edits show `you` and a lock and approve the item; the invalid one shows a message and keeps the old value; re-ingesting the case does not change the edited values; Unlock restores the read value (SC-005, SC-008).
 7. **Filters**: Appointments, Tasks and Reminders each list only their kind; the context filter applies to the Inbox.
 8. **Scale**: the scale test reports opening an item's evidence under 1 s and the Inbox under 0.5 s with 5,000 items (SC-007).
+
+## Results
+
+### US1: evidence (2026-10-01)
+
+Debug build, `CFFIXED_USER_HOME` set to a scratch folder, `qwen3-vl:8b-instruct`, drawn pictures only (`calendar-week-web-12h` ingested twice).
+
+- **2 Evidence**: log lines `evidence image=… written=3 skipped=0 ms=111` and `… ms=118` after the two `reconciled` lines. The Items window showed, for "Dentist Clinic" (2 sightings), a card per sighting with a cut-out showing the block "9:00 AM Dentist Clinic", the capture date, time and display, the title as found, the confidence and `why: text-time (text 1.00, time 1.00)`. As expected.
+- **Show whole capture**: not pressed in the app. Buttons in this window have no accessibility name, and pressing by screen position is off the table after the stray click of spec 005; the sheet is therefore not seen on screen. Its data comes from `EvidenceStore.capture` (tested: picture, lines, nil once the picture is missing). Known gap: look at the sheet by hand once.
+- **3 Deleted capture**: not driven through Settings (buttons not reachable by name). Covered by `EvidenceLifecycleTests`: retention keeps the cut-out and its item, the whole capture is then unavailable, `Delete everything` removes every row and file and the Evidence figure goes to 0, the preview counts evidence bytes.

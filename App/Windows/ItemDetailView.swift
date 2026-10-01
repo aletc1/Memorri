@@ -7,6 +7,8 @@ struct ItemDetailView: View {
     let detail: ItemDetail
     @State private var titleDraft: String
     @State private var checked: Set<String> = []
+    @State private var showAll = false
+    @State private var wholeCapture: EvidenceEntry?
 
     init(model: ItemsViewModel, detail: ItemDetail) {
         self.model = model
@@ -19,7 +21,7 @@ struct ItemDetailView: View {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 fields
-                sightings
+                evidenceSection
                 if !detail.aliases.isEmpty { aliases }
                 if !detail.possibleDuplicates.isEmpty { possibleDuplicates }
                 history
@@ -64,25 +66,23 @@ struct ItemDetailView: View {
         }
     }
 
-    // MARK: Sightings
+    // MARK: Evidence
 
-    private var sightings: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Sightings").font(.headline)
-            ForEach(detail.sightings, id: \.id) { sighting in
-                HStack(alignment: .top) {
-                    Toggle("", isOn: Binding(get: { checked.contains(sighting.id) },
-                                             set: { if $0 { checked.insert(sighting.id) } else { checked.remove(sighting.id) } }))
-                        .labelsHidden()
-                        .accessibilityLabel("Select the sighting from \(sighting.capturedAt.formatted(date: .abbreviated, time: .shortened))")
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(sighting.capturedAt.formatted(date: .abbreviated, time: .shortened))\(sighting.displayName.map { " · \($0)" } ?? "")")
-                        Text("\(sighting.title) · confidence \(String(format: "%.2f", sighting.confidence))")
-                            .font(.callout).foregroundStyle(.secondary)
-                        let why = ItemListModel.whyText(decisionJSON: sighting.decisionJSON)
-                        if !why.isEmpty { Text("why: \(why)").font(.caption).foregroundStyle(.secondary) }
-                    }
-                }
+    private var evidenceSection: some View {
+        let entries = ItemListModel.evidenceEntries(sightings: detail.sightings, evidence: model.evidence)
+        let visible = ItemListModel.shownEntries(entries, showAll: showAll)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Evidence").font(.headline)
+            ForEach(visible.shown) { entry in
+                EvidenceCardView(entry: entry, model: model,
+                                 isChecked: entry.sighting.map { sighting in
+                                     Binding(get: { checked.contains(sighting.id) },
+                                             set: { if $0 { checked.insert(sighting.id) } else { checked.remove(sighting.id) } })
+                                 },
+                                 onShowWhole: { wholeCapture = entry })
+            }
+            if let more = visible.moreText {
+                Button(more) { showAll = true }.buttonStyle(.link)
             }
             Button("Split into new item") {
                 let chosen = Array(checked)
@@ -91,6 +91,9 @@ struct ItemDetailView: View {
             }
             .disabled(!ItemListModel.canSplit(checked: checked, of: detail.sightings))
             .accessibilityLabel("Split the checked sightings into a new item")
+        }
+        .sheet(item: $wholeCapture) { entry in
+            WholeCaptureSheet(entry: entry, model: model, onClose: { wholeCapture = nil })
         }
     }
 

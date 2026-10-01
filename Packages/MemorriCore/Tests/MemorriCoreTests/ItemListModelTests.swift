@@ -153,4 +153,43 @@ import Testing
         }
         #expect(ItemListModel.operationText("new_kind") == "new_kind")
     }
+
+    // MARK: evidence cards
+
+    private func sighting(_ id: String, at seconds: Double) -> SightingRow {
+        SightingRow(id: id, imageID: "i-\(id)", displayName: "Display", capturedAt: Date(timeIntervalSince1970: seconds), title: "t-\(id)", confidence: 0.9, citedLines: [1], decisionJSON: "{}")
+    }
+
+    private func evidence(_ id: String, sighting: String?, at seconds: Double, reason: String? = nil) -> EvidenceRecord {
+        EvidenceRecord(id: id, itemID: "item", sightingID: sighting, imageID: "i-\(sighting ?? id)", capturedAt: Date(timeIntervalSince1970: seconds), displayName: "Display",
+                       title: "e-\(id)", citedLines: [1], region: nil, filePath: reason == nil ? "evidence/x.heic" : nil, reason: reason)
+    }
+
+    @Test func entriesJoinSightingsAndEvidenceNewestFirst() {
+        let entries = ItemListModel.evidenceEntries(
+            sightings: [sighting("a", at: 300), sighting("b", at: 100)],
+            evidence: [evidence("ea", sighting: "a", at: 300), evidence("gone", sighting: nil, at: 200)])
+        #expect(entries.map(\.id) == ["a", "gone", "b"])
+        #expect(entries[0].evidence?.id == "ea" && entries[0].sighting?.id == "a")
+        #expect(entries[1].sighting == nil && entries[1].title == "e-gone")           // the capture is gone, the cut-out stays
+        #expect(entries[2].evidence == nil && entries[2].title == "t-b")               // a sighting from before evidence existed
+    }
+
+    @Test func onlyTheFiveNewestShowBeforeShowAll() {
+        let entries = ItemListModel.evidenceEntries(sightings: (0..<8).map { sighting("s\($0)", at: Double($0)) }, evidence: [])
+        let few = ItemListModel.shownEntries(entries, showAll: false)
+        #expect(few.shown.map(\.id) == ["s7", "s6", "s5", "s4", "s3"] && few.moreText == "Show all 8 sightings")
+        let all = ItemListModel.shownEntries(entries, showAll: true)
+        #expect(all.shown.count == 8 && all.moreText == nil)
+        let five = ItemListModel.shownEntries(Array(entries.prefix(5)), showAll: false)
+        #expect(five.shown.count == 5 && five.moreText == nil)
+    }
+
+    @Test func aMissingCutOutSaysWhy() {
+        #expect(ItemListModel.missingCutOutText(evidence("e", sighting: "a", at: 1, reason: "no-lines")) == "No cut-out: the finding cited no lines.")
+        #expect(ItemListModel.missingCutOutText(evidence("e", sighting: "a", at: 1, reason: "picture-missing")).contains("no longer stored"))
+        #expect(ItemListModel.missingCutOutText(evidence("e", sighting: "a", at: 1, reason: "failed")).contains("could not be made"))
+        #expect(ItemListModel.missingCutOutText(nil) == "No cut-out yet.")
+        #expect(ItemListModel.missingCutOutText(evidence("e", sighting: "a", at: 1)) == "The cut-out file is gone.")
+    }
 }

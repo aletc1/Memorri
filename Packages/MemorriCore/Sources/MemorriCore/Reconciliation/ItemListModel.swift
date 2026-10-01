@@ -64,6 +64,16 @@ public struct LockChoice: Sendable, Equatable, Identifiable {
     public var prompt: String { "Both items have your value for \(field.rawValue). Keep:" }
 }
 
+/// One card of an item's evidence: a sighting, its saved cut-out, or both. Evidence outlives its sighting (the capture may be gone).
+public struct EvidenceEntry: Sendable, Equatable, Identifiable {
+    public let sighting: SightingRow?
+    public let evidence: EvidenceRecord?
+    public var id: String { sighting?.id ?? evidence?.id ?? "" }
+    public var capturedAt: Date { sighting?.capturedAt ?? evidence?.capturedAt ?? .distantPast }
+    public var title: String { sighting?.title ?? evidence?.title ?? "" }
+    public var displayName: String? { sighting?.displayName ?? evidence?.displayName }
+}
+
 /// The logic of the Items window, kept out of the views so it can be tested (spec 005, US5).
 public enum ItemListModel {
     public enum StatusAction: Sendable, Equatable { case dismiss, restore }
@@ -209,6 +219,37 @@ public enum ItemListModel {
         case "different": "Marked as different"
         case "undo": "Undone"
         default: kind
+        }
+    }
+
+    // MARK: Evidence cards
+
+    /// How many cards the detail shows before "Show all" (clarification 5).
+    public static let evidenceCardsShown = 5
+
+    /// Sightings and evidence joined, newest first: a card for every sighting (with its cut-out when it has one) and for every cut-out
+    /// whose sighting is gone.
+    public static func evidenceEntries(sightings: [SightingRow], evidence: [EvidenceRecord]) -> [EvidenceEntry] {
+        let bySighting = Dictionary(evidence.compactMap { record in record.sightingID.map { ($0, record) } }, uniquingKeysWith: { first, _ in first })
+        var entries = sightings.map { EvidenceEntry(sighting: $0, evidence: bySighting[$0.id]) }
+        let known = Set(sightings.map(\.id))
+        entries += evidence.filter { $0.sightingID.map(known.contains) != true }.map { EvidenceEntry(sighting: nil, evidence: $0) }
+        return entries.sorted { $0.capturedAt != $1.capturedAt ? $0.capturedAt > $1.capturedAt : $0.id < $1.id }
+    }
+
+    /// The cards to show, and the text of the button that shows the rest (nil when everything is shown).
+    public static func shownEntries(_ entries: [EvidenceEntry], showAll: Bool) -> (shown: [EvidenceEntry], moreText: String?) {
+        guard !showAll, entries.count > evidenceCardsShown else { return (entries, nil) }
+        return (Array(entries.prefix(evidenceCardsShown)), "Show all \(entries.count) sightings")
+    }
+
+    /// What a card says in place of a missing cut-out.
+    public static func missingCutOutText(_ evidence: EvidenceRecord?) -> String {
+        switch evidence?.reason {
+        case "no-lines": "No cut-out: the finding cited no lines."
+        case "picture-missing": "No cut-out: the capture was no longer stored when it was analysed."
+        case "failed": "No cut-out: it could not be made."
+        default: evidence == nil ? "No cut-out yet." : "The cut-out file is gone."
         }
     }
 }

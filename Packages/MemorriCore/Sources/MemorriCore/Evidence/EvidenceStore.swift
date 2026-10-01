@@ -48,8 +48,12 @@ public struct EvidenceStore: Sendable {
 
     /// The whole capture with its text lines (for outlining the cited ones); nil once the picture is no longer stored.
     public func capture(_ record: EvidenceRecord) throws -> (picture: CGImage, lines: [RecognisedLine])? {
-        guard let pictures, let picture = try pictures.fullPicture(imageID: record.imageID) else { return nil }
-        return (picture, try OCRStore(database: database).lines(imageID: record.imageID))
+        try capture(imageID: record.imageID)
+    }
+
+    public func capture(imageID: String) throws -> (picture: CGImage, lines: [RecognisedLine])? {
+        guard let pictures, let picture = try pictures.fullPicture(imageID: imageID) else { return nil }
+        return (picture, try OCRStore(database: database).lines(imageID: imageID))
     }
 
     /// What the evidence files take, from the rows (the files themselves are counted by `StorageStats`).
