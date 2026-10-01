@@ -65,6 +65,8 @@ public struct CaptureFileStore: Sendable {
             }
         }
 
+        _ = try? EvidenceFiles.removeOrphans(paths: paths, database: store.database)
+
         var markedMissing = 0
         for image in try store.allImages() where !image.missing {
             let full = paths.root.appendingPathComponent(image.fullPath).path

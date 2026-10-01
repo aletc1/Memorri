@@ -87,7 +87,8 @@ import Testing
         #expect(try h.cleanup.delete(olderThanDays: 30) == 0)
     }
 
-    @Test func nothingDerivedFromCapturesIsTouched() throws {
+    /// Deleting captures leaves what was derived from them (FR-023); only "Delete everything" also removes the evidence cut-outs (spec 006).
+    @Test func nothingDerivedFromCapturesIsTouchedExceptByDeleteEverythingForEvidence() throws {
         let h = try Harness(now: now); defer { h.temp.cleanUp() }
         try h.addCapture(id: "old", at: now.addingTimeInterval(-99 * day))
         // Stand-ins for later items and their evidence crops (FR-023).
@@ -98,9 +99,12 @@ import Testing
             try db.execute(sql: "CREATE TABLE derived_things (id TEXT, evidence_path TEXT)")
             try db.execute(sql: "INSERT INTO derived_things VALUES ('item-1', 'evidence/crop.heic')")
         }
-        #expect(try h.cleanup.delete(olderThanDays: nil) == 1)
+        #expect(try h.cleanup.delete(olderThanDays: 30) == 1)
         #expect(FileManager.default.fileExists(atPath: crop.path))
         #expect(try h.context.store?.sentinelCount() == 1)
+        #expect(try h.cleanup.delete(olderThanDays: nil) == 0)
+        #expect(!FileManager.default.fileExists(atPath: crop.path))
+        #expect(try h.context.store?.sentinelCount() == 1)      // what else was derived stays
     }
 
     @Test func deletingCapturesSweepsTheItemsThatLostTheirSightings() throws {

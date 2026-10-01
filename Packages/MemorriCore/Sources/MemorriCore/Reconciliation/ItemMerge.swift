@@ -111,11 +111,12 @@ extension ItemOperations {
             .flatMap { try? JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }
     }
 
-    /// Moves sightings, and the observations that belong to them, to another item.
+    /// Moves sightings, and the observations and evidence that belong to them, to another item.
     static func move(_ db: Database, sightings: [String], to itemID: String) throws {
         for id in sightings {
             try db.execute(sql: "UPDATE sightings SET item_id = ? WHERE id = ?", arguments: [itemID, id])
             try db.execute(sql: "UPDATE observations SET item_id = ? WHERE sighting_id = ?", arguments: [itemID, id])
+            try db.execute(sql: "UPDATE evidence SET item_id = ? WHERE sighting_id = ?", arguments: [itemID, id])
         }
     }
 
