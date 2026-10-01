@@ -22,7 +22,7 @@ public enum MatchDecision: Sendable, Equatable {
 }
 
 /// The thresholds of research R7. Start values; the final ones come from `memorri-eval reconcile` and are written into ADR 0020.
-public struct ReconcileThresholds: Sendable, Equatable {
+public struct ReconcileThresholds: Sendable, Equatable, Codable {
     public var mergeText = 0.9
     public var minTime = 0.5
     public var sameTime = 0.8

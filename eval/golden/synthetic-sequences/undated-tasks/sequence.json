@@ -1,0 +1,133 @@
+{
+  "actions" : [
+
+  ],
+  "captures" : [
+    {
+      "capturedAt" : "2026-10-11T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "permit",
+          "inferred" : [
+
+          ],
+          "kind" : "task",
+          "people" : [
+
+          ],
+          "title" : "Renew parking permit"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "passport",
+          "inferred" : [
+
+          ],
+          "kind" : "task",
+          "people" : [
+
+          ],
+          "title" : "Renew passport"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "invoice",
+          "inferred" : [
+
+          ],
+          "kind" : "task",
+          "people" : [
+
+          ],
+          "title" : "Send the monthly invoice"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "report",
+          "inferred" : [
+
+          ],
+          "kind" : "task",
+          "people" : [
+
+          ],
+          "title" : "Send the monthly report"
+        }
+      ],
+      "id" : "c1"
+    },
+    {
+      "capturedAt" : "2026-10-11T09:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "permit",
+          "inferred" : [
+
+          ],
+          "kind" : "task",
+          "people" : [
+
+          ],
+          "title" : "Renew parking permit"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "passport",
+          "inferred" : [
+
+          ],
+          "kind" : "task",
+          "people" : [
+
+          ],
+          "title" : "Renew passport"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "invoice",
+          "inferred" : [
+
+          ],
+          "kind" : "task",
+          "people" : [
+
+          ],
+          "title" : "Send the monthly invoice"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "report",
+          "inferred" : [
+
+          ],
+          "kind" : "task",
+          "people" : [
+
+          ],
+          "title" : "Send the monthly report"
+        }
+      ],
+      "id" : "c2"
+    }
+  ],
+  "contexts" : [
+    {
+      "id" : "a",
+      "name" : "Customer A",
+      "timezone" : "Europe/Madrid"
+    }
+  ],
+  "macTimezone" : "UTC"
+}

@@ -89,4 +89,48 @@ import Testing
         #expect(o.isBelowMinimum(numbers(precision: 0, recall: 0)) == false)
         #expect(EvalExit.finished == 0 && EvalExit.error == 1 && EvalExit.refusal == 2 && EvalExit.belowMinimum == 3)
     }
+
+    @Test func generateSequencesHasADefaultFolder() throws {
+        #expect(try parse("generate-sequences") == .generateSequences(out: "eval/golden/synthetic-sequences"))
+        #expect(try parse("generate-sequences", "--out", "/tmp/x") == .generateSequences(out: "/tmp/x"))
+    }
+
+    @Test func reconcileDefaultsToTheTrackedSetWithoutModels() throws {
+        guard case .reconcile(let o) = try parse("reconcile") else { Issue.record("not a reconcile"); return }
+        #expect(o.cases == "eval/golden/synthetic-sequences" && o.modelsOn == false && o.out == nil && o.only == nil)
+        #expect(o.minMergeRecall == nil && o.maxWrongMerge == nil)
+    }
+
+    @Test func reconcileTakesEveryOption() throws {
+        guard case .reconcile(let o) = try parse("reconcile", "--cases", "c", "--models", "on", "--embedding-model", "e", "--reranker-model", "r",
+                                                 "--address", "http://127.0.0.1:11434", "--out", "o.json", "--only", "x",
+                                                 "--min-merge-recall", "0.95", "--max-wrong-merge=0.02") else { Issue.record("not a reconcile"); return }
+        #expect(o.cases == "c" && o.modelsOn && o.embeddingModel == "e" && o.rerankerModel == "r" && o.out == "o.json" && o.only == "x")
+        #expect(o.minMergeRecall == 0.95 && o.maxWrongMerge == 0.02)
+    }
+
+    @Test func reconcileRejectsBadValuesAndAddressesOffThisMac() throws {
+        #expect(throws: EvalUsageError.self) { try parse("reconcile", "--models", "maybe") }
+        #expect(throws: EvalUsageError.self) { try parse("reconcile", "--min-merge-recall", "2") }
+        #expect(throws: EvalUsageError.notLocal("http://example.com:11434")) { try parse("reconcile", "--address", "http://example.com:11434") }
+        #expect(throws: EvalUsageError.unexpectedArgument("stray")) { try parse("reconcile", "stray") }
+    }
+
+    @Test func reconcileLimitsDecideTheExitCode() throws {
+        var o = ReconcileOptions()
+        let good = ReconcileOverall(captures: 1, items: 1, mergeRecall: 0.97, wrongMergeRate: 0.01, judgedShare: 0, msPerCapture: 1, translatedFlagged: nil,
+                                    recreatedDismissed: 0, overwrittenTitles: 0)
+        #expect(o.isOutsideLimits(good) == false)
+        o.minMergeRecall = 0.98
+        #expect(o.isOutsideLimits(good))
+        o.minMergeRecall = 0.9; o.maxWrongMerge = 0.005
+        #expect(o.isOutsideLimits(good))
+    }
+
+    @Test func runAcceptsTheReconcileFlag() throws {
+        guard case .run(let o) = try parse("run", "--reconcile") else { Issue.record("not a run"); return }
+        #expect(o.reconcile)
+        guard case .run(let plain) = try parse("run") else { return }
+        #expect(plain.reconcile == false)
+    }
 }

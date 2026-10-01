@@ -1,0 +1,108 @@
+{
+  "actions" : [
+
+  ],
+  "captures" : [
+    {
+      "capturedAt" : "2026-10-11T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T11:00:00Z",
+          "event" : "a-sync",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T10:00:00Z",
+          "title" : "Weekly sync"
+        }
+      ],
+      "id" : "a"
+    },
+    {
+      "capturedAt" : "2026-10-11T09:00:00Z",
+      "context" : "b",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T11:00:00Z",
+          "event" : "b-sync",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T10:00:00Z",
+          "title" : "Weekly sync"
+        }
+      ],
+      "id" : "b"
+    },
+    {
+      "capturedAt" : "2026-10-11T10:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T10:30:00Z",
+          "event" : "a-sync",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T10:00:00Z",
+          "title" : "Weekly sync"
+        }
+      ],
+      "id" : "a2"
+    },
+    {
+      "capturedAt" : "2026-10-11T11:00:00Z",
+      "context" : "b",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T10:30:00Z",
+          "event" : "b-sync",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T10:00:00Z",
+          "title" : "Weekly sync"
+        }
+      ],
+      "id" : "b2"
+    }
+  ],
+  "contexts" : [
+    {
+      "id" : "a",
+      "name" : "Customer A",
+      "timezone" : "Europe/Madrid"
+    },
+    {
+      "id" : "b",
+      "name" : "Customer B",
+      "timezone" : "America/New_York"
+    }
+  ],
+  "macTimezone" : "UTC"
+}

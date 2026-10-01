@@ -1,0 +1,125 @@
+{
+  "actions" : [
+
+  ],
+  "captures" : [
+    {
+      "capturedAt" : "2026-10-11T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T08:15:00Z",
+          "event" : "standup",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "lang" : "en",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T08:00:00Z",
+          "title" : "Daily standup"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T12:00:00Z",
+          "event" : "budget",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "lang" : "en",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T11:00:00Z",
+          "title" : "Budget review"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T15:00:00Z",
+          "event" : "kickoff",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "lang" : "en",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T14:00:00Z",
+          "title" : "Project kickoff"
+        }
+      ],
+      "id" : "en"
+    },
+    {
+      "capturedAt" : "2026-10-11T09:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T08:15:00Z",
+          "event" : "standup",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "lang" : "es",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T08:00:00Z",
+          "title" : "Reunión diaria"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T12:00:00Z",
+          "event" : "budget",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "lang" : "es",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T11:00:00Z",
+          "title" : "Revisión de presupuesto"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T15:00:00Z",
+          "event" : "kickoff",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "lang" : "es",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T14:00:00Z",
+          "title" : "Inicio del proyecto"
+        }
+      ],
+      "id" : "es"
+    }
+  ],
+  "contexts" : [
+    {
+      "id" : "a",
+      "name" : "Customer A",
+      "timezone" : "Europe/Madrid"
+    }
+  ],
+  "macTimezone" : "UTC"
+}

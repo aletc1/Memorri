@@ -18,10 +18,12 @@ public struct ReconcileSummary: Sendable, Equatable {
     public var merged = 0
     public var possibleDuplicates = 0
     public var judged = 0
+    /// Candidate items a finding was compared with (the pairs scored).
+    public var compared = 0
     public var error: String?
 
-    public init(created: Int = 0, merged: Int = 0, possibleDuplicates: Int = 0, judged: Int = 0, error: String? = nil) {
-        self.created = created; self.merged = merged; self.possibleDuplicates = possibleDuplicates; self.judged = judged; self.error = error
+    public init(created: Int = 0, merged: Int = 0, possibleDuplicates: Int = 0, judged: Int = 0, compared: Int = 0, error: String? = nil) {
+        self.created = created; self.merged = merged; self.possibleDuplicates = possibleDuplicates; self.judged = judged; self.compared = compared; self.error = error
     }
 }
 
@@ -47,6 +49,7 @@ public struct ReconcilePlan: Sendable, Equatable {
     public let imageID: String
     public let steps: [Step]
     public let judged: Int
+    public let compared: Int
 }
 
 /// Turns the findings of an analysed picture into sightings of items (ADR 0020): candidates by context, kind family and day; scores
@@ -72,6 +75,7 @@ public struct Reconciler: ImageReconciling {
             let plan = try await plan(imageID: imageID)
             var summary = try apply(plan)
             summary.judged = plan.judged
+            summary.compared = plan.compared
             let ms = started.duration(to: .now).components.seconds * 1000 + started.duration(to: .now).components.attoseconds / 1_000_000_000_000_000
             Self.logger.info("reconciled image=\(imageID, privacy: .public) findings=\(plan.steps.count) created=\(summary.created) merged=\(summary.merged) possible=\(summary.possibleDuplicates) judged=\(summary.judged) ms=\(ms)")
             return summary
@@ -122,6 +126,7 @@ public struct Reconciler: ImageReconciling {
         let canJudge = await judge.canJudge
         var steps: [ReconcilePlan.Step] = []
         var judged = 0
+        var compared = 0
         var usedEarlier: Set<String> = []
         var extra: [Candidate.Key: Candidate] = [:]            // what decided findings added to a candidate
         var created: [Candidate] = []                          // items this plan makes
@@ -163,6 +168,7 @@ public struct Reconciler: ImageReconciling {
                 scored.append(Scored(candidate: candidate, scores: scores, decision: MatchScorer.decide(scores, undated: span.start == nil, thresholds: thresholds),
                                      combined: text * 0.6 + time * 0.4))
             }
+            compared += scored.count
             scored.sort { $0.combined != $1.combined ? $0.combined > $1.combined : $0.candidate.lastSeen > $1.candidate.lastSeen }
 
             // Meaning of the titles, only where it can change the answer.
@@ -224,7 +230,7 @@ public struct Reconciler: ImageReconciling {
                 created.append(Candidate(key: .step(index), itemID: nil, title: finding.title, titles: [normal], spans: [span], lastSeen: .distantFuture))
             }
         }
-        return ReconcilePlan(imageID: imageID, steps: steps, judged: judged)
+        return ReconcilePlan(imageID: imageID, steps: steps, judged: judged, compared: compared)
     }
 
     private static func target(of candidate: Candidate) -> ReconcilePlan.Target {

@@ -46,6 +46,8 @@ public struct RunOptions: Sendable, Equatable {
     public var allowBusy = false
     public var minRecall: Double?
     public var minPrecision: Double?
+    /// Reconcile the results of every case, then analyse and reconcile them again (SC-003, SC-007).
+    public var reconcile = false
 
     /// True when a `--min-…` option was given and the run scored below it.
     public func isBelowMinimum(_ overall: OverallNumbers) -> Bool {
@@ -55,8 +57,29 @@ public struct RunOptions: Sendable, Equatable {
     }
 }
 
+public struct ReconcileOptions: Sendable, Equatable {
+    public var cases = "eval/golden/synthetic-sequences"
+    public var modelsOn = false
+    public var embeddingModel: String?
+    public var rerankerModel: String?
+    public var address = LoopbackAddress.standard.text
+    public var out: String?
+    public var only: String?
+    public var minMergeRecall: Double?
+    public var maxWrongMerge: Double?
+
+    /// True when a `--min-merge-recall` or `--max-wrong-merge` option was given and the run is outside it.
+    public func isOutsideLimits(_ overall: ReconcileOverall) -> Bool {
+        if let minMergeRecall, overall.mergeRecall < minMergeRecall { return true }
+        if let maxWrongMerge, overall.wrongMergeRate > maxWrongMerge { return true }
+        return false
+    }
+}
+
 public enum EvalCommand: Sendable, Equatable {
     case generateSynthetic(out: String)
+    case generateSequences(out: String)
+    case reconcile(ReconcileOptions)
     case run(RunOptions)
     case compare(a: String, b: String)
     case sweepSize(cases: String, sizes: [Int])
@@ -73,10 +96,15 @@ public enum EvalCommand: Sendable, Equatable {
     commands:
       generate-synthetic [--out eval/golden/synthetic]
           draw the synthetic golden cases (the same files every time)
+      generate-sequences [--out eval/golden/synthetic-sequences]
+          write the synthetic sighting sequences for `reconcile` (the same files every time)
+      reconcile [--cases eval/golden/synthetic-sequences] [--models off|on] [--embedding-model <name>] [--reranker-model <name>]
+          [--address http://localhost:11434] [--out <report.json>] [--only <case>] [--min-merge-recall <x>] [--max-wrong-merge <x>]
+          reconcile the sequences into scratch databases and score the matching (off needs no server)
       run [--cases eval/golden] [--out <report.json>] [--size 2048] [--model <name>] [--think off|low|medium|high]
           [--prompt-set v1] [--address http://localhost:11434] [--only <case>] [--replay <report.json>] [--allow-busy]
-          [--min-recall <x>] [--min-precision <x>]
-          run the analysis over the cases and print the scores
+          [--min-recall <x>] [--min-precision <x>] [--reconcile]
+          run the analysis over the cases and print the scores; --reconcile then counts items against distinct events
       compare <a.json> <b.json>
           print the difference between two saved reports
       sweep-size [--cases eval/golden] [--sizes 1024,1536,2048,3072]
@@ -93,6 +121,10 @@ public enum EvalCommand: Sendable, Equatable {
         case "generate-synthetic":
             var words = try Words(rest, flags: [], options: ["--out"])
             return .generateSynthetic(out: try words.value("--out") ?? "eval/golden/synthetic")
+        case "generate-sequences":
+            var words = try Words(rest, flags: [], options: ["--out"])
+            return .generateSequences(out: try words.value("--out") ?? "eval/golden/synthetic-sequences")
+        case "reconcile": return .reconcile(try parseReconcile(rest))
         case "run": return .run(try parseRun(rest))
         case "compare":
             let words = try Words(rest, flags: [], options: [])
@@ -113,7 +145,7 @@ public enum EvalCommand: Sendable, Equatable {
     }
 
     private static func parseRun(_ rest: [String]) throws -> RunOptions {
-        var words = try Words(rest, flags: ["--allow-busy"],
+        var words = try Words(rest, flags: ["--allow-busy", "--reconcile"],
                               options: ["--cases", "--out", "--size", "--model", "--think", "--prompt-set", "--address", "--only", "--replay",
                                         "--min-recall", "--min-precision"])
         if let stray = words.positionals.first { throw EvalUsageError.unexpectedArgument(stray) }
@@ -141,8 +173,32 @@ public enum EvalCommand: Sendable, Equatable {
         o.only = try words.value("--only")
         o.replay = try words.value("--replay")
         o.allowBusy = words.flag("--allow-busy")
+        o.reconcile = words.flag("--reconcile")
         o.minRecall = try words.value("--min-recall").map { try fraction($0, option: "--min-recall") }
         o.minPrecision = try words.value("--min-precision").map { try fraction($0, option: "--min-precision") }
+        return o
+    }
+
+    private static func parseReconcile(_ rest: [String]) throws -> ReconcileOptions {
+        var words = try Words(rest, flags: [], options: ["--cases", "--models", "--embedding-model", "--reranker-model", "--address", "--out", "--only",
+                                                         "--min-merge-recall", "--max-wrong-merge"])
+        if let stray = words.positionals.first { throw EvalUsageError.unexpectedArgument(stray) }
+        var o = ReconcileOptions()
+        if let v = try words.value("--cases") { o.cases = v }
+        if let v = try words.value("--models") {
+            guard ["on", "off"].contains(v) else { throw EvalUsageError.invalidValue(option: "--models", value: v, expected: "on or off") }
+            o.modelsOn = v == "on"
+        }
+        o.embeddingModel = try words.value("--embedding-model")
+        o.rerankerModel = try words.value("--reranker-model")
+        if let v = try words.value("--address") {
+            guard let address = LoopbackAddress(v) else { throw EvalUsageError.notLocal(v) }
+            o.address = address.text
+        }
+        o.out = try words.value("--out")
+        o.only = try words.value("--only")
+        o.minMergeRecall = try words.value("--min-merge-recall").map { try fraction($0, option: "--min-merge-recall") }
+        o.maxWrongMerge = try words.value("--max-wrong-merge").map { try fraction($0, option: "--max-wrong-merge") }
         return o
     }
 

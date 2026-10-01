@@ -1,0 +1,130 @@
+{
+  "actions" : [
+    {
+      "action" : "dismiss",
+      "after" : "c1",
+      "event" : "webinar"
+    }
+  ],
+  "captures" : [
+    {
+      "capturedAt" : "2026-10-11T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T13:00:00Z",
+          "event" : "webinar",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T12:00:00Z",
+          "title" : "Product webinar"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T15:00:00Z",
+          "event" : "review",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T14:00:00Z",
+          "title" : "Contract review"
+        }
+      ],
+      "id" : "c1"
+    },
+    {
+      "capturedAt" : "2026-10-11T09:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T13:00:00Z",
+          "event" : "webinar",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T12:00:00Z",
+          "title" : "Product webinar"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T15:00:00Z",
+          "event" : "review",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T14:00:00Z",
+          "title" : "Contract review"
+        }
+      ],
+      "id" : "c2"
+    },
+    {
+      "capturedAt" : "2026-10-11T10:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T13:00:00Z",
+          "event" : "webinar",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T12:00:00Z",
+          "title" : "Product webinar series"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T15:00:00Z",
+          "event" : "review",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T14:00:00Z",
+          "title" : "Contract review"
+        }
+      ],
+      "id" : "c3"
+    }
+  ],
+  "contexts" : [
+    {
+      "id" : "a",
+      "name" : "Customer A",
+      "timezone" : "Europe/Madrid"
+    }
+  ],
+  "macTimezone" : "UTC"
+}
