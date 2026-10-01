@@ -351,4 +351,11 @@ import Testing
                                       lines: [line(1, "Mon 12", x: 100), line(2, "09:00 Team sync", x: 110)], locales: en)
         #expect(DateResolver.resolve(text: "09:00", field: "start", draft: draft, in: named).provenance?.origin == .read)
     }
+
+    @Test func aDayLabelWithoutAMonthTakesItFromTheDayViewsFullDateTitle() {
+        // `Wednesday, February 11, 2026` titles the view and `Wed 11` labels the column: both are the same day, and neither is a guess.
+        let lines = [line(1, "Wednesday, February 11, 2026", x: 20, y: 20, w: 400), line(2, "Wed 11", x: 300, y: 80, w: 60), line(3, "09:00", x: 20, y: 120)]
+        let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
+        #expect(headers.count == 2 && headers.allSatisfy { $0.date == DateComponents(year: 2026, month: 2, day: 11) && !$0.monthAssumed })
+    }
 }

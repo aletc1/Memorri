@@ -285,6 +285,12 @@ public enum DateResolver {
                 hintYear = parsed.year ?? DateParser.match(#"\b((?:19|20)\d{2})\b"#, in: line.text).flatMap { Int($0[1]) }
             }
         }
+        // A header that writes its month (a day view's `Wednesday, October 14, 2026`) says which month the others, which only carry a
+        // weekday and a number (`Wed 14`), are in.
+        if hintMonth == nil, let named = candidates.first(where: { $0.parsed.month != nil }) {
+            hintMonth = named.parsed.month
+            hintYear = named.parsed.year
+        }
         let found: [DateHeader] = candidates.compactMap { item in
             guard let weekday = item.parsed.weekday, let dayNumber = item.parsed.day else { return nil }
             var chosen: Day?
