@@ -100,6 +100,14 @@ public struct ChatResponse: Sendable, Equatable {
     }
 }
 
+/// A candidate first token and its natural log probability.
+public struct TokenLogprob: Sendable, Equatable {
+    public let token: String
+    public let logprob: Double
+
+    public init(token: String, logprob: Double) { self.token = token; self.logprob = logprob }
+}
+
 /// Plain requests and answers for the four calls the app uses. No policy: retries, waiting and
 /// status belong to the service and the queue.
 public struct OllamaClient: Sendable {
@@ -148,6 +156,46 @@ public struct OllamaClient: Sendable {
             loadDurationNanoseconds: Self.int64(fields["load_duration"]),
             promptEvalNanoseconds: Self.int64(fields["prompt_eval_duration"]),
             evalCount: Self.int64(fields["eval_count"]).map(Int.init))
+    }
+
+    /// One vector per input, in order (`/api/embed`).
+    public func embed(model: String, inputs: [String], timeout: TimeInterval) async throws -> [[Float]] {
+        let body = try Self.encode(.object(["model": .string(model), "input": .array(inputs.map(JSONValue.string))]))
+        let fields = try await object(for: OllamaHTTPRequest(method: .post, path: "/api/embed", body: body, timeout: timeout))
+        guard case .array(let rows)? = fields["embeddings"], rows.count == inputs.count else { throw OllamaClientError.badResponse }
+        return try rows.map { row in
+            guard case .array(let numbers) = row else { throw OllamaClientError.badResponse }
+            return try numbers.map { number in
+                switch number {
+                case .double(let value): Float(value)
+                case .int(let value): Float(value)
+                default: throw OllamaClientError.badResponse
+                }
+            }
+        }
+    }
+
+    /// The most likely first tokens of the answer to a raw prompt, with their log probabilities (`/api/generate` with
+    /// `raw`, one token, `logprobs`). Used for yes/no judgments.
+    public func generateNextTokenLogprobs(model: String, prompt: String, timeout: TimeInterval) async throws -> [TokenLogprob] {
+        let body = try Self.encode(.object([
+            "model": .string(model), "prompt": .string(prompt), "raw": .bool(true), "stream": .bool(false),
+            "logprobs": .bool(true), "top_logprobs": .int(5),
+            "options": .object(["temperature": .double(0), "num_predict": .int(1)]),
+        ]))
+        let fields = try await object(for: OllamaHTTPRequest(method: .post, path: "/api/generate", body: body, timeout: timeout))
+        guard case .array(let steps)? = fields["logprobs"], case .object(let first)? = steps.first,
+              case .array(let top)? = first["top_logprobs"] else { throw OllamaClientError.badResponse }
+        let tokens: [TokenLogprob] = top.compactMap { entry in
+            guard case .object(let item) = entry, let token = Self.string(item["token"]) else { return nil }
+            switch item["logprob"] {
+            case .double(let value)?: return TokenLogprob(token: token, logprob: value)
+            case .int(let value)?: return TokenLogprob(token: token, logprob: Double(value))
+            default: return nil
+            }
+        }
+        guard !tokens.isEmpty else { throw OllamaClientError.badResponse }
+        return tokens
     }
 
     /// The request exactly as sent, with the picture replaced by its placeholder (run record).

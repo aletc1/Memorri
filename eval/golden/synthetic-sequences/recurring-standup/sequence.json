@@ -1,0 +1,235 @@
+{
+  "actions" : [
+
+  ],
+  "captures" : [
+    {
+      "capturedAt" : "2026-10-09T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-12T08:15:00Z",
+          "event" : "standup-0",
+          "inferred" : [
+            "end"
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-12T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week0a"
+    },
+    {
+      "capturedAt" : "2026-10-09T12:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-12T08:15:00Z",
+          "event" : "standup-0",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-12T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week0b"
+    },
+    {
+      "capturedAt" : "2026-10-10T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-13T08:15:00Z",
+          "event" : "standup-1",
+          "inferred" : [
+            "end"
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-13T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week1a"
+    },
+    {
+      "capturedAt" : "2026-10-10T12:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-13T08:15:00Z",
+          "event" : "standup-1",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-13T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week1b"
+    },
+    {
+      "capturedAt" : "2026-10-11T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T08:15:00Z",
+          "event" : "standup-2",
+          "inferred" : [
+            "end"
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week2a"
+    },
+    {
+      "capturedAt" : "2026-10-11T12:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T08:15:00Z",
+          "event" : "standup-2",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week2b"
+    },
+    {
+      "capturedAt" : "2026-10-12T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-15T08:15:00Z",
+          "event" : "standup-3",
+          "inferred" : [
+            "end"
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-15T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week3a"
+    },
+    {
+      "capturedAt" : "2026-10-12T12:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-15T08:15:00Z",
+          "event" : "standup-3",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-15T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week3b"
+    },
+    {
+      "capturedAt" : "2026-10-13T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-16T08:15:00Z",
+          "event" : "standup-4",
+          "inferred" : [
+            "end"
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-16T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week4a"
+    },
+    {
+      "capturedAt" : "2026-10-13T12:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-16T08:15:00Z",
+          "event" : "standup-4",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-16T08:00:00Z",
+          "title" : "Daily standup"
+        }
+      ],
+      "id" : "week4b"
+    }
+  ],
+  "contexts" : [
+    {
+      "id" : "a",
+      "name" : "Customer A",
+      "timezone" : "Europe/Madrid"
+    }
+  ],
+  "macTimezone" : "UTC"
+}

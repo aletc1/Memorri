@@ -200,4 +200,66 @@ import Testing
         #expect(ThinkWireValue.acceptsLevels(modelName: "gpt-oss:20b"))
         #expect(!ThinkWireValue.acceptsLevels(modelName: "qwen3.8:27b-mlx"))
     }
+
+    // MARK: embeddings and next-token log probabilities (spec 005)
+
+    @Test func embedPostsTheInputsAndReturnsOneVectorEachInOrder() async throws {
+        let transport = FakeOllamaTransport()
+        transport.set("/api/embed", .json(#"{"model":"e5","embeddings":[[0.5,1.5],[2.5,3.5]]}"#))
+        let vectors = try await OllamaClient(transport: transport).embed(model: "e5", inputs: ["query: a", "query: b"], timeout: 7)
+        #expect(vectors == [[0.5, 1.5], [2.5, 3.5]])
+        let sent = try #require(transport.requests(to: "/api/embed").first)
+        #expect(sent.method == .post && sent.timeout == 7)
+        let body = try body(of: sent)
+        #expect(body["model"] as? String == "e5")
+        #expect(body["input"] as? [String] == ["query: a", "query: b"])
+    }
+
+    @Test func embedRejectsACountMismatchOrAMissingList() async throws {
+        for answer in [#"{"embeddings":[[1.0]]}"#, #"{"model":"e5"}"#, #"{"embeddings":"nope"}"#] {
+            let transport = FakeOllamaTransport()
+            transport.set("/api/embed", .json(answer))
+            await #expect(throws: OllamaClientError.badResponse) {
+                _ = try await OllamaClient(transport: transport).embed(model: "e5", inputs: ["a", "b"], timeout: 5)
+            }
+        }
+    }
+
+    @Test func nextTokenLogprobsSendsTheRawRequestAndReturnsTheTopTokens() async throws {
+        let transport = FakeOllamaTransport()
+        transport.set("/api/generate", .json("""
+        {"model":"r","response":"yes","done":true,
+         "logprobs":[{"token":"yes","logprob":-0.2,"top_logprobs":[{"token":"yes","logprob":-0.2},{"token":"no","logprob":-1.9}]}]}
+        """))
+        let top = try await OllamaClient(transport: transport).generateNextTokenLogprobs(model: "r", prompt: "<p>", timeout: 9)
+        #expect(top == [TokenLogprob(token: "yes", logprob: -0.2), TokenLogprob(token: "no", logprob: -1.9)])
+        let sent = try #require(transport.requests(to: "/api/generate").first)
+        #expect(sent.timeout == 9)
+        let fields = try body(of: sent)
+        #expect(fields["model"] as? String == "r" && fields["prompt"] as? String == "<p>")
+        #expect(fields["raw"] as? Bool == true && fields["stream"] as? Bool == false && fields["logprobs"] as? Bool == true)
+        #expect(fields["top_logprobs"] as? Int == 5)
+        let options = try #require(fields["options"] as? [String: Any])
+        #expect(options["num_predict"] as? Int == 1 && options["temperature"] as? Double == 0)
+    }
+
+    @Test func nextTokenLogprobsWithoutLogprobsIsABadResponse() async throws {
+        let transport = FakeOllamaTransport()
+        transport.set("/api/generate", .json(#"{"model":"r","response":"yes","done":true}"#))
+        await #expect(throws: OllamaClientError.badResponse) {
+            _ = try await OllamaClient(transport: transport).generateNextTokenLogprobs(model: "r", prompt: "p", timeout: 5)
+        }
+    }
+
+    @Test func theNewCallsMapFailuresLikeChat() async throws {
+        let cases: [(FakeOllamaTransport.Reply, OllamaClientError)] = [
+            (.status(500), .serverError(500)), (.status(404), .requestRejected), (.fail(.timedOut), .timedOut), (.fail(.unreachable), .unreachable),
+        ]
+        for (reply, expected) in cases {
+            let transport = FakeOllamaTransport()
+            transport.set("/api/embed", reply); transport.set("/api/generate", reply)
+            await #expect(throws: expected) { _ = try await OllamaClient(transport: transport).embed(model: "e", inputs: ["a"], timeout: 5) }
+            await #expect(throws: expected) { _ = try await OllamaClient(transport: transport).generateNextTokenLogprobs(model: "r", prompt: "p", timeout: 5) }
+        }
+    }
 }

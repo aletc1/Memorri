@@ -1,0 +1,89 @@
+{
+  "actions" : [
+
+  ],
+  "captures" : [
+    {
+      "capturedAt" : "2026-10-11T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T11:00:00Z",
+          "event" : "coffee",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T10:00:00Z",
+          "title" : "Café con proveedores"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T14:00:00Z",
+          "event" : "report",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T13:00:00Z",
+          "title" : "Revisión mensual"
+        }
+      ],
+      "id" : "c1"
+    },
+    {
+      "capturedAt" : "2026-10-11T09:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T11:00:00Z",
+          "event" : "coffee",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T10:00:00Z",
+          "title" : "CAFE CON PROVEEDORES"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T14:00:00Z",
+          "event" : "report",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T13:00:00Z",
+          "title" : "Revision mensual."
+        }
+      ],
+      "id" : "c2"
+    }
+  ],
+  "contexts" : [
+    {
+      "id" : "a",
+      "name" : "Customer A",
+      "timezone" : "Europe/Madrid"
+    }
+  ],
+  "macTimezone" : "UTC"
+}

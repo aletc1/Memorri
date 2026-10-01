@@ -1,0 +1,146 @@
+{
+  "actions" : [
+
+  ],
+  "captures" : [
+    {
+      "capturedAt" : "2026-10-09T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "review",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T11:00:00Z",
+          "title" : "Sprint review"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "retro",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T13:00:00Z",
+          "title" : "Sprint retrospective"
+        }
+      ],
+      "id" : "month"
+    },
+    {
+      "capturedAt" : "2026-10-10T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T12:00:00Z",
+          "event" : "review",
+          "inferred" : [
+            "end"
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T11:00:00Z",
+          "title" : "Sprint review"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T14:00:00Z",
+          "event" : "retro",
+          "inferred" : [
+            "end"
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T13:00:00Z",
+          "title" : "Sprint retrospective"
+        }
+      ],
+      "id" : "week"
+    },
+    {
+      "capturedAt" : "2026-10-11T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T12:30:00Z",
+          "event" : "review",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T11:00:00Z",
+          "title" : "Sprint review"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T14:00:00Z",
+          "event" : "retro",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T13:00:00Z",
+          "title" : "Sprint retrospective"
+        }
+      ],
+      "id" : "email"
+    },
+    {
+      "capturedAt" : "2026-10-11T12:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.95,
+          "end" : "2026-10-14T12:30:00Z",
+          "event" : "review",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T11:00:00Z",
+          "title" : "Sprint review"
+        }
+      ],
+      "id" : "day"
+    }
+  ],
+  "contexts" : [
+    {
+      "id" : "a",
+      "name" : "Customer A",
+      "timezone" : "Europe/Madrid"
+    }
+  ],
+  "macTimezone" : "UTC"
+}

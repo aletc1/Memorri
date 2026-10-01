@@ -35,6 +35,57 @@ struct CLIAnalyser: CaseAnalysing {
     }
 }
 
+/// Keeps what each case's analysis found, for `run --reconcile`.
+final class RecordingAnalyser: CaseAnalysing, @unchecked Sendable {
+    private let base: any CaseAnalysing
+    private let lock = NSLock()
+    private var found: [String: [FoundFinding]] = [:]
+
+    init(_ base: any CaseAnalysing) { self.base = base }
+
+    var findings: [String: [FoundFinding]] { lock.withLock { found } }
+
+    func analyse(_ golden: GoldenCase, replaying steps: [EvalStepRecord]?) async throws -> CaseResult {
+        let result = try await base.analyse(golden, replaying: steps)
+        lock.withLock { found[golden.name] = result.findings }
+        return result
+    }
+}
+
+/// The judge `reconcile --models on` and `run --reconcile` use: the local embedding model and reranker, or nothing.
+func makeJudge(address: String, embeddingModel: String?, rerankerModel: String?) async -> any MeaningJudging {
+    let settings = OllamaSettings(store: MemorySettingsStore())
+    _ = settings.setAddress(address)
+    let service = OllamaService.live(settings: settings)
+    let client = await service.client()
+    guard let installed = try? await client.models() else { return NoMeaningJudge() }
+    let names = Set(installed.map(\.name))
+    func pick(_ asked: String?, default fallback: String) -> String? { names.contains(asked ?? fallback) ? (asked ?? fallback) : nil }
+    return OllamaMeaningJudge(client: client, embeddingModel: pick(embeddingModel, default: OllamaSettings.defaultEmbeddingModel),
+                              rerankerModel: pick(rerankerModel, default: OllamaSettings.defaultRerankerModel), database: nil)
+}
+
+func reconcile(_ options: ReconcileOptions) async -> Int32 {
+    do {
+        let cases = try SequenceCase.loadAll(in: URL(fileURLWithPath: options.cases))
+        let judge: any MeaningJudging = options.modelsOn
+            ? await makeJudge(address: options.address, embeddingModel: options.embeddingModel, rerankerModel: options.rerankerModel)
+            : NoMeaningJudge()
+        if options.modelsOn, !(await judge.canEmbed), !(await judge.canJudge) {
+            fail("The matching models are not installed on the server at \(options.address); use --models off or install them.", code: EvalExit.refusal)
+        }
+        let report = try await ReconcileRunner(judge: judge, modelsOn: options.modelsOn).run(cases: cases, only: options.only, progress: { print($0) })
+        print(report.text)
+        if let out = options.out {
+            try report.write(to: URL(fileURLWithPath: out))
+            print("saved \(out)")
+        }
+        return options.isOutsideLimits(report.overall) ? EvalExit.belowMinimum : EvalExit.finished
+    } catch {
+        fail("\(error)", code: EvalExit.error)
+    }
+}
+
 func defaultReportPath() -> String {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -61,7 +112,7 @@ func run(_ options: RunOptions) async -> Int32 {
     do {
         let (cases, warnings) = try GoldenCase.loadAll(in: URL(fileURLWithPath: options.cases))
         for warning in warnings { FileHandle.standardError.write(Data((warning + "\n").utf8)) }
-        let analyser = CLIAnalyser(service: service, settings: settings, size: options.size, contexts: PipelineCaseAnalyser.contexts(in: cases))
+        let analyser = RecordingAnalyser(CLIAnalyser(service: service, settings: settings, size: options.size, contexts: PipelineCaseAnalyser.contexts(in: cases)))
         let runner = EvalRunner(analyser: analyser, settings: evalSettings,
                                 isAppBusy: { (try? AppPaths.standard()).map(BusyCheck.isBusy(paths:)) ?? false },
                                 serverStatus: { await service.check() })
@@ -72,6 +123,24 @@ func run(_ options: RunOptions) async -> Int32 {
         let out = URL(fileURLWithPath: options.out ?? defaultReportPath())
         try report.write(to: out)
         print("saved \(out.path)")
+        if options.reconcile {
+            let first = analyser.findings
+            _ = try await runner.run(cases: cases, only: options.only, replay: replay, allowBusy: true, progress: { print("second pass: " + $0) })
+            let judge = await makeJudge(address: options.address, embeddingModel: nil, rerankerModel: nil)
+            let expected = cases.reduce(0) { $0 + $1.expected.findings.count }
+            let again = try await ReconcileRunner(judge: judge, modelsOn: true).reanalysis(first: first, second: analyser.findings, expectedEvents: expected, progress: { print($0) })
+            print(again.text)
+            // The same, with what the cases expect as the analysis: isolates what reconciliation does from the analysis' own mistakes.
+            var ideal: [String: [FoundFinding]] = [:]
+            for golden in cases {
+                ideal[golden.name] = golden.expected.findings.map { e in
+                    FoundFinding(kind: e.kind, title: e.title, start: e.start, end: e.end, due: e.due, remind: e.remind, allDay: e.allDay ?? false,
+                                 people: e.people ?? [], place: e.place, inferred: e.inferred ?? [])
+                }
+            }
+            let perfect = try await ReconcileRunner(judge: judge, modelsOn: true).reanalysis(first: ideal, second: ideal, expectedEvents: expected)
+            print("with the expected findings as the analysis: " + perfect.text)
+        }
         if report.cases.allSatisfy({ $0.foundKind == "failed" }) {
             fail("No case could be analysed (see the saved report for the model's answers).", code: EvalExit.error)
         }
@@ -115,8 +184,18 @@ do {
     case .generateSynthetic(let out):
         let folders = try SyntheticCases.generate(into: URL(fileURLWithPath: out))
         print("wrote \(folders.count) cases to \(out)")
+    case .generateSequences(let out):
+        let folders = try SyntheticSequences.generate(into: URL(fileURLWithPath: out))
+        print("wrote \(folders.count) sequence cases to \(out)")
+    case .reconcile(let options):
+        exit(await reconcile(options))
     case .compare(let a, let b):
-        print(EvalReport.compare(try readReport(a), try readReport(b)).text)
+        if let first = try? SequenceReport.decode(Data(contentsOf: URL(fileURLWithPath: a))),
+           let second = try? SequenceReport.decode(Data(contentsOf: URL(fileURLWithPath: b))) {
+            print(SequenceReport.compare(first, second))
+        } else {
+            print(EvalReport.compare(try readReport(a), try readReport(b)).text)
+        }
     case .run(let options):
         exit(await run(options))
     case .sweepSize(let cases, let sizes):

@@ -22,6 +22,7 @@ struct MenuContent: View {
                 Task { await environment.analysis?.pause(!paused) }
             }
         }
+        Button("Items…") { environment.windows.show(.items) }
         Button("Inbox") { environment.windows.show(.inbox) }
         Button("Search") { environment.windows.show(.search) }
 

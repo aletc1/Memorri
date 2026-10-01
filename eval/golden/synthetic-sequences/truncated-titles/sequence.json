@@ -1,0 +1,123 @@
+{
+  "actions" : [
+
+  ],
+  "captures" : [
+    {
+      "capturedAt" : "2026-10-11T08:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "planning",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T09:00:00Z",
+          "title" : "Quarterly planning work"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "event" : "lunch",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T12:00:00Z",
+          "title" : "Team lunch at the Corner Caf"
+        }
+      ],
+      "id" : "c1"
+    },
+    {
+      "capturedAt" : "2026-10-11T09:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T11:00:00Z",
+          "event" : "planning",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T09:00:00Z",
+          "title" : "Quarterly planning workshop"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T13:30:00Z",
+          "event" : "lunch",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T12:00:00Z",
+          "title" : "Team lunch"
+        }
+      ],
+      "id" : "c2"
+    },
+    {
+      "capturedAt" : "2026-10-11T10:00:00Z",
+      "context" : "a",
+      "findings" : [
+        {
+          "allDay" : false,
+          "confidence" : 0.6,
+          "event" : "planning",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T09:00:00Z",
+          "title" : "Quarterly planning"
+        },
+        {
+          "allDay" : false,
+          "confidence" : 0.9,
+          "end" : "2026-10-14T13:30:00Z",
+          "event" : "lunch",
+          "inferred" : [
+
+          ],
+          "kind" : "appointment",
+          "people" : [
+
+          ],
+          "start" : "2026-10-14T12:00:00Z",
+          "title" : "Team lunch at the Corner Café"
+        }
+      ],
+      "id" : "c3"
+    }
+  ],
+  "contexts" : [
+    {
+      "id" : "a",
+      "name" : "Customer A",
+      "timezone" : "Europe/Madrid"
+    }
+  ],
+  "macTimezone" : "UTC"
+}

@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 @testable import MemorriCore
 
 /// In-memory `SettingsStore` for tests.
@@ -564,4 +565,152 @@ final class FakeEnqueuer: AnalysisEnqueuing, @unchecked Sendable {
     private func add(_ ids: [String]) { lock.withLock { batches.append(ids) } }
 
     func enqueueAnalysis(imageIDs: [String]) async { add(imageIDs) }
+}
+
+extension Item {
+    /// A plain active appointment for tests; change what a test needs.
+    static func sample(id: String = UUID().uuidString, kind: FindingKind = .appointment, title: String = "Daily standup",
+                       start: Date? = Date(timeIntervalSince1970: 1_791_961_200), contextID: String? = nil) -> Item {
+        Item(id: id, kind: kind, contextID: contextID, title: title, start: start, timezone: "UTC", confidence: 0.8,
+             firstSeen: Date(timeIntervalSince1970: 1_791_900_000), lastSeen: Date(timeIntervalSince1970: 1_791_900_000))
+    }
+}
+
+// MARK: Reconciliation fakes (spec 005)
+
+/// A meaning judge whose vectors and answers the test scripts, counting the calls it gets. A title with no scripted vector has an
+/// empty one, which reconciliation reads as "unknown".
+final class FakeMeaningJudge: MeaningJudging, @unchecked Sendable {
+    enum Mode { case ok, unavailable, throwing }
+
+    private let lock = NSLock()
+    private var mode: Mode
+    private var vectors: [String: [Float]] = [:]
+    private var answers: [String: Double] = [:]
+    private var fallback: Double
+    private var embedded: [[String]] = []
+    private var judged: [(JudgedSighting, JudgedSighting)] = []
+
+    init(mode: Mode = .ok, defaultAnswer: Double = 0) { self.mode = mode; self.fallback = defaultAnswer }
+
+    func setMode(_ value: Mode) { lock.lock(); mode = value; lock.unlock() }
+    func setVector(_ vector: [Float], for normalisedTitle: String) { lock.lock(); vectors[normalisedTitle] = vector; lock.unlock() }
+    /// The probability of "same event" for a pair of normalised titles, in either order.
+    func setAnswer(_ p: Double, _ a: String, _ b: String) { lock.lock(); answers[[a, b].sorted().joined(separator: "|")] = p; lock.unlock() }
+
+    var embedCalls: [[String]] { lock.lock(); defer { lock.unlock() }; return embedded }
+    var judgeCalls: [(JudgedSighting, JudgedSighting)] { lock.lock(); defer { lock.unlock() }; return judged }
+
+    var canEmbed: Bool { get async { lock.withLock { mode != .unavailable } } }
+    var canJudge: Bool { get async { lock.withLock { mode != .unavailable } } }
+
+    func embeddings(for titles: [String]) async throws -> [[Float]] {
+        try lock.withLock {
+            if mode == .unavailable { throw MeaningJudgeError.unavailable }
+            embedded.append(titles)
+            if mode == .throwing { throw OllamaClientError.timedOut }
+            return titles.map { vectors[$0] ?? [] }
+        }
+    }
+
+    func sameEvent(_ a: JudgedSighting, _ b: JudgedSighting) async throws -> Double {
+        try lock.withLock {
+            if mode == .unavailable { throw MeaningJudgeError.unavailable }
+            judged.append((a, b))
+            if mode == .throwing { throw OllamaClientError.timedOut }
+            let key = [TitleNormaliser.normalise(a.title), TitleNormaliser.normalise(b.title)].sorted().joined(separator: "|")
+            return answers[key] ?? fallback
+        }
+    }
+}
+
+/// A database with several pictures and contexts, and a way to store the findings of an analysis the way the job does.
+final class ReconcileFixture {
+    let base: PipelineFixture
+    var database: StorageDatabase { base.database }
+    private(set) var imageIDs: [String]
+
+    init() throws {
+        base = try makePipelineFixture()
+        imageIDs = [base.imageID]
+    }
+
+    func cleanUp() { base.cleanUp() }
+
+    /// 2026-10-14 07:00 UTC, a Wednesday: the day the sample appointments are on.
+    static let nine = Date(timeIntervalSince1970: 1_791_961_200)
+    static func minutes(_ n: Int, after date: Date = ReconcileFixture.nine) -> Date { date.addingTimeInterval(Double(n) * 60) }
+
+    func addContext(_ id: String, _ name: String, timezone: String? = "UTC") throws {
+        try database.pool.write {
+            try $0.execute(sql: "INSERT INTO contexts (id, name, timezone, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))",
+                           arguments: [id, name, timezone])
+        }
+    }
+
+    /// A new picture (its own capture event) taken at `date`; returns its id.
+    @discardableResult
+    func addPicture(at date: Date, display: String = "Test display") throws -> String {
+        let event = makeEventRecord(at: date)
+        var image = makeImageRecord(eventID: event.id)
+        image.displayName = display
+        try base.captures.insert(event: event, images: [image])
+        imageIDs.append(image.id)
+        return image.id
+    }
+
+    func finding(_ title: String, start: Date? = ReconcileFixture.nine, end: Date? = nil, kind: FindingKind = .appointment, allDay: Bool = false,
+                 due: Date? = nil, confidence: Double = 0.8, inferredEnd: Bool = false, people: [String] = [], place: String? = nil,
+                 cited: [Int] = [1], timezone: String = "UTC", id: String = UUID().uuidString) -> Finding {
+        var provenance: [String: FieldProvenance] = [:]
+        if start != nil { provenance["start"] = FieldProvenance(origin: .read, rule: "explicit-date") }
+        if end != nil { provenance["end"] = inferredEnd ? FieldProvenance(origin: .inferred, rule: "default-duration") : FieldProvenance(origin: .read, rule: "explicit-time") }
+        return Finding(id: id, kind: kind, title: title, allDay: allDay, start: start, end: end, due: due, timezone: timezone, people: people,
+                       place: place, citedLines: cited, confidence: confidence, provenance: provenance)
+    }
+
+    /// Stores an analysis the way `AnalysisResultStore.save` does, replacing the picture's earlier one, with the context decision.
+    func save(_ findings: [Finding], imageID: String? = nil, contextID: String? = nil, contextSource: ContextDecision.Source = .auto) throws {
+        let classification = ClassificationResult(kind: .calendarWeek, confidence: 0.9, application: "Outlook", platformLook: "windows",
+                                                  isRemote: false, remoteClient: "", theme: "light", calendarName: "")
+        let decision = contextID == nil ? ContextDecision.unassigned : ContextDecision(contextID: contextID, source: contextSource, score: 5)
+        let result = AnalysisResult(lines: [], classification: classification, findings: findings, decision: decision,
+                                    timezone: TimeZone(identifier: "UTC")!, model: "fake", pictureLongEdge: 2048)
+        try AnalysisResultStore(database: database).save(result, imageID: imageID ?? base.imageID, runID: nil, at: Date(timeIntervalSince1970: 1_791_950_000))
+    }
+
+    func count(_ table: String) throws -> Int {
+        try database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM \(table)") ?? -1 }
+    }
+
+    /// Everything an undo has to put back, as sorted text lines (times of last change left out).
+    func snapshot() throws -> [String] {
+        try read { db in
+            func lines(_ tag: String, _ sql: String) throws -> [String] {
+                try Row.fetchAll(db, sql: sql).map { row in tag + "|" + row.databaseValues.map { "\($0)" }.joined(separator: "|") }
+            }
+            var all: [String] = []
+            all += try lines("item", """
+                SELECT id, kind, family, status, merged_into, context_id, title, all_day, start_at, end_at, due_at, remind_at, timezone, day_key,
+                       people_json, place, notes, confidence, user_touched, first_seen, last_seen FROM items
+                """)
+            all += try lines("sighting", "SELECT id, item_id, image_id, title FROM sightings")
+            all += try lines("observation", "SELECT id, item_id, sighting_id, field, value_json, source FROM observations")
+            all += try lines("lock", "SELECT item_id, field, observation_id FROM field_locks")
+            all += try lines("alias", "SELECT item_id, normalised, title FROM item_aliases")
+            all += try lines("apart", "SELECT item_a, item_b FROM keep_apart")
+            all += try lines("possible", "SELECT item_a, item_b FROM possible_duplicates")
+            return all.sorted()
+        }
+    }
+
+    /// What differs between two snapshots, for a readable failure.
+    static func difference(_ a: [String], _ b: [String]) -> String {
+        let onlyA = Set(a).subtracting(b).sorted(), onlyB = Set(b).subtracting(a).sorted()
+        return onlyA.isEmpty && onlyB.isEmpty ? "" : "only in first:\n" + onlyA.joined(separator: "\n") + "\nonly in second:\n" + onlyB.joined(separator: "\n")
+    }
+
+    // Plain, non-async wrappers: inside an async test `pool.read` would pick the async overload.
+    func read<T>(_ body: (GRDB.Database) throws -> T) throws -> T { try withoutActuallyEscaping(body) { try database.pool.read($0) } }
+    func write<T>(_ body: (GRDB.Database) throws -> T) throws -> T { try withoutActuallyEscaping(body) { try database.pool.write($0) } }
 }

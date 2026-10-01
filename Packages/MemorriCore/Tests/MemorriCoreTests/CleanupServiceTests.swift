@@ -95,12 +95,32 @@ import Testing
         try FileManager.default.createDirectory(at: crop.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("crop".utf8).write(to: crop)
         try h.context.store?.withSentinelTable { db in
-            try db.execute(sql: "CREATE TABLE items (id TEXT, evidence_path TEXT)")
-            try db.execute(sql: "INSERT INTO items VALUES ('item-1', 'evidence/crop.heic')")
+            try db.execute(sql: "CREATE TABLE derived_things (id TEXT, evidence_path TEXT)")
+            try db.execute(sql: "INSERT INTO derived_things VALUES ('item-1', 'evidence/crop.heic')")
         }
         #expect(try h.cleanup.delete(olderThanDays: nil) == 1)
         #expect(FileManager.default.fileExists(atPath: crop.path))
         #expect(try h.context.store?.sentinelCount() == 1)
+    }
+
+    @Test func deletingCapturesSweepsTheItemsThatLostTheirSightings() throws {
+        let h = try Harness(now: now); defer { h.temp.cleanUp() }
+        try h.addCapture(id: "old", at: now.addingTimeInterval(-99 * day))
+        try h.context.database!.pool.write { db in
+            for (id, touched) in [("empty", 0), ("edited", 1)] {
+                try ItemStore.insert(db, Item.sample(id: id), at: now)
+                try db.execute(sql: "UPDATE items SET user_touched = ? WHERE id = ?", arguments: [touched, id])
+                try db.execute(sql: """
+                    INSERT INTO sightings (id, item_id, image_id, finding_id, captured_at, title, cited_lines_json, confidence, decision_json, created_at)
+                    VALUES (?, ?, 'old-img', 'f', datetime('now'), 'Daily standup', '[1]', 0.8, '{}', datetime('now'))
+                    """, arguments: ["s-\(id)", id])
+            }
+        }
+        #expect(try h.cleanup.delete(olderThanDays: 30) == 1)
+        let left = try h.context.database!.pool.read { try String.fetchAll($0, sql: "SELECT id FROM items ORDER BY id") }
+        #expect(left == ["edited"])
+        let sightings = try h.context.database!.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM sightings") }
+        #expect(sightings == 0)
     }
 
     @Test func aCaptureInProgressIsNeverRemoved() throws {
@@ -135,6 +155,6 @@ extension CaptureStore {
         try database.pool.write { try body($0) }
     }
     func sentinelCount() throws -> Int {
-        try database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM items") ?? 0 }
+        try database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM derived_things") ?? 0 }
     }
 }

@@ -3,8 +3,8 @@ import os
 
 /// Deletes captures (record and pictures together) older than a number of days, or all of them.
 /// Every kind of deletion goes through here: rows first in one transaction, then the folders, so a
-/// crash in between leaves only folders that the start-up sweep removes. It touches captures only,
-/// never anything derived from them (FR-023, ADR 0010).
+/// crash in between leaves only folders that the start-up sweep removes. Items found in the captures are kept
+/// (FR-023, ADR 0010), except those left with no sighting that the user never touched (spec 005, ADR 0020).
 public struct CleanupService: Sendable {
     public struct Preview: Sendable, Equatable {
         public let captureCount: Int
@@ -44,6 +44,13 @@ public struct CleanupService: Sendable {
         let events = try events(olderThanDays: days, now: now)
         guard !events.isEmpty else { return 0 }
         try store.deleteEvents(ids: events.map(\.id))
+        // Items lose their sightings with the captures; the sweep rebuilds them and drops the empty ones nobody touched.
+        do {
+            let itemsRemoved = try ItemStore(database: store.database).sweep(at: time.now())
+            Self.logger.notice("cleanup items removed=\(itemsRemoved)")
+        } catch {
+            Self.logger.error("cleanup item sweep failed: \(error.localizedDescription, privacy: .public)")
+        }
         for event in events { files.removeCaptureDirectory(eventID: event.id, capturedAt: event.capturedAt) }
         Self.logger.notice("cleanup removed=\(events.count)")
         return events.count
