@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Related ADRs**: 0020 (reconciliation: items, sightings and the operation log)
+**Related ADRs**: 0020 (reconciliation: items, sightings and the operation log), 0021 (evidence cut-outs and review state, Proposed)
 
 **Input**: User description: "An Items window for Appointments, Tasks and Reminders filtered by context. Detail view shows evidence crops and field provenance. Inline edits lock fields. An Inbox lists low-confidence items for approve or dismiss. (Spec 005 already ships a minimal Items window with filters, list, detail with fields, sightings and history, merge, split, dismiss, restore, title edit, unlock and undo; this spec grows it: cropped evidence from the cited OCR lines of each sighting, per-field provenance and inline editing of every field with locking, and the confidence-gated Inbox.)"
 
