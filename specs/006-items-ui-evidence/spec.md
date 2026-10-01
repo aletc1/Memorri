@@ -10,6 +10,16 @@
 
 **Input**: User description: "An Items window for Appointments, Tasks and Reminders filtered by context. Detail view shows evidence crops and field provenance. Inline edits lock fields. An Inbox lists low-confidence items for approve or dismiss. (Spec 005 already ships a minimal Items window with filters, list, detail with fields, sightings and history, merge, split, dismiss, restore, title edit, unlock and undo; this spec grows it: cropped evidence from the cited OCR lines of each sighting, per-field provenance and inline editing of every field with locking, and the confidence-gated Inbox.)"
 
+## Clarifications
+
+### Session 2026-10-01
+
+- Q: Below what confidence should an item go to the Inbox for review, and can you change that level? → A: 0.75, fixed. Below 0.75, or with a guessed time, an item needs review; it is not a setting.
+- Q: Should evidence cut-outs be saved to disk, or cut from the stored picture each time you open an item? → A: Saved when the capture is analysed, as small files counted in the storage figures.
+- Q: When a later capture conflicts with an item you already approved, what should happen? → A: Unlocked values update as usual and the item returns to the Inbox with the reason "changed after you approved it".
+- Q: When a capture is deleted (by the user or by retention), should its cut-outs be deleted too? → A: No. Cut-outs stay as long as the item they prove exists; "Delete everything" in Storage still removes them.
+- Q: How many sightings should an item's detail show before a "Show all" button? → A: The 5 newest, then "Show all N sightings".
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Show me the proof (Priority: P1)
@@ -25,7 +35,7 @@ The user opens an item and wants to know whether to trust it. Today the detail v
 1. **Given** an item seen in one capture, **When** the user opens it, **Then** each sighting shows a cut-out of the picture around the lines the finding cited, with the capture date, time and display beside it.
 2. **Given** an item seen in three captures, **When** the user opens it, **Then** the sightings are listed newest first, each with its own cut-out, and the user can tell which sighting each field value was taken from.
 3. **Given** a sighting's cut-out, **When** the user asks to see the whole capture, **Then** the picture opens with the cited lines marked, and closing it returns to the item.
-4. **Given** a capture whose pictures were deleted by cleanup, **When** the user opens an item that was seen in it, **Then** the sighting still shows its text and details, says the picture is no longer stored, and nothing else in the item breaks.
+4. **Given** a capture whose pictures were deleted by cleanup or retention, **When** the user opens an item that was seen in it, **Then** the sighting still shows its saved cut-out, text and details; asking for the whole capture says the picture is no longer stored, and nothing else in the item breaks.
 5. **Given** a sighting that cited no readable lines (the model inferred the value), **When** the user opens it, **Then** it says there is no cut-out for it and why, instead of showing an empty box.
 
 ---
@@ -92,13 +102,13 @@ The user wants the Items window to match how they think: appointments, tasks and
 
 - A sighting cites lines on a picture that has more than one display or was captured at a different size than the model saw: the cut-out must still match the lines it claims (it is made from the full-size picture, not from the downscaled copy).
 - A cited line sits at the very edge of the picture: the cut-out is cropped to the picture, not padded with empty space.
-- An item has dozens of sightings (a recurring view captured all day): the detail view stays responsive and shows the newest few with a way to see the rest.
-- A picture is deleted while the user has the item open: the cut-out is replaced by the "no longer stored" notice without an error.
+- An item has dozens of sightings (a recurring view captured all day): the detail view shows the 5 newest with their cut-outs and a "Show all N sightings" button, and stays responsive.
+- A picture is deleted while the user has the item open: the saved cut-out stays; opening the whole capture shows the "no longer stored" notice without an error.
+- An item is removed (its sightings all gone and it was never touched by the user) or the user chooses "Delete everything": its cut-outs are removed with it.
 - Two edits to the same field in a row, or an edit made while a capture is being reconciled: the last confirmed edit wins and nothing is lost; undo still goes back one step at a time.
 - The user approves an item and later merges it with another: the merged item is approved only if both were; otherwise it returns to the Inbox with the reason.
 - An item split from an approved item starts out not approved if its own sightings are doubtful.
 - Inline edit of a date in a time zone different from the Mac's: the date is read and shown in the item's own zone.
-- The review level is changed (if it can be): items move in and out of the Inbox without losing earlier approvals.
 
 ## Requirements *(mandatory)*
 
@@ -106,19 +116,21 @@ The user wants the Items window to match how they think: appointments, tasks and
 
 - **FR-001**: The detail view MUST show, for every sighting of an item, a cut-out of the capture around the lines that sighting cited, with the capture date, time and display.
 - **FR-002**: The user MUST be able to open the whole capture of a sighting with its cited lines marked, and return to the item.
-- **FR-003**: Cut-outs MUST be made from the full-size picture, MUST match the cited lines, and MUST NOT leave the Mac or be sent to any service.
-- **FR-004**: When the picture of a sighting is no longer stored, or the sighting cited no lines, the sighting MUST say so and still show its text and details.
+- **FR-003**: Cut-outs MUST be made from the full-size picture when the capture is analysed and saved, MUST match the cited lines, and MUST NOT leave the Mac or be sent to any service.
+- **FR-004**: When the full picture of a sighting is no longer stored, the sighting MUST still show its saved cut-out and say the whole capture is gone; when the sighting cited no lines, it MUST say there is no cut-out and why. Either way its text and details stay.
+- **FR-004a**: Saved cut-outs MUST be counted in the storage figures, MUST be kept as long as the item they belong to exists (also after the capture is deleted by the user or by retention), and MUST be removed with the item and by "Delete everything".
+- **FR-004b**: The detail view MUST show the 5 newest sightings with their cut-outs and a "Show all N sightings" control for the rest.
 - **FR-005**: For each field the detail view MUST show the current value, whether it was read, guessed or set by the user, whether it is locked, and the sightings and values behind it; the user MUST be able to see which sighting the current value came from.
 - **FR-006**: The user MUST be able to edit every field of an item inline: title, start, end, all-day, due, reminder time, people, place and notes. Each confirmed edit MUST become the user's locked value.
 - **FR-007**: Edits MUST be validated before they are stored (valid dates and times, start not after end, a title that is not empty); a rejected edit MUST show why next to the field and MUST keep the old value.
 - **FR-008**: A locked field MUST keep the user's value through later sightings, merges and reanalysis, and the user MUST be able to unlock it; unlocking MUST show the value the sightings decide.
 - **FR-009**: Every edit, unlock, approval and dismissal made from the new views MUST be recorded in the operation log and be undoable with Undo last, like the operations of spec 005.
-- **FR-010**: An item MUST need review when its confidence is below the review level, or when its start, due or end time was guessed rather than read, or when it is a possible duplicate that nobody has decided, or when something changed after the user approved it.
+- **FR-010**: An item MUST need review when its confidence is below the review level of 0.75 (fixed, not a setting), or when its start, due or end time was guessed rather than read, or when it is a possible duplicate that nobody has decided, or when something changed after the user approved it.
 - **FR-011**: The Inbox MUST list exactly the items that need review, each with the reasons, and MUST be usable from the menu bar menu and from the Items window.
 - **FR-012**: The user MUST be able to approve an item (it leaves the Inbox and stays approved while nothing conflicts with it) or dismiss it (with the existing dismissal rules).
 - **FR-013**: An item that does not need review MUST count as approved without any action, and MUST be shown as approved.
 - **FR-014**: An item the user edited MUST count as approved, because the user has checked it.
-- **FR-015**: A later sighting that conflicts with an approved item's read values MUST return the item to the Inbox with the reason; it MUST NOT change locked fields.
+- **FR-015**: A later sighting that changes an approved item's unlocked values MUST update them as usual and return the item to the Inbox with the reason "changed after you approved it"; it MUST NOT change locked fields.
 - **FR-016**: The Items window MUST filter by kind (All, Appointments, Tasks, Reminders), by context (including none) and by approval state, and the Inbox MUST support the context filter.
 - **FR-017**: The menu bar menu and the Items window MUST show the number of items needing review, and it MUST equal the number listed in the Inbox.
 - **FR-018**: Each list row MUST show the kind, title, date and time in the item's zone, context, approval state, and a lock mark when any field is locked.
@@ -127,11 +139,11 @@ The user wants the Items window to match how they think: appointments, tasks and
 
 ### Key Entities
 
-- **Evidence**: The visual proof of one sighting: a cut-out of the capture around the lines the finding cited, the full capture with those lines marked, and the capture's date, time and display. It may be unavailable (picture deleted, no lines cited) and says so.
+- **Evidence**: The visual proof of one sighting: a saved cut-out of the capture around the lines the finding cited (kept while its item exists), the full capture with those lines marked while the capture is stored, and the capture's date, time and display. The cut-out is missing only when no lines were cited, and says so.
 - **Provenance**: For one field of one item, the current value, how it was obtained (read, guessed, set by the user), whether it is locked, and the sightings and values behind it.
 - **Review state**: Whether an item needs review (with the reasons) or is approved, and the history of approvals. It is derived from confidence, guessed fields, undecided possible duplicates and the user's actions.
 - **Approval**: The user's decision that an item is right. It is an operation in the log and can be undone.
-- **Review level**: The confidence below which an item needs review.
+- **Review level**: The confidence below which an item needs review: 0.75, fixed.
 - **Inbox**: The list of items that need review.
 
 ## Success Criteria *(mandatory)*
@@ -151,8 +163,8 @@ The user wants the Items window to match how they think: appointments, tasks and
 
 - Spec 005's items, sightings, observations, locks, aliases, possible duplicates and operation log are the data this spec shows and edits; the rules for merging and for choosing field values do not change.
 - A finding's cited lines (spec 004) and the stored text lines of its capture with their positions are available for cut-outs; full-size pictures are kept under the retention rules of spec 002 and may have been deleted.
-- Cut-outs are made on this Mac from the full-size picture; whether they are made when the item is opened or kept is a design choice, but kept ones count in the storage figures and follow retention (the constitution's principle V).
-- The review level starts as a fixed default chosen on the synthetic set (for example 0.75) and is not a user setting in this spec; changing it later does not remove approvals.
+- Cut-outs are made on this Mac from the full-size picture when a capture is analysed and saved as small files; they count in the storage figures and are under the user's control through "Delete everything" (the constitution's principle V). They deliberately outlive their capture so the evidence stays while the item exists. Sightings made before this spec get their cut-outs once, from the full picture if it is still stored.
+- The review level is 0.75 and is not a user setting in this spec; if it changes in a later version, earlier approvals stay.
 - "Guessed" means the finding flagged the value as inferred (for example an end time from a default duration), as in spec 004.
 - Approval is stored per item and is what Calendar and Reminders sync (spec 009) will read; nothing is synced here.
 - Search (spec 007), reprocessing with a new model (spec 008), cancellation detection and notifications (spec 010) are out of scope; the Inbox is built so that spec 010 can add items "possibly cancelled" to it.

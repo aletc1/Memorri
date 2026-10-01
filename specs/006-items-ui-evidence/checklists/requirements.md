@@ -31,5 +31,5 @@
 
 ## Notes
 
-- Open decisions left to `/speckit-clarify` instead of markers (each has a stated default in Assumptions or Edge Cases): the review level and whether it is adjustable, whether cut-outs are kept or made on demand, whether approval is shown separately from "needs review" in the list, and how many sightings the detail shows before "see the rest".
+- Clarified on 2026-10-01: review level 0.75 fixed; cut-outs saved at analysis and kept while their item exists; a conflicting sighting returns an approved item to the Inbox; 5 newest sightings then "Show all".
 - The spec names the existing spec 005 operations (merge, split, Undo last) because it extends them; it does not prescribe any technology.
