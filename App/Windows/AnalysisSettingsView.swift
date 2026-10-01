@@ -134,8 +134,7 @@ private struct CaptureRow: View {
                 .labelsHidden().fixedSize()
                 .onChange(of: choice) { _, value in
                     guard value != row.contextID else { return }
-                    try? environment.contexts?.setUserChoice(imageID: row.id, contextID: value, at: Date())
-                    onChange()
+                    Task { await environment.changeContext(imageID: row.id, to: value); onChange() }
                 }
                 .onChange(of: row.contextID) { _, value in choice = value }
                 if row.contextChosenByUser { Text("(chosen by you)").foregroundStyle(.secondary) }

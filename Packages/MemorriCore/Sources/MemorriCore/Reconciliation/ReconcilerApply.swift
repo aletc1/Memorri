@@ -13,7 +13,7 @@ extension Reconciler {
         let contextName = try context.flatMap { try String.fetchOne(db, sql: "SELECT name FROM contexts WHERE id = ?", arguments: [$0]) }
 
         let earlier = try Row.fetchAll(db, sql: """
-            SELECT s.id, s.item_id, s.title,
+            SELECT s.id, s.item_id, s.title, (SELECT i.context_id FROM items i WHERE i.id = s.item_id) AS item_context,
                    (SELECT value_json FROM observations o WHERE o.sighting_id = s.id AND o.field = 'start') AS start_json,
                    (SELECT value_json FROM observations o WHERE o.sighting_id = s.id AND o.field = 'due') AS due_json
             FROM sightings s WHERE s.image_id = ? ORDER BY s.created_at, s.id
@@ -21,7 +21,8 @@ extension Reconciler {
             func date(_ column: String) -> Date? {
                 (row[column] as String?).flatMap { try? JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }?.asDate
             }
-            return Earlier(sightingID: row["id"], itemID: row["item_id"], title: row["title"], when: date("start_json") ?? date("due_json"))
+            return Earlier(sightingID: row["id"], itemID: row["item_id"], itemContext: row["item_context"], title: row["title"],
+                           when: date("start_json") ?? date("due_json"))
         }
 
         var keepApart: Set<[String]> = []

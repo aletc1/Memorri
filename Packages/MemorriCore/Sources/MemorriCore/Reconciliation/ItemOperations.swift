@@ -13,7 +13,12 @@ public enum ItemOperationError: Error, Equatable {
     case invalidValue
     /// Both items have a locked value for these fields; say which to keep.
     case needsLockChoice([ItemField])
+    /// The sightings do not belong to the item, or would leave it empty, or take all of it.
     case invalidSightings
+    /// An item cannot be merged into itself.
+    case sameItem
+    /// This operation needs the reconciler, which was not given.
+    case noReconciler
 }
 
 /// What the user can do to an item. Each operation runs in one transaction and writes an entry of the operation log with what an
@@ -21,9 +26,11 @@ public enum ItemOperationError: Error, Equatable {
 public struct ItemOperations: Sendable {
     let database: StorageDatabase
     let now: @Sendable () -> Date
+    let reconciler: (any ImageReconciling)?
 
-    public init(database: StorageDatabase, now: @escaping @Sendable () -> Date = { Date() }) {
-        self.database = database; self.now = now
+    /// `reconciler` is needed only by `changeContext` and by the undo of a context change.
+    public init(database: StorageDatabase, reconciler: (any ImageReconciling)? = nil, now: @escaping @Sendable () -> Date = { Date() }) {
+        self.database = database; self.reconciler = reconciler; self.now = now
     }
 
     /// Sets a field to the user's value and locks it: later sightings are recorded but never change it.

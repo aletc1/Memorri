@@ -34,6 +34,9 @@ final class AppEnvironment {
     let captureOverview: CaptureOverview?
     /// The user's contexts and the context chosen for each picture; `nil` when the storage is unavailable.
     let contexts: ContextStore?
+    /// The list of items and what the user can do to them; `nil` when the storage is unavailable.
+    let items: ItemStore?
+    let itemOperations: ItemOperations?
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -63,12 +66,12 @@ final class AppEnvironment {
                 service: ollama, store: jobs, pictures: pictures, settings: ollamaSettings, time: SystemTimeSource())
             let pipeline = AnalysisPipeline(recogniser: TiledTextRecogniser(base: VisionTextRecogniser()), model: ServiceModelChatting(service: ollama),
                                             time: SystemTimeSource())
+            let reconciler = Reconciler(database: database, judge: LiveMeaningJudge(service: ollama, settings: ollamaSettings, database: database,
+                                                                                   time: SystemTimeSource()))
             let analyseRunner = ImageAnalysisJobRunner(
                 service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                 results: AnalysisResultStore(database: database), jobs: jobs, settings: ollamaSettings, time: SystemTimeSource(),
-                contexts: ContextStore(database: database), windows: CaptureStore(database: database),
-                reconciler: Reconciler(database: database, judge: LiveMeaningJudge(service: ollama, settings: ollamaSettings, database: database,
-                                                                                   time: SystemTimeSource())))
+                contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler)
             let runner = CompositeJobRunner(runners: [
                 "test": testRunner,
                 ImageAnalysisJobRunner.analyseKind: analyseRunner,
@@ -79,11 +82,15 @@ final class AppEnvironment {
             analysisJobs = jobs
             captureOverview = CaptureOverview(database: database)
             contexts = ContextStore(database: database)
+            items = ItemStore(database: database)
+            itemOperations = ItemOperations(database: database, reconciler: reconciler)
         } else {
             analysis = nil
             analysisJobs = nil
             captureOverview = nil
             contexts = nil
+            items = nil
+            itemOperations = nil
         }
         captureService = CaptureRequestService(
             runner: Self.makeCaptureRunner(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings),
@@ -144,6 +151,11 @@ final class AppEnvironment {
     /// Adds every stored picture that was never analysed to the queue, oldest first. Returns how many.
     @discardableResult
     func analyseStoredCaptures() async -> Int { await analysis?.enqueueBacklog() ?? 0 }
+
+    /// The user picks another context for a picture: its findings are matched again among the items of that context.
+    func changeContext(imageID: String, to contextID: String?) async {
+        _ = try? await itemOperations?.changeContext(imageID: imageID, to: contextID)
+    }
 
     /// Asks for a fresh analysis of one picture.
     @discardableResult

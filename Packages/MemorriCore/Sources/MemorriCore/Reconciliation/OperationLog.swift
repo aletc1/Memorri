@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 public enum OperationKind: String, Sendable, Equatable, Codable {
-    case autoMerge = "auto_merge", merge, split, dismiss, restore, edit, unlock, context, undo
+    case autoMerge = "auto_merge", merge, split, dismiss, restore, edit, unlock, context, different, undo
 }
 
 /// A sighting that changed item: `from` is nil when it joined an item as part of its own analysis.

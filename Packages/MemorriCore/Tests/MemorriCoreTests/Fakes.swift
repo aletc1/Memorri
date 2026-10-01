@@ -683,6 +683,33 @@ final class ReconcileFixture {
         try database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM \(table)") ?? -1 }
     }
 
+    /// Everything an undo has to put back, as sorted text lines (times of last change left out).
+    func snapshot() throws -> [String] {
+        try read { db in
+            func lines(_ tag: String, _ sql: String) throws -> [String] {
+                try Row.fetchAll(db, sql: sql).map { row in tag + "|" + row.databaseValues.map { "\($0)" }.joined(separator: "|") }
+            }
+            var all: [String] = []
+            all += try lines("item", """
+                SELECT id, kind, family, status, merged_into, context_id, title, all_day, start_at, end_at, due_at, remind_at, timezone, day_key,
+                       people_json, place, notes, confidence, user_touched, first_seen, last_seen FROM items
+                """)
+            all += try lines("sighting", "SELECT id, item_id, image_id, title FROM sightings")
+            all += try lines("observation", "SELECT id, item_id, sighting_id, field, value_json, source FROM observations")
+            all += try lines("lock", "SELECT item_id, field, observation_id FROM field_locks")
+            all += try lines("alias", "SELECT item_id, normalised, title FROM item_aliases")
+            all += try lines("apart", "SELECT item_a, item_b FROM keep_apart")
+            all += try lines("possible", "SELECT item_a, item_b FROM possible_duplicates")
+            return all.sorted()
+        }
+    }
+
+    /// What differs between two snapshots, for a readable failure.
+    static func difference(_ a: [String], _ b: [String]) -> String {
+        let onlyA = Set(a).subtracting(b).sorted(), onlyB = Set(b).subtracting(a).sorted()
+        return onlyA.isEmpty && onlyB.isEmpty ? "" : "only in first:\n" + onlyA.joined(separator: "\n") + "\nonly in second:\n" + onlyB.joined(separator: "\n")
+    }
+
     // Plain, non-async wrappers: inside an async test `pool.read` would pick the async overload.
     func read<T>(_ body: (GRDB.Database) throws -> T) throws -> T { try withoutActuallyEscaping(body) { try database.pool.read($0) } }
     func write<T>(_ body: (GRDB.Database) throws -> T) throws -> T { try withoutActuallyEscaping(body) { try database.pool.write($0) } }

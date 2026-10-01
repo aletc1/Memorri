@@ -31,6 +31,7 @@ extension ItemStore {
     @discardableResult
     static func recompute(_ db: Database, itemID: String, at date: Date) throws -> Bool {
         guard var item = try Self.item(db, id: itemID) else { return false }
+        if item.status == .merged { return true }      // kept as the record of a merge; nothing is built for it
         let sightings = try Row.fetchAll(db, sql: "SELECT id, captured_at, confidence, decision_json FROM sightings WHERE item_id = ? ORDER BY captured_at, id",
                                          arguments: [itemID])
         let locks = try Row.fetchAll(db, sql: "SELECT field, observation_id FROM field_locks WHERE item_id = ?", arguments: [itemID])

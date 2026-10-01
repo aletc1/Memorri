@@ -105,7 +105,7 @@ public struct Reconciler: ImageReconciling {
         let lastSeen: Date
     }
 
-    struct Earlier { let sightingID: String; let itemID: String; let title: String; let when: Date? }
+    struct Earlier { let sightingID: String; let itemID: String; let itemContext: String?; let title: String; let when: Date? }
 
     struct Snapshot {
         var findings: [Finding]
@@ -131,14 +131,15 @@ public struct Reconciler: ImageReconciling {
             let normal = TitleNormaliser.normalise(finding.title)
 
             // Rule 0: a finding this picture already had stays with its item.
-            if let earlier = snapshot.earlier.first(where: { !usedEarlier.contains($0.sightingID) && TitleNormaliser.normalise($0.title) == normal
-                                                             && Self.sameInstant($0.when, span.start) }) {
+            // (Not when the picture has since been given another context: then the finding is matched afresh.)
+            if let earlier = snapshot.earlier.first(where: { !usedEarlier.contains($0.sightingID) && $0.itemContext == snapshot.context
+                                                             && TitleNormaliser.normalise($0.title) == normal && Self.sameInstant($0.when, span.start) }) {
                 usedEarlier.insert(earlier.sightingID)
                 steps.append(.init(findingID: finding.id, target: .existing(itemID: earlier.itemID), scores: nil, rule: "same-picture", candidate: earlier.itemID))
                 Self.remember(.item(earlier.itemID), finding: finding, span: span, into: &extra)
                 continue
             }
-            let blockedBy = snapshot.earlier.first { TitleNormaliser.normalise($0.title) == normal }?.itemID
+            let blockedBy = snapshot.earlier.first { $0.itemContext == snapshot.context && TitleNormaliser.normalise($0.title) == normal }?.itemID
 
             // Candidates: the stored ones for this finding, plus the items earlier steps made.
             var pool = snapshot.candidates[index].map { c -> Candidate in

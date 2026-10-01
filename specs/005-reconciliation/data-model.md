@@ -110,7 +110,7 @@ A row goes when the user merges the pair or marks it different (which also write
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT, primary key | |
-| `kind` | TEXT, not null | `auto_merge`, `merge`, `split`, `dismiss`, `restore`, `edit`, `unlock`, `context`, `undo`. One `auto_merge` op per applied plan (a capture), listing every sighting that joined an item that already had sightings from another picture; none when nothing joined. |
+| `kind` | TEXT, not null | `auto_merge`, `merge`, `split`, `dismiss`, `restore`, `edit`, `unlock`, `context`, `different`, `undo`. One `auto_merge` op per applied plan (a capture), listing every sighting that joined an item that already had sightings from another picture; none when nothing joined. |
 | `by_user` | INTEGER, not null | 0 for `auto_merge` and reconciliation after a context change made by code, 1 otherwise. `Undo last` uses the newest `by_user` op. |
 | `item_ids_json` | TEXT, not null | Items touched. |
 | `moved_json` | TEXT, not null | `[{sighting, from, to}]`. |

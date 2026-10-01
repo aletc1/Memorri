@@ -276,7 +276,7 @@ enum Migrations {
             try db.create(table: "reconcile_ops") { t in
                 t.primaryKey("id", .text)
                 t.column("kind", .text).notNull()
-                    .check(sql: "kind IN ('auto_merge', 'merge', 'split', 'dismiss', 'restore', 'edit', 'unlock', 'context', 'undo')")
+                    .check(sql: "kind IN ('auto_merge', 'merge', 'split', 'dismiss', 'restore', 'edit', 'unlock', 'context', 'different', 'undo')")
                 t.column("by_user", .integer).notNull()
                 t.column("item_ids_json", .text).notNull()
                 t.column("moved_json", .text).notNull()
