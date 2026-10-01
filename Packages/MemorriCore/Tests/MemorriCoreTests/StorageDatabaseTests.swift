@@ -220,7 +220,7 @@ import Testing
         ("ocr_lines", ["image_id", "n", "text", "x", "y", "width", "height", "confidence"]),
         ("image_analysis", ["image_id", "screen_kind", "kind_confidence", "classify_version", "prompt_version", "schema_version",
                             "model", "picture_long_edge", "timezone", "timezone_source", "finding_count", "line_cap_applied",
-                            "discarded_json", "extract_run_id", "analysed_at"]),
+                            "discarded_json", "extract_run_id", "analysed_at", "reconciled_at", "reconcile_error"]),   // the last two: migration v5
         ("image_context", ["image_id", "context_id", "source", "score", "matched_json", "runner_up_json", "decided_at"]),
         ("capture_tags", ["image_id", "key", "value", "confidence", "source"]),
         ("findings", ["id", "image_id", "run_id", "kind", "title", "all_day", "start_at", "end_at", "due_at", "remind_at", "timezone",
@@ -256,7 +256,9 @@ import Testing
         try db.execute(sql: "INSERT INTO ocr_reads VALUES (?, datetime('now'), 1, 'vision', 5)", arguments: [image])
         try db.execute(sql: "INSERT INTO ocr_lines VALUES (?, 1, 'text', 0, 0, 10, 10, 0.9)", arguments: [image])
         try db.execute(sql: """
-            INSERT INTO image_analysis VALUES (?, 'email', 0.9, 'classify-v1', 'extract-email-v1', 'schema-email-v1', 'm', 2048, 'Europe/Madrid',
+            INSERT INTO image_analysis (image_id, screen_kind, kind_confidence, classify_version, prompt_version, schema_version, model,
+                picture_long_edge, timezone, timezone_source, finding_count, line_cap_applied, discarded_json, extract_run_id, analysed_at)
+            VALUES (?, 'email', 0.9, 'classify-v1', 'extract-email-v1', 'schema-email-v1', 'm', 2048, 'Europe/Madrid',
                                                'mac', 1, 0, '[]', NULL, datetime('now'))
             """, arguments: [image])
         try db.execute(sql: "INSERT INTO image_context VALUES (?, NULL, 'none', 0, '[]', NULL, datetime('now'))", arguments: [image])
@@ -375,6 +377,191 @@ import Testing
             let captures = try self.count(db, "capture_images"), jobs = try self.count(db, "analysis_jobs"), runs = try self.count(db, "model_runs")
             #expect(captures == 1 && jobs == 1 && runs == 1)
             #expect(try String.fetchOne(db, sql: "SELECT step FROM model_runs") == "test")
+        }
+    }
+
+    // MARK: migration "v5" (spec 005)
+
+    private static let v5Columns: [(String, [String])] = [
+        ("items", ["id", "kind", "family", "status", "merged_into", "context_id", "title", "all_day", "start_at", "end_at", "due_at", "remind_at",
+                   "timezone", "day_key", "people_json", "place", "notes", "confidence", "user_touched", "first_seen", "last_seen",
+                   "created_at", "updated_at"]),
+        ("sightings", ["id", "item_id", "image_id", "finding_id", "captured_at", "title", "cited_lines_json", "confidence", "decision_json", "created_at"]),
+        ("observations", ["id", "item_id", "sighting_id", "field", "value_json", "source", "confidence", "observed_at"]),
+        ("field_locks", ["item_id", "field", "observation_id", "locked_at"]),
+        ("item_aliases", ["item_id", "normalised", "title"]),
+        ("keep_apart", ["item_a", "item_b", "op_id"]),
+        ("possible_duplicates", ["item_a", "item_b", "scores_json", "created_at"]),
+        ("reconcile_ops", ["id", "kind", "by_user", "item_ids_json", "moved_json", "before_json", "detail_json", "undone_by", "created_at"]),
+        ("reconcile_op_items", ["op_id", "item_id"]),
+        ("title_embeddings", ["normalised", "model", "vector", "created_at"]),
+    ]
+
+    private func insertItem(_ db: Database, id: String, status: String = "active", family: String = "event", kind: String = "appointment") throws {
+        try db.execute(sql: """
+            INSERT INTO items (id, kind, family, status, title, timezone, confidence, first_seen, last_seen, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'Daily standup', 'Europe/Madrid', 0.8, datetime('now'), datetime('now'), datetime('now'), datetime('now'))
+            """, arguments: [id, kind, family, status])
+    }
+
+    private func insertSighting(_ db: Database, id: String, item: String, image: String = "img-1") throws {
+        try db.execute(sql: """
+            INSERT INTO sightings (id, item_id, image_id, finding_id, captured_at, title, cited_lines_json, confidence, decision_json, created_at)
+            VALUES (?, ?, ?, 'f1', datetime('now'), 'Daily standup', '[1]', 0.8, '{}', datetime('now'))
+            """, arguments: [id, item, image])
+    }
+
+    @Test func v5CreatesTheTablesWithTheListedColumns() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.read { db in
+            for (table, expected) in Self.v5Columns {
+                let v1 = try db.columns(in: table).map(\.name)
+                #expect(v1 == expected, "columns of \(table)")
+            }
+            let analysis = try db.columns(in: "image_analysis").map(\.name)
+            #expect(analysis.suffix(2) == ["reconciled_at", "reconcile_error"])
+            let v2 = try self.column("image_analysis", "reconciled_at", in: db).isNotNull
+            #expect(v2 == false)
+            let v3 = try self.column("image_analysis", "reconcile_error", in: db).isNotNull
+            #expect(v3 == false)
+            let v4 = try self.column("reconcile_ops", "by_user", in: db)
+            #expect(v4.isNotNull)
+            let v5 = try self.column("observations", "sighting_id", in: db).isNotNull
+            #expect(v5 == false)
+            let v6 = try self.column("items", "day_key", in: db).isNotNull
+            #expect(v6 == false)
+            let v7 = try self.column("items", "user_touched", in: db).defaultValueSQL
+            #expect(v7 == "0")
+        }
+    }
+
+    @Test func v5ConstrainsStatusFamilyAndKind() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.write { db in
+            for status in ["active", "dismissed", "merged"] { try self.insertItem(db, id: "s-\(status)", status: status) }
+            for family in ["event", "todo"] { try self.insertItem(db, id: "f-\(family)", family: family) }
+            for kind in ["appointment", "task", "reminder", "deadline"] { try self.insertItem(db, id: "k-\(kind)", kind: kind) }
+            #expect(throws: (any Error).self) { try self.insertItem(db, id: "bad-s", status: "gone") }
+            #expect(throws: (any Error).self) { try self.insertItem(db, id: "bad-f", family: "other") }
+            #expect(throws: (any Error).self) { try self.insertItem(db, id: "bad-k", kind: "meeting") }
+            #expect(throws: (any Error).self) { try db.execute(sql: "INSERT INTO reconcile_ops VALUES ('o', 'teleport', 1, '[]', '[]', '{}', '{}', NULL, datetime('now'))") }
+            try db.execute(sql: "INSERT INTO reconcile_ops VALUES ('o', 'auto_merge', 0, '[]', '[]', '{}', '{}', NULL, datetime('now'))")
+        }
+    }
+
+    @Test func v5KeysForeignKeysAndCascades() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.write { db in
+            try self.seedPicture(db)
+            try db.execute(sql: "INSERT INTO contexts VALUES ('c1', 'Acme', NULL, datetime('now'), datetime('now'))")
+            try self.insertItem(db, id: "i1"); try self.insertItem(db, id: "i2")
+            try db.execute(sql: "UPDATE items SET context_id = 'c1' WHERE id = 'i1'")
+            try self.insertSighting(db, id: "s1", item: "i1")
+            try db.execute(sql: "INSERT INTO observations VALUES ('o1', 'i1', 's1', 'title', '\"Daily standup\"', 'read', 0.8, datetime('now'))")
+            try db.execute(sql: "INSERT INTO observations VALUES ('o2', 'i1', NULL, 'title', '\"Mine\"', 'user', 1, datetime('now'))")
+            try db.execute(sql: "INSERT INTO field_locks VALUES ('i1', 'title', 'o2', datetime('now'))")
+            try db.execute(sql: "INSERT INTO item_aliases VALUES ('i1', 'dailystandup', 'Daily standup')")
+            try db.execute(sql: "INSERT INTO keep_apart VALUES ('i1', 'i2', 'op')")
+            try db.execute(sql: "INSERT INTO possible_duplicates VALUES ('i1', 'i2', '{}', datetime('now'))")
+            try db.execute(sql: "INSERT INTO reconcile_ops VALUES ('op', 'merge', 1, '[]', '[]', '{}', '{}', NULL, datetime('now'))")
+            try db.execute(sql: "INSERT INTO reconcile_op_items VALUES ('op', 'i1')")
+            try db.execute(sql: "INSERT INTO title_embeddings VALUES ('dailystandup', 'e5', x'00', datetime('now'))")
+            // keys
+            #expect(throws: (any Error).self) { try db.execute(sql: "INSERT INTO field_locks VALUES ('i1', 'title', 'o2', datetime('now'))") }
+            #expect(throws: (any Error).self) { try db.execute(sql: "INSERT INTO item_aliases VALUES ('i1', 'dailystandup', 'again')") }
+            #expect(throws: (any Error).self) { try db.execute(sql: "INSERT INTO keep_apart VALUES ('i1', 'i2', 'op2')") }
+            #expect(throws: (any Error).self) { try db.execute(sql: "INSERT INTO possible_duplicates VALUES ('i1', 'i2', '{}', datetime('now'))") }
+            #expect(throws: (any Error).self) { try db.execute(sql: "INSERT INTO reconcile_op_items VALUES ('op', 'i1')") }
+            #expect(throws: (any Error).self) { try db.execute(sql: "INSERT INTO title_embeddings VALUES ('dailystandup', 'e5', x'01', datetime('now'))") }
+            try db.execute(sql: "INSERT INTO title_embeddings VALUES ('dailystandup', 'other-model', x'01', datetime('now'))")
+            // foreign keys
+            #expect(throws: (any Error).self) { try db.execute(sql: "UPDATE items SET merged_into = 'nobody' WHERE id = 'i2'") }
+            #expect(throws: (any Error).self) { try self.insertSighting(db, id: "s9", item: "i1", image: "no-such-image") }
+            // deleting the capture removes the sighting and its observation, nothing else
+            try db.execute(sql: "DELETE FROM capture_images WHERE id = 'img-1'")
+            let v8 = try self.count(db, "sightings")
+            #expect(v8 == 0)
+            let userObservations = try self.count(db, "observations")           // the user's
+            #expect(userObservations == 1)
+            let v9 = try self.count(db, "items")
+            #expect(v9 == 2)
+            let v10 = try self.count(db, "item_aliases")
+            #expect(v10 == 1)
+            let v11 = try self.count(db, "field_locks")
+            #expect(v11 == 1)
+            // deleting a context keeps the item and clears its context
+            try db.execute(sql: "DELETE FROM contexts WHERE id = 'c1'")
+            let contextRow = try Row.fetchOne(db, sql: "SELECT context_id FROM items WHERE id = 'i1'")
+            #expect(contextRow?["context_id"] as String? == nil)
+            let v13 = try self.count(db, "items")
+            #expect(v13 == 2)
+            // deleting an item removes everything that hangs on it
+            try db.execute(sql: "DELETE FROM items WHERE id = 'i1'")
+            for table in ["observations", "field_locks", "item_aliases", "keep_apart", "possible_duplicates"] {
+                let v14 = try self.count(db, table)
+                #expect(v14 == 0, Comment(rawValue: table))
+            }
+            // the history of an item outlives it
+            let v15 = try self.count(db, "reconcile_op_items")
+            #expect(v15 == 1)
+        }
+    }
+
+    @Test func v5IndexesExist() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        // Read the index definitions from the schema itself (`indexes(on:)` returns nothing for `items`).
+        let sql: [String: [String]] = try db.pool.read { db in
+            var result: [String: [String]] = [:]
+            for row in try Row.fetchAll(db, sql: "SELECT tbl_name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL") {
+                let table: String = row["tbl_name"]
+                let definition: String = row["sql"]
+                result[table, default: []].append(definition)
+            }
+            return result
+        }
+        func has(_ table: String, _ columns: String) -> Bool {
+            sql[table]?.contains { $0.hasSuffix("(\(columns))") } == true
+        }
+        #expect(has("items", "\"context_id\", \"family\", \"day_key\""))
+        #expect(has("items", "\"status\""))
+        #expect(has("sightings", "\"item_id\""))
+        #expect(has("sightings", "\"image_id\""))
+        #expect(has("observations", "\"item_id\", \"field\""))
+        #expect(has("reconcile_ops", "\"created_at\""))
+        #expect(has("reconcile_op_items", "\"item_id\""))
+    }
+
+    @Test func aV4DatabaseGainsV5WithoutLosingData() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v4")
+            try pool.write { db in
+                try self.seedPicture(db)
+                try self.fillPictureTables(db)
+            }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.read { db in
+            for (table, _) in Self.v5Columns {
+                let exists = try db.tableExists(table)
+                #expect(exists, "\(table) exists")
+            }
+            let v16 = try self.count(db, "capture_images")
+            #expect(v16 == 1)
+            let v17 = try self.count(db, "findings")
+            #expect(v17 == 1)
+            let v18 = try self.count(db, "image_analysis")
+            #expect(v18 == 1)
+            let v19 = try Row.fetchOne(db, sql: "SELECT reconciled_at, reconcile_error FROM image_analysis")?["reconciled_at"] as Date?
+            #expect(v19 == nil)
         }
     }
 }

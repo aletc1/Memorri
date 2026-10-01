@@ -95,8 +95,8 @@ import Testing
         try FileManager.default.createDirectory(at: crop.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("crop".utf8).write(to: crop)
         try h.context.store?.withSentinelTable { db in
-            try db.execute(sql: "CREATE TABLE items (id TEXT, evidence_path TEXT)")
-            try db.execute(sql: "INSERT INTO items VALUES ('item-1', 'evidence/crop.heic')")
+            try db.execute(sql: "CREATE TABLE derived_things (id TEXT, evidence_path TEXT)")
+            try db.execute(sql: "INSERT INTO derived_things VALUES ('item-1', 'evidence/crop.heic')")
         }
         #expect(try h.cleanup.delete(olderThanDays: nil) == 1)
         #expect(FileManager.default.fileExists(atPath: crop.path))
@@ -135,6 +135,6 @@ extension CaptureStore {
         try database.pool.write { try body($0) }
     }
     func sentinelCount() throws -> Int {
-        try database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM items") ?? 0 }
+        try database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM derived_things") ?? 0 }
     }
 }

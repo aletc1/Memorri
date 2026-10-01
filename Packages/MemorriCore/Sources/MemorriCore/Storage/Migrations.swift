@@ -188,6 +188,119 @@ enum Migrations {
         migrator.registerMigration("v4") { db in
             try db.execute(sql: "ALTER TABLE capture_windows ADD COLUMN stack INTEGER")
         }
+        // Spec 005: items made of sightings, with per-field observations, locks, aliases, an operation log and a title embedding cache.
+        // Only `sightings` belongs to a picture (cascade); the rest is the user's list of items and is swept after cleanups.
+        migrator.registerMigration("v5") { db in
+            try db.alter(table: "image_analysis") { t in
+                t.add(column: "reconciled_at", .datetime)
+                t.add(column: "reconcile_error", .text)
+            }
+            try db.create(table: "items") { t in
+                t.primaryKey("id", .text)
+                t.column("kind", .text).notNull().check(sql: "kind IN ('appointment', 'task', 'reminder', 'deadline')")
+                t.column("family", .text).notNull().check(sql: "family IN ('event', 'todo')")
+                t.column("status", .text).notNull().check(sql: "status IN ('active', 'dismissed', 'merged')")
+                t.column("merged_into", .text).references("items")
+                t.column("context_id", .text).references("contexts", onDelete: .setNull)
+                t.column("title", .text).notNull()
+                t.column("all_day", .integer).notNull().defaults(to: 0)
+                t.column("start_at", .datetime)
+                t.column("end_at", .datetime)
+                t.column("due_at", .datetime)
+                t.column("remind_at", .datetime)
+                t.column("timezone", .text).notNull()
+                t.column("day_key", .text)
+                t.column("people_json", .text).notNull().defaults(to: "[]")
+                t.column("place", .text)
+                t.column("notes", .text)
+                t.column("confidence", .double).notNull()
+                t.column("user_touched", .integer).notNull().defaults(to: 0)
+                t.column("first_seen", .datetime).notNull()
+                t.column("last_seen", .datetime).notNull()
+                t.column("created_at", .datetime).notNull()
+                t.column("updated_at", .datetime).notNull()
+            }
+            try db.create(index: "items_candidates", on: "items", columns: ["context_id", "family", "day_key"])
+            try db.create(index: "items_status", on: "items", columns: ["status"])
+            try db.create(table: "sightings") { t in
+                t.primaryKey("id", .text)
+                t.column("item_id", .text).notNull().references("items", onDelete: .cascade)
+                t.column("image_id", .text).notNull().references("capture_images", onDelete: .cascade)
+                t.column("finding_id", .text).notNull()
+                t.column("captured_at", .datetime).notNull()
+                t.column("title", .text).notNull()
+                t.column("cited_lines_json", .text).notNull()
+                t.column("confidence", .double).notNull()
+                t.column("decision_json", .text).notNull()
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.create(index: "sightings_item_id", on: "sightings", columns: ["item_id"])
+            try db.create(index: "sightings_image_id", on: "sightings", columns: ["image_id"])
+            try db.create(table: "observations") { t in
+                t.primaryKey("id", .text)
+                t.column("item_id", .text).notNull().references("items", onDelete: .cascade)
+                t.column("sighting_id", .text).references("sightings", onDelete: .cascade)
+                t.column("field", .text).notNull()
+                t.column("value_json", .text).notNull()
+                t.column("source", .text).notNull().check(sql: "source IN ('read', 'inferred', 'user')")
+                t.column("confidence", .double).notNull()
+                t.column("observed_at", .datetime).notNull()
+            }
+            try db.create(index: "observations_item_field", on: "observations", columns: ["item_id", "field"])
+            try db.create(table: "field_locks") { t in
+                t.column("item_id", .text).notNull().references("items", onDelete: .cascade)
+                t.column("field", .text).notNull()
+                t.column("observation_id", .text).notNull().references("observations", onDelete: .cascade)
+                t.column("locked_at", .datetime).notNull()
+                t.primaryKey(["item_id", "field"])
+            }
+            try db.create(table: "item_aliases") { t in
+                t.column("item_id", .text).notNull().references("items", onDelete: .cascade)
+                t.column("normalised", .text).notNull()
+                t.column("title", .text).notNull()
+                t.primaryKey(["item_id", "normalised"])
+            }
+            try db.create(table: "keep_apart") { t in
+                t.column("item_a", .text).notNull().references("items", onDelete: .cascade)
+                t.column("item_b", .text).notNull().references("items", onDelete: .cascade)
+                t.column("op_id", .text).notNull()
+                t.primaryKey(["item_a", "item_b"])
+            }
+            try db.create(table: "possible_duplicates") { t in
+                t.column("item_a", .text).notNull().references("items", onDelete: .cascade)
+                t.column("item_b", .text).notNull().references("items", onDelete: .cascade)
+                t.column("scores_json", .text).notNull()
+                t.column("created_at", .datetime).notNull()
+                t.primaryKey(["item_a", "item_b"])
+            }
+            try db.create(table: "reconcile_ops") { t in
+                t.primaryKey("id", .text)
+                t.column("kind", .text).notNull()
+                    .check(sql: "kind IN ('auto_merge', 'merge', 'split', 'dismiss', 'restore', 'edit', 'unlock', 'context', 'undo')")
+                t.column("by_user", .integer).notNull()
+                t.column("item_ids_json", .text).notNull()
+                t.column("moved_json", .text).notNull()
+                t.column("before_json", .text).notNull()
+                t.column("detail_json", .text).notNull()
+                t.column("undone_by", .text)
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.create(index: "reconcile_ops_created_at", on: "reconcile_ops", columns: ["created_at"])
+            // The history of an item outlives it, so `item_id` is not a foreign key.
+            try db.create(table: "reconcile_op_items") { t in
+                t.column("op_id", .text).notNull().references("reconcile_ops", onDelete: .cascade)
+                t.column("item_id", .text).notNull()
+                t.primaryKey(["op_id", "item_id"])
+            }
+            try db.create(index: "reconcile_op_items_item_id", on: "reconcile_op_items", columns: ["item_id"])
+            try db.create(table: "title_embeddings") { t in
+                t.column("normalised", .text).notNull()
+                t.column("model", .text).notNull()
+                t.column("vector", .blob).notNull()
+                t.column("created_at", .datetime).notNull()
+                t.primaryKey(["normalised", "model"])
+            }
+        }
         return migrator
     }
 }

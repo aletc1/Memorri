@@ -5,6 +5,11 @@ public enum ThinkSetting: String, Sendable, CaseIterable {
     case off, low, medium, high
 }
 
+/// What the user did with a model picker: nothing yet (the default applies when installed), chose none, or chose a name.
+public enum ModelChoice: Sendable, Equatable {
+    case unset, none, named(String)
+}
+
 /// The Ollama section's settings, with the rules from the spec: the address can only be on this
 /// Mac (FR-002) and the timeout is 10 to 1800 seconds (FR-009). A rejected value keeps the previous
 /// one. Defaults come from the spike (ADR 0013).
@@ -18,6 +23,11 @@ public struct OllamaSettings: Sendable {
     /// `qwen3-vl:8b-instruct`: on the 27 synthetic cases it scored 0.83 precision and 0.87 recall at 9 seconds a picture, against 0.89 and 0.89
     /// at 21 seconds for `qwen3.8:27b-mlx`, which stays a good choice for the most accurate answers (ADR 0019).
     public static let recommendedModel = "qwen3-vl:8b-instruct"
+    public static let embeddingModelKey = "memorri.matching.embeddingModel"
+    public static let rerankerModelKey = "memorri.matching.rerankerModel"
+    /// The local models reconciliation uses for the meaning of a title and for the uncertain band (spec 005, research R3 and R4).
+    public static let defaultEmbeddingModel = "jeffh/intfloat-multilingual-e5-large-instruct:f32"
+    public static let defaultRerankerModel = "fanyx/Qwen3-Reranker-0.6B-Q8_0:latest"
     public static let defaultTimeoutSeconds = 300
     public static let timeoutRange = 10...1800
     public static let defaultThink = ThinkSetting.off
@@ -78,5 +88,36 @@ public struct OllamaSettings: Sendable {
 
     public func setAnalysisPaused(_ value: Bool) {
         store.setBool(value, forKey: Self.pausedKey)
+    }
+
+    // MARK: Matching models
+
+    public var embeddingChoice: ModelChoice { choice(forKey: Self.embeddingModelKey) }
+    public var rerankerChoice: ModelChoice { choice(forKey: Self.rerankerModelKey) }
+
+    /// `nil` means "None": text and time only.
+    public func setEmbeddingModel(_ name: String?) { store.setString(name ?? "", forKey: Self.embeddingModelKey) }
+    public func setRerankerModel(_ name: String?) { store.setString(name ?? "", forKey: Self.rerankerModelKey) }
+
+    /// The model to call: the user's choice when installed, the default when nothing was chosen and it is installed, else none.
+    public func embeddingModel(installed: Set<String>) -> String? {
+        resolve(embeddingChoice, default: Self.defaultEmbeddingModel, installed: installed)
+    }
+
+    public func rerankerModel(installed: Set<String>) -> String? {
+        resolve(rerankerChoice, default: Self.defaultRerankerModel, installed: installed)
+    }
+
+    private func choice(forKey key: String) -> ModelChoice {
+        guard let text = store.string(forKey: key) else { return .unset }
+        return text.isEmpty ? .none : .named(text)
+    }
+
+    private func resolve(_ choice: ModelChoice, default name: String, installed: Set<String>) -> String? {
+        switch choice {
+        case .unset: installed.contains(name) ? name : nil
+        case .none: nil
+        case .named(let chosen): installed.contains(chosen) ? chosen : nil
+        }
     }
 }
