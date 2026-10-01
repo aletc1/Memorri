@@ -15,6 +15,16 @@ public enum ItemField: String, Sendable, Equatable, CaseIterable {
 
 public enum ObservationSource: String, Sendable, Equatable { case read, inferred, user }
 
+/// Why an item needs review (spec 006, research R5). The order is the order they are shown in.
+public enum ReviewReason: String, Sendable, Equatable, Codable, CaseIterable {
+    case lowConfidence = "low-confidence"
+    case guessedStart = "guessed-start"
+    case guessedEnd = "guessed-end"
+    case guessedDue = "guessed-due"
+    case possibleDuplicate = "possible-duplicate"
+    case changedAfterApproval = "changed-after-approval"
+}
+
 /// One real-world appointment, task or reminder, made of one or more sightings. Its fields are chosen from observations
 /// by `FieldResolver` (ADR 0020).
 public struct Item: Sendable, Equatable, Identifiable {
@@ -39,17 +49,24 @@ public struct Item: Sendable, Equatable, Identifiable {
     public var userTouched: Bool
     public var firstSeen: Date
     public var lastSeen: Date
+    /// Stored by every recompute (`ReviewRules`); what the Inbox lists.
+    public var needsReview: Bool
+    public var reviewReasons: [ReviewReason]
+    /// When the user approved the item or edited it; nil while nobody checked it.
+    public var approvedAt: Date?
 
     public var family: KindFamily { KindFamily(kind: kind) }
 
     public init(id: String = UUID().uuidString, kind: FindingKind, status: ItemStatus = .active, mergedInto: String? = nil, contextID: String? = nil,
                 title: String, allDay: Bool = false, start: Date? = nil, end: Date? = nil, due: Date? = nil, remind: Date? = nil,
                 timezone: String, dayKey: String? = nil, people: [String] = [], place: String? = nil, notes: String? = nil,
-                confidence: Double, userTouched: Bool = false, firstSeen: Date, lastSeen: Date) {
+                confidence: Double, userTouched: Bool = false, firstSeen: Date, lastSeen: Date,
+                needsReview: Bool = false, reviewReasons: [ReviewReason] = [], approvedAt: Date? = nil) {
         self.id = id; self.kind = kind; self.status = status; self.mergedInto = mergedInto; self.contextID = contextID
         self.title = title; self.allDay = allDay; self.start = start; self.end = end; self.due = due; self.remind = remind
         self.timezone = timezone; self.dayKey = dayKey; self.people = people; self.place = place; self.notes = notes
         self.confidence = confidence; self.userTouched = userTouched; self.firstSeen = firstSeen; self.lastSeen = lastSeen
+        self.needsReview = needsReview; self.reviewReasons = reviewReasons; self.approvedAt = approvedAt
     }
 }
 

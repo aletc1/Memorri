@@ -38,6 +38,19 @@ import Testing
         #expect(row?["created_at"] as Date? == created && row?["updated_at"] as Date? == updated)
     }
 
+    @Test func reviewReasonsAndApprovalRoundTrip() throws {
+        let fixture = try makePipelineFixture(); defer { fixture.cleanUp() }
+        var item = Item.sample(id: "i1")
+        item.needsReview = true
+        item.reviewReasons = [.lowConfidence, .guessedEnd, .changedAfterApproval]
+        item.approvedAt = Date(timeIntervalSince1970: 1_791_999_000)
+        try fixture.database.pool.write { try ItemStore.insert($0, item, at: Date(timeIntervalSince1970: 1)) }
+        #expect(try store(fixture).item(id: "i1") == item)
+        item.needsReview = false; item.reviewReasons = []; item.approvedAt = nil
+        try fixture.database.pool.write { try ItemStore.update($0, item, at: Date(timeIntervalSince1970: 2)) }
+        #expect(try store(fixture).item(id: "i1") == item)
+    }
+
     @Test func itemsFilterByStatusFamilyAndContext() throws {
         let fixture = try makePipelineFixture(); defer { fixture.cleanUp() }
         try addContext(fixture, "c1", "A"); try addContext(fixture, "c2", "B")

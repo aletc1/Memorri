@@ -196,7 +196,11 @@ public struct ItemStore: Sendable {
         return Item(id: row["id"], kind: kind, status: status, mergedInto: row["merged_into"], contextID: row["context_id"], title: row["title"],
                     allDay: (row["all_day"] as Int) != 0, start: row["start_at"], end: row["end_at"], due: row["due_at"], remind: row["remind_at"],
                     timezone: row["timezone"], dayKey: row["day_key"], people: people, place: row["place"], notes: row["notes"],
-                    confidence: row["confidence"], userTouched: (row["user_touched"] as Int) != 0, firstSeen: row["first_seen"], lastSeen: row["last_seen"])
+                    confidence: row["confidence"], userTouched: (row["user_touched"] as Int) != 0, firstSeen: row["first_seen"], lastSeen: row["last_seen"],
+                    needsReview: ((row["needs_review"] as Int?) ?? 0) != 0,
+                    reviewReasons: ((row["review_reasons_json"] as String?).flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) } ?? [])
+                        .compactMap(ReviewReason.init(rawValue:)),
+                    approvedAt: row["approved_at"])
     }
 
     /// After captures are deleted their sightings are gone: every item is built again from what is left, and an item with nothing left is
@@ -219,8 +223,9 @@ public struct ItemStore: Sendable {
     static func insert(_ db: Database, _ item: Item, at date: Date) throws {
         try db.execute(sql: """
             INSERT INTO items (id, kind, family, status, merged_into, context_id, title, all_day, start_at, end_at, due_at, remind_at, timezone,
-                               day_key, people_json, place, notes, confidence, user_touched, first_seen, last_seen, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               day_key, people_json, place, notes, confidence, user_touched, first_seen, last_seen, needs_review,
+                               review_reasons_json, approved_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, arguments: StatementArguments(values(for: item) + [date, date]))
     }
 
@@ -229,17 +234,19 @@ public struct ItemStore: Sendable {
         try db.execute(sql: """
             UPDATE items SET kind = ?, family = ?, status = ?, merged_into = ?, context_id = ?, title = ?, all_day = ?, start_at = ?, end_at = ?,
                 due_at = ?, remind_at = ?, timezone = ?, day_key = ?, people_json = ?, place = ?, notes = ?, confidence = ?, user_touched = ?,
-                first_seen = ?, last_seen = ?, updated_at = ?
+                first_seen = ?, last_seen = ?, needs_review = ?, review_reasons_json = ?, approved_at = ?, updated_at = ?
             WHERE id = ?
             """, arguments: StatementArguments(Array(values(for: item).dropFirst()) + [date, item.id]))
     }
 
     private static func values(for item: Item) -> [(any DatabaseValueConvertible)?] {
         let people = (try? JSONEncoder().encode(item.people)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
+        let reasons = (try? JSONEncoder().encode(item.reviewReasons.map(\.rawValue))).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
         let values: [(any DatabaseValueConvertible)?] = [
             item.id, item.kind.rawValue, item.family.rawValue, item.status.rawValue, item.mergedInto, item.contextID, item.title,
             item.allDay ? 1 : 0, item.start, item.end, item.due, item.remind, item.timezone, item.dayKey, people, item.place, item.notes,
             item.confidence, item.userTouched ? 1 : 0, item.firstSeen, item.lastSeen,
+            item.needsReview ? 1 : 0, reasons, item.approvedAt,
         ]
         return values
     }

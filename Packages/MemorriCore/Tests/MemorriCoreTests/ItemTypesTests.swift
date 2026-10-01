@@ -3,6 +3,11 @@ import Testing
 @testable import MemorriCore
 
 @Suite struct ItemTypesTests {
+    @Test func reviewReasonRawValuesAreTheStoredWordsInShowingOrder() {
+        #expect(ReviewReason.allCases.map(\.rawValue) == ["low-confidence", "guessed-start", "guessed-end", "guessed-due", "possible-duplicate", "changed-after-approval"])
+        #expect(Item.sample().needsReview == false && Item.sample().reviewReasons.isEmpty && Item.sample().approvedAt == nil)
+    }
+
     @Test func kindsMapToFamilies() {
         #expect(KindFamily(kind: .appointment) == .event)
         for kind in [FindingKind.task, .reminder, .deadline] { #expect(KindFamily(kind: kind) == .todo) }

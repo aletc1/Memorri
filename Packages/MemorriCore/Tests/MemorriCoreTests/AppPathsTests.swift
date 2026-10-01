@@ -12,7 +12,7 @@ import Testing
         let temp = TempDirectory(); defer { temp.cleanUp() }
         let paths = AppPaths(root: temp.url.appendingPathComponent("Memorri"))
         try paths.prepare()
-        for url in [paths.root, paths.captures, paths.staging] {
+        for url in [paths.root, paths.captures, paths.staging, paths.evidence] {
             var isDirectory: ObjCBool = false
             #expect(FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue)
             #expect(try mode(url) == 0o700)
@@ -42,5 +42,6 @@ import Testing
         #expect(paths.database.path == "/tmp/x/Memorri/memorri.sqlite")
         #expect(paths.captures.path == "/tmp/x/Memorri/captures")
         #expect(paths.staging.path == "/tmp/x/Memorri/staging")
+        #expect(paths.evidence.path == "/tmp/x/Memorri/evidence")
     }
 }

@@ -301,6 +301,52 @@ enum Migrations {
                 t.primaryKey(["normalised", "model"])
             }
         }
+        // Spec 006: evidence cut-outs that belong to an item (they outlive their capture), and the review state of an item. The
+        // `approve` operation kind needs the CHECK of `reconcile_ops` changed, which SQLite only allows by building the table again.
+        migrator.registerMigration("v6") { db in
+            try db.alter(table: "items") { t in
+                t.add(column: "needs_review", .integer).notNull().defaults(to: 0)
+                t.add(column: "review_reasons_json", .text).notNull().defaults(to: "[]")
+                t.add(column: "approved_at", .datetime)
+                t.add(column: "approved_values_json", .text)
+            }
+            try db.create(index: "items_review", on: "items", columns: ["needs_review", "status"])
+            try db.create(table: "evidence") { t in
+                t.primaryKey("id", .text)
+                t.column("item_id", .text).notNull().references("items", onDelete: .cascade)
+                t.column("sighting_id", .text).references("sightings", onDelete: .setNull)
+                t.column("image_id", .text).notNull()
+                t.column("captured_at", .datetime).notNull()
+                t.column("display_name", .text)
+                t.column("title", .text).notNull()
+                t.column("cited_lines_json", .text).notNull()
+                t.column("region_json", .text).notNull()
+                t.column("file_path", .text)
+                t.column("reason", .text)
+                t.column("bytes", .integer).notNull().defaults(to: 0)
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.create(index: "evidence_item", on: "evidence", columns: ["item_id", "captured_at"])
+            try db.create(index: "evidence_image", on: "evidence", columns: ["image_id"])
+            try db.create(index: "evidence_sighting", on: "evidence", columns: ["sighting_id"], unique: true, condition: Column("sighting_id") != nil)
+
+            try db.create(table: "reconcile_ops_v6") { t in
+                t.primaryKey("id", .text)
+                t.column("kind", .text).notNull()
+                    .check(sql: "kind IN ('auto_merge', 'merge', 'split', 'dismiss', 'restore', 'edit', 'unlock', 'context', 'different', 'undo', 'approve')")
+                t.column("by_user", .integer).notNull()
+                t.column("item_ids_json", .text).notNull()
+                t.column("moved_json", .text).notNull()
+                t.column("before_json", .text).notNull()
+                t.column("detail_json", .text).notNull()
+                t.column("undone_by", .text)
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.execute(sql: "INSERT INTO reconcile_ops_v6 SELECT id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at FROM reconcile_ops")
+            try db.drop(table: "reconcile_ops")
+            try db.rename(table: "reconcile_ops_v6", to: "reconcile_ops")
+            try db.create(index: "reconcile_ops_created_at", on: "reconcile_ops", columns: ["created_at"])
+        }
         return migrator
     }
 }
