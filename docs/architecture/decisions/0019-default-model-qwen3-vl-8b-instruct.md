@@ -13,7 +13,7 @@ All on the 27 synthetic golden cases, think off, picture size 2048, the same pip
 |---|---|---|---|
 | `qwen3.8:27b-mlx` (18 GB) | v4 (before the real-capture changes) | 0.90 / 0.96 / 0.94, 24 s | the previous baseline |
 | `qwen3.8:27b-mlx` | v10 | 0.89 / 0.89 / 0.98, 21 s | after the prompt rewrite |
-| `qwen3-vl:8b-instruct` (6 GB) | v11 | 0.83 / 0.87 / 0.90, 9 s (v9 gave the same) | chosen |
+| `qwen3-vl:8b-instruct` (6 GB) | v12 | 0.83 / 0.87 / 0.90, 9 s (v9 to v12 gave the same) | chosen |
 | `gemma4` (6.6 GB) | v8 | 0.75 / 0.78 / 0.92, 5 s | no gain from the v9 prompt; one case looped |
 | `qwen3-vl:8b` (thinking) | v8 | 0.79 / 0.65 / 0.92, 37 s | the server ignores `think: false` for it; 8 of 27 cases ended without an answer |
 | `minicpm-v4.5` (6.1 GB) | v8 | 0.57 / 0.70 / 0.89, 7 s | many extra items, two failures |
@@ -21,7 +21,7 @@ All on the 27 synthetic golden cases, think off, picture size 2048, the same pip
 On calendar day, week and month pictures the 8B instruct model equals the 27B one. Its remaining gap is in email (0.40 / 0.40 against 0.60 / 0.60) and in field accuracy on documents. The prompts were tuned on these same cases, so the numbers are a little optimistic for real captures.
 
 ## Decision
-`OllamaSettings.recommendedModel` is `qwen3-vl:8b-instruct`, with prompts `extract-<kind>-v11` (numbered rules, a field contract and short examples for pictures whose dates are written in text) and `classify-v2`. A model the user chose keeps being used: the default is applied only when none is chosen. `qwen3.8:27b-mlx` remains a supported choice for the most accurate results.
+`OllamaSettings.recommendedModel` is `qwen3-vl:8b-instruct`, with prompts `extract-<kind>-v12` (numbered rules, a field contract and short examples for pictures whose dates are written in text) and `classify-v2`. A model the user chose keeps being used: the default is applied only when none is chosen. `qwen3.8:27b-mlx` remains a supported choice for the most accurate results.
 
 ## Consequences
 - First analysis is about 2.3 times faster and needs a quarter of the memory.

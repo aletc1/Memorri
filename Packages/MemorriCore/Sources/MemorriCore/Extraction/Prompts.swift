@@ -17,7 +17,7 @@ public enum ExtractionPrompts {
             + "Use empty strings for what you cannot tell."
     }
 
-    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v11" }
+    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v12" }
 
     private static func description(of kind: ScreenKind) -> String {
         switch kind {
@@ -63,7 +63,8 @@ public enum ExtractionPrompts {
             return """
 
             5. Everything in a calendar is an appointment: kind is always "appointment". Each block sits under a date header: give the number of that header's line in column_line.
-            6. start_text is the time shown on the block. end_text only if the block itself shows an end, like "09:00 - 10:00"; never take an end time from the hour scale at the side.
+            6. Give one item for each block. The same title in several columns is several items, each citing only its own lines.
+            7. start_text is the time written on the block. Never write a time that is not in the lines; if the block shows none, leave start_text out. end_text only if the block itself shows an end, like "09:00 - 10:00"; never take an end time from the hour scale at the side.
             """
         case .calendarMonth:
             return """
