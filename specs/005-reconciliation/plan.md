@@ -91,6 +91,7 @@ Packages/MemorriCore/Sources/MemorriCore/
 │   ├── FieldResolver.swift              # chooses each field from observations (new)
 │   ├── Reconciler.swift                 # plan (async) then apply (one transaction) (new)
 │   ├── ItemStore.swift                  # reads, recompute, cleanup sweep (new)
+│   ├── ItemListModel.swift              # filters, sort, row text and enabled actions for the window (new)
 │   ├── ItemOperations.swift             # merge, split, dismiss, restore, edit, unlock (new)
 │   └── OperationLog.swift               # record and undo (new)
 ├── Analysis/ImageAnalysisJob.swift      # reconcile step after save (edit)
