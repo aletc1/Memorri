@@ -4,7 +4,7 @@ import Testing
 @testable import MemorriCore
 
 @Suite struct ReconcilerTests {
-    private let later = Date(timeIntervalSince1970: 1_791_960_000)
+    private let later = Date(timeIntervalSince1970: 1_800_000_000)      // the capture time of the fixture's own picture
 
     private func reconciler(_ fixture: ReconcileFixture, judge: any MeaningJudging = NoMeaningJudge(),
                             thresholds: ReconcileThresholds = .default) -> Reconciler {
@@ -294,5 +294,90 @@ import Testing
         #expect(try items(fixture).isEmpty)          // nothing user-touched, so the empty item goes
         let stamp = try fixture.read { try Date.fetchOne($0, sql: "SELECT reconciled_at FROM image_analysis") }
         #expect(stamp != nil)
+    }
+
+    // MARK: what the user did stays (user story 3)
+
+    private func ops(_ fixture: ReconcileFixture) -> ItemOperations {
+        ItemOperations(database: fixture.database, now: { Date(timeIntervalSince1970: 1_800_200_000) })
+    }
+
+    @Test func aLaterSightingWithTheOldTitleLeavesTheUsersTitleAndAddsAnObservation() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = reconciler(fixture)
+        try await see(fixture, [fixture.finding("Daily standup")], with: r, picture: fixture.base.imageID)
+        let id = try items(fixture)[0].id
+        try ops(fixture).edit(id, field: .title, value: .string("My standup"))
+        try await see(fixture, [fixture.finding("Daily standup")], with: r)
+        let all = try items(fixture)
+        #expect(all.count == 1 && all[0].title == "My standup")
+        let titles = try fixture.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM observations WHERE field = 'title'") }
+        #expect(titles == 3)         // two read, one the user's
+    }
+
+    @Test func aDismissedEventSeenAgainGetsTheSightingAndStaysDismissed() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = reconciler(fixture)
+        try await see(fixture, [fixture.finding("Quarterly planning with the customer")], with: r, picture: fixture.base.imageID)
+        let id = try items(fixture)[0].id
+        try ops(fixture).dismiss(id)
+        for title in ["Quarterly planning with the customer", "Quarterly planning with the cust…"] {
+            let seen = try await see(fixture, [fixture.finding(title)], with: r)
+            #expect(seen.summary.created == 0)
+        }
+        let all = try items(fixture)
+        #expect(all.count == 1 && all[0].status == .dismissed)
+        #expect(try sightingCount(fixture, item: id) == 3)
+    }
+
+    @Test func aClearlyDifferentEventAtTheTimeOfADismissedOneIsANewItem() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = reconciler(fixture, judge: FakeMeaningJudge(defaultAnswer: 0.05))
+        try await see(fixture, [fixture.finding("Design review")], with: r, picture: fixture.base.imageID)
+        try ops(fixture).dismiss(try items(fixture)[0].id)
+        try await see(fixture, [fixture.finding("Budget review")], with: r)
+        let all = try items(fixture)
+        #expect(all.count == 2)
+        #expect(Set(all.map(\.status)) == [.dismissed, .active])
+    }
+
+    @Test func afterARestoreLaterSightingsMergeIntoTheItemWithItsHistory() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = reconciler(fixture)
+        try await see(fixture, [fixture.finding("Daily standup")], with: r, picture: fixture.base.imageID)
+        let id = try items(fixture)[0].id
+        try ops(fixture).dismiss(id)
+        try await see(fixture, [fixture.finding("Daily standup")], with: r)
+        try ops(fixture).restore(id)
+        try await see(fixture, [fixture.finding("Daily standup")], with: r)
+        let all = try items(fixture)
+        #expect(all.count == 1 && all[0].status == .active && all[0].id == id)
+        #expect(try sightingCount(fixture, item: id) == 3)
+    }
+
+    @Test func afterAnUnlockTheFieldTakesTheValueTheRulesChoose() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = reconciler(fixture)
+        try await see(fixture, [fixture.finding("Daily standup", place: "Room 4")], with: r, picture: fixture.base.imageID)
+        let id = try items(fixture)[0].id
+        try ops(fixture).edit(id, field: .place, value: .string("Room 9"))
+        try await see(fixture, [fixture.finding("Daily standup", place: "Room 7")], with: r)
+        #expect(try items(fixture)[0].place == "Room 9")
+        try ops(fixture).unlock(id, field: .place)
+        #expect(try items(fixture)[0].place == "Room 7")
+    }
+
+    @Test func aLockedStartIsNotMovedByALaterSightingAtAnotherTime() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = reconciler(fixture)
+        try await see(fixture, [fixture.finding("Daily standup")], with: r, picture: fixture.base.imageID)
+        let id = try items(fixture)[0].id
+        let mine = ReconcileFixture.minutes(10)
+        try ops(fixture).edit(id, field: .start, value: .date(mine))
+        let seen = try await see(fixture, [fixture.finding("Daily standup")], with: r)       // the sighting still says 09:00
+        #expect(seen.summary.created == 0)
+        let all = try items(fixture)
+        #expect(all.count == 1 && all[0].start == mine)
+        #expect(try sightingCount(fixture, item: id) == 2)
     }
 }

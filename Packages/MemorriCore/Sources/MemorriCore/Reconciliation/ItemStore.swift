@@ -199,6 +199,21 @@ public struct ItemStore: Sendable {
                     confidence: row["confidence"], userTouched: (row["user_touched"] as Int) != 0, firstSeen: row["first_seen"], lastSeen: row["last_seen"])
     }
 
+    /// After captures are deleted their sightings are gone: every item is built again from what is left, and an item with nothing left is
+    /// removed unless the user edited, locked or dismissed it (FR-014). Cached title vectors nobody uses any more go too. Returns how many
+    /// items were removed.
+    @discardableResult
+    public func sweep(at date: Date = Date()) throws -> Int {
+        try database.pool.write { db in
+            var removed = 0
+            for id in try String.fetchAll(db, sql: "SELECT id FROM items WHERE status != 'merged'") {
+                if try !Self.recompute(db, itemID: id, at: date) { removed += 1 }
+            }
+            try db.execute(sql: "DELETE FROM title_embeddings WHERE normalised NOT IN (SELECT normalised FROM item_aliases)")
+            return removed
+        }
+    }
+
     // MARK: Writing (inside the caller's transaction)
 
     static func insert(_ db: Database, _ item: Item, at date: Date) throws {

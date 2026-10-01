@@ -80,6 +80,7 @@ extension Reconciler {
 
             var summary = ReconcileSummary()
             var resolved: [Int: String] = [:]
+            var joins: [MovedSighting] = []
             for (index, step) in plan.steps.enumerated() {
                 guard let finding = findings[step.findingID] else { continue }
                 var itemID: String?
@@ -107,10 +108,21 @@ extension Reconciler {
                 } else {
                     summary.merged += 1
                 }
-                _ = joined
+                // A sighting that joins an item other pictures already showed is a merge the log can explain and undo; a finding that
+                // goes back where this picture had it (a reanalysis) is not a new decision.
+                var showedElsewhere = false
+                if joined, step.rule != "same-picture" {
+                    showedElsewhere = (try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM sightings WHERE item_id = ? AND image_id != ?",
+                                                        arguments: [itemID!, plan.imageID]) ?? 0) > 0
+                }
                 resolved[index] = itemID
                 touched.insert(itemID!)
-                try Self.attach(db, finding: finding, itemID: itemID!, imageID: plan.imageID, capturedAt: capturedAt, step: step, at: date)
+                let sighting = try Self.attach(db, finding: finding, itemID: itemID!, imageID: plan.imageID, capturedAt: capturedAt, step: step, at: date)
+                if showedElsewhere { joins.append(MovedSighting(sighting: sighting, from: nil, to: itemID!)) }
+            }
+            if !joins.isEmpty {
+                try OperationLog.record(db, kind: .autoMerge, byUser: false, items: joins.map(\.to), moved: joins,
+                                        detail: ["image": .string(plan.imageID)], at: date)
             }
 
             for id in touched { try ItemStore.recompute(db, itemID: id, at: date) }
@@ -129,7 +141,8 @@ extension Reconciler {
         return nil
     }
 
-    private static func attach(_ db: Database, finding: Finding, itemID: String, imageID: String, capturedAt: Date, step: ReconcilePlan.Step, at date: Date) throws {
+    @discardableResult
+    private static func attach(_ db: Database, finding: Finding, itemID: String, imageID: String, capturedAt: Date, step: ReconcilePlan.Step, at date: Date) throws -> String {
         let sightingID = UUID().uuidString
         let decision = SightingDecision(rule: step.rule, scores: step.scores, candidate: step.candidate, kind: finding.kind.rawValue, timezone: finding.timezone)
         let cited = (try? JSONEncoder().encode(finding.citedLines)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
@@ -156,5 +169,6 @@ extension Reconciler {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, arguments: [UUID().uuidString, itemID, sightingID, field.rawValue, json, origin.rawValue, min(max(finding.confidence, 0), 1), capturedAt])
         }
+        return sightingID
     }
 }

@@ -152,8 +152,8 @@ import Testing
             try db.execute(sql: "INSERT INTO field_locks VALUES (?, 'place', 'mine', datetime('now'))", arguments: [id])
             let pair = [id, "other"].sorted()
             try db.execute(sql: "INSERT INTO possible_duplicates VALUES (?, ?, '{}', datetime('now'))", arguments: [pair[0], pair[1]])
-            try db.execute(sql: "INSERT INTO reconcile_ops VALUES ('op1', 'edit', 1, '[]', '[]', '{}', '{}', NULL, '2026-10-02 10:00:00')")
-            try db.execute(sql: "INSERT INTO reconcile_ops VALUES ('op2', 'auto_merge', 0, '[]', '[]', '{}', '{}', 'op3', '2026-10-03 10:00:00')")
+            try db.execute(sql: "INSERT INTO reconcile_ops VALUES ('op1', 'edit', 1, '[]', '[]', '{}', '{}', NULL, '2030-01-02 10:00:00')")
+            try db.execute(sql: "INSERT INTO reconcile_ops VALUES ('op2', 'auto_merge', 0, '[]', '[]', '{}', '{}', 'op3', '2030-01-03 10:00:00')")
             try db.execute(sql: "INSERT INTO reconcile_op_items VALUES ('op1', ?)", arguments: [id])
             try db.execute(sql: "INSERT INTO reconcile_op_items VALUES ('op2', ?)", arguments: [id])
         }
@@ -161,10 +161,87 @@ import Testing
         #expect(detail.aliases == ["Daily stand…"])
         #expect(detail.locks == [.place: "mine"])
         #expect(detail.possibleDuplicates == ["other"])
-        #expect(detail.operations.map(\.id) == ["op2", "op1"])
-        #expect(detail.operations.map(\.undone) == [true, false] && detail.operations.map(\.byUser) == [false, true])
+        #expect(detail.operations.prefix(2).map(\.id) == ["op2", "op1"])
+        #expect(detail.operations.prefix(2).map(\.undone) == [true, false])
+        #expect(detail.operations.prefix(2).map(\.byUser) == [false, true])
+        #expect(detail.operations.count == 3)          // and the automatic merge the reconciler wrote for the second sighting
         let place = try #require(detail.fields.first { $0.field == .place })
         #expect(place.locked && place.current == .string("Room 9") && place.chosenObservationID == "mine")
         #expect(place.entries.contains { $0.source == .user && $0.sightingID == nil })
+    }
+
+    // MARK: sweep after cleanups (spec 005, FR-014)
+
+    private func eventID(_ fixture: ReconcileFixture, of imageID: String) throws -> String {
+        try fixture.read { try String.fetchOne($0, sql: "SELECT event_id FROM capture_images WHERE id = ?", arguments: [imageID]) ?? "" }
+    }
+
+    @Test func sweepRecomputesTheItemsThatLostSightingsAndRemovesTheEmptyUntouchedOnes() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+        try fixture.save([fixture.finding("Daily standup"), fixture.finding("Only on the second", start: ReconcileFixture.minutes(240))])
+        _ = await r.reconcile(imageID: fixture.base.imageID)
+        let second = try fixture.addPicture(at: Date(timeIntervalSince1970: 1_800_003_600))
+        try fixture.save([fixture.finding("Daily standup", place: "Room 4"), fixture.finding("Only here", start: ReconcileFixture.minutes(480))], imageID: second)
+        _ = await r.reconcile(imageID: second)
+        #expect(try ItemStore(database: fixture.database).items(status: [.active], kinds: nil, contextID: nil).count == 3)
+
+        try fixture.base.captures.deleteEvents(ids: [try eventID(fixture, of: second)])
+        let removed = try ItemStore(database: fixture.database).sweep(at: Date(timeIntervalSince1970: 1_800_300_000))
+        #expect(removed == 1)
+        let rows = try ItemStore(database: fixture.database).items(status: [.active], kinds: nil, contextID: nil)
+        #expect(Set(rows.map(\.item.title)) == ["Daily standup", "Only on the second"])
+        let standup = try #require(rows.first { $0.item.title == "Daily standup" })
+        #expect(standup.sightingCount == 1 && standup.item.place == nil)          // the place was only on the deleted capture
+        #expect(try fixture.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM observations WHERE field = 'place'") } == 0)
+    }
+
+    @Test func sweepKeepsEmptyItemsTheUserEditedLockedOrDismissed() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+        let image = try fixture.addPicture(at: Date(timeIntervalSince1970: 1_800_003_600))
+        let titles = ["Edited", "Dismissed", "Untouched"]
+        try fixture.save(titles.enumerated().map { fixture.finding($1, start: ReconcileFixture.minutes($0 * 180)) }, imageID: image)
+        _ = await r.reconcile(imageID: image)
+        let byTitle = Dictionary(uniqueKeysWithValues: try ItemStore(database: fixture.database).items(status: [.active], kinds: nil, contextID: nil)
+            .map { ($0.item.title, $0.item.id) })
+        let ops = ItemOperations(database: fixture.database, now: { Date(timeIntervalSince1970: 1_800_200_000) })
+        try ops.edit(byTitle["Edited"]!, field: .place, value: .string("Room 9"))
+        try ops.dismiss(byTitle["Dismissed"]!)
+        let opsBefore = try fixture.count("reconcile_op_items")
+
+        try fixture.base.captures.deleteEvents(ids: [try eventID(fixture, of: image)])
+        let removed = try ItemStore(database: fixture.database).sweep(at: Date(timeIntervalSince1970: 1_800_300_000))
+        #expect(removed == 1)
+        let left = try ItemStore(database: fixture.database).items(status: [.active, .dismissed], kinds: nil, contextID: nil)
+        #expect(Set(left.map(\.item.title)) == ["Edited", "Dismissed"])
+        #expect(try fixture.count("reconcile_op_items") == opsBefore)                      // the history stays
+        let edited = try #require(left.first { $0.item.title == "Edited" })
+        #expect(edited.item.place == "Room 9" && edited.sightingCount == 0 && edited.locked)
+    }
+
+    @Test func sweepDropsCachedVectorsOfTitlesNoItemKnowsAnyMore() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        try fixture.write { db in
+            try ItemStore.insert(db, Item.sample(id: "i1", title: "Daily standup"), at: Date(timeIntervalSince1970: 1))
+            try db.execute(sql: "UPDATE items SET user_touched = 1")
+            try db.execute(sql: "INSERT INTO item_aliases VALUES ('i1', 'daily standup', 'Daily standup')")
+            try db.execute(sql: "INSERT INTO title_embeddings VALUES ('daily standup', 'e5', x'00', datetime('now'))")
+            try db.execute(sql: "INSERT INTO title_embeddings VALUES ('daily standup', 'other', x'00', datetime('now'))")
+            try db.execute(sql: "INSERT INTO title_embeddings VALUES ('long gone', 'e5', x'00', datetime('now'))")
+        }
+        try ItemStore(database: fixture.database).sweep(at: Date(timeIntervalSince1970: 1_800_300_000))
+        let left = try fixture.read { try String.fetchAll($0, sql: "SELECT normalised || '/' || model FROM title_embeddings ORDER BY 1") }
+        #expect(left == ["daily standup/e5", "daily standup/other"])
+    }
+
+    @Test func sweepOnATableWithNothingToDoChangesNothing() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let r = Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+        try fixture.save([fixture.finding("Daily standup", end: ReconcileFixture.minutes(30), place: "Room 4")])
+        _ = await r.reconcile(imageID: fixture.base.imageID)
+        let before = try ItemStore(database: fixture.database).items(status: [.active], kinds: nil, contextID: nil).map(\.item)
+        #expect(try ItemStore(database: fixture.database).sweep(at: Date(timeIntervalSince1970: 1_800_300_000)) == 0)
+        #expect(try ItemStore(database: fixture.database).items(status: [.active], kinds: nil, contextID: nil).map(\.item) == before)
     }
 }

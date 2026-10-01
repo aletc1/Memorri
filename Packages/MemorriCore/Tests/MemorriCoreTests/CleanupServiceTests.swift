@@ -103,6 +103,26 @@ import Testing
         #expect(try h.context.store?.sentinelCount() == 1)
     }
 
+    @Test func deletingCapturesSweepsTheItemsThatLostTheirSightings() throws {
+        let h = try Harness(now: now); defer { h.temp.cleanUp() }
+        try h.addCapture(id: "old", at: now.addingTimeInterval(-99 * day))
+        try h.context.database!.pool.write { db in
+            for (id, touched) in [("empty", 0), ("edited", 1)] {
+                try ItemStore.insert(db, Item.sample(id: id), at: now)
+                try db.execute(sql: "UPDATE items SET user_touched = ? WHERE id = ?", arguments: [touched, id])
+                try db.execute(sql: """
+                    INSERT INTO sightings (id, item_id, image_id, finding_id, captured_at, title, cited_lines_json, confidence, decision_json, created_at)
+                    VALUES (?, ?, 'old-img', 'f', datetime('now'), 'Daily standup', '[1]', 0.8, '{}', datetime('now'))
+                    """, arguments: ["s-\(id)", id])
+            }
+        }
+        #expect(try h.cleanup.delete(olderThanDays: 30) == 1)
+        let left = try h.context.database!.pool.read { try String.fetchAll($0, sql: "SELECT id FROM items ORDER BY id") }
+        #expect(left == ["edited"])
+        let sightings = try h.context.database!.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM sightings") }
+        #expect(sightings == 0)
+    }
+
     @Test func aCaptureInProgressIsNeverRemoved() throws {
         let h = try Harness(now: now); defer { h.temp.cleanUp() }
         let staging = try h.context.files.makeStagingDirectory()
