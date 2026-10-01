@@ -261,6 +261,34 @@ import Testing
         #expect(headers[0].midX == 130 && headers[4].midX == 1330)
     }
 
+    /// Day number over the weekday name, each its own line, with the range as the title; Thursday's number was not read.
+    private func stackedLines() -> [RecognisedLine] {
+        var lines = [line(1, "28 de Septiembre - 2 de Octubre de 2026", x: 20, y: 20, w: 300)]
+        for (number, name, x) in [("28", "Lunes", 100), ("29", "Martes", 300), ("30", "Miércoles", 500), ("2", "Viernes", 1100)] {
+            lines.append(line(lines.count + 1, number, x: x, y: 60, w: 24)); lines.append(line(lines.count + 1, name, x: x, y: 84, w: 60))
+        }
+        return lines
+    }
+
+    @Test func aDayNumberOverItsWeekdayNameIsOneHeaderAndAMissedColumnIsFilled() {
+        let headers = DateResolver.headers(in: stackedLines(), locales: es, reference: at(2026, 10, 1, 12), timezone: madrid)
+        let days = headers.map { "\($0.date.month!)-\($0.date.day!)" }
+        #expect(days == ["9-28", "9-29", "9-30", "10-1", "10-2"])
+        #expect(headers.map(\.line) == [2, 4, 6, 0, 8])            // the number's line; none for the filled column
+        #expect(headers[3].midX > headers[2].midX && headers[3].midX < headers[4].midX)
+    }
+
+    @Test func aWeekViewWithAMonthPickerBesideItIsNotAMonthView() {
+        var lines = stackedLines()
+        // A month picker: weekday letters and 5 rows of day numbers in a narrow block at the left.
+        for i in 0..<35 { lines.append(line(lines.count + 1, "\(i % 31 + 1)", x: 10 + (i % 7) * 14, y: 200 + (i / 7) * 14, w: 10)) }
+        let model = ClassificationResult(kind: .calendarMonth, confidence: 0.9, application: "Calendar", platformLook: "macos", isRemote: false,
+                                         remoteClient: "", theme: "light", calendarName: "")
+        let fixed = AnalysisPipeline.corrected(model, lines: lines, locales: es, reference: at(2026, 10, 1, 12), zone: madrid)
+        #expect(fixed.kind == .calendarWeek && fixed.modelKind == .calendarMonth)
+        #expect(AnalysisPipeline.corrected(model.withKind(.email), lines: lines, locales: es, reference: at(2026, 10, 1, 12), zone: madrid).kind == .email)
+    }
+
     @Test func headersInSpanishCome_FromTheLocale() {
         let lines = headerLines([("lun 12", 100), ("mar 13", 400), ("mié 14", 700)], title: "12 – 16 de octubre de 2026")
         let headers = DateResolver.headers(in: lines, locales: es, reference: capture, timezone: madrid)

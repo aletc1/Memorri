@@ -138,16 +138,17 @@ public struct AnalysisPipeline: Sendable {
                 classification = parsed
             }
         }
-        let resolved = classification.resolved()
+        let first = classification.resolved()
 
         // What the picture's surroundings say: tags from the capture, the text and the first call. They feed the context choice,
         // and the context decides the time zone the dates are read in, so both are settled before the dates are resolved.
         let tags = TagExtractor.tags(width: input.image.width, height: input.image.height, scale: input.displayScale, windows: input.windows,
-                                     lines: lines, classification: resolved)
+                                     lines: lines, classification: first)
         let decision = input.userChoice.flatMap { $0.source == .user ? $0 : nil }
             ?? ContextMatcher.decide(contexts: input.contexts, windows: input.windows, tags: tags, lines: lines)
         let (zone, zoneSource) = Self.zone(for: input.contexts.first { $0.id == decision.contextID }, mac: input.macTimezone)
         let locales = Self.locales(input.locales, preferring: tags.first { $0.key == "language" }?.value)
+        let resolved = Self.corrected(first, lines: lines, locales: locales, reference: input.captureTime, zone: zone)
         let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
         let headers = calendarKind ? DateResolver.headers(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
         let cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
@@ -216,6 +217,17 @@ public struct AnalysisPipeline: Sendable {
         let title = compact(draft.title)
         if !title.isEmpty, let line = candidates.first(where: { compact($0.text).contains(title) }) { return line }
         return candidates.min { $0.box.y < $1.box.y }
+    }
+
+    /// A week view with a month picker beside it reads as a month view to the model. When date headers (a weekday name with its day
+    /// number) run across the picture, much wider than any grid of day labels, the picture is a week view (or a day view).
+    static func corrected(_ result: ClassificationResult, lines: [RecognisedLine], locales: [Locale], reference: Date, zone: TimeZone) -> ClassificationResult {
+        guard result.kind == .calendarMonth else { return result }
+        let headers = DateResolver.headers(in: lines, locales: locales, reference: reference, timezone: zone)
+        guard headers.count >= 3, let left = headers.map(\.midX).min(), let right = headers.map(\.midX).max() else { return result }
+        let cells = DateResolver.monthCells(in: lines, locales: locales, reference: reference, timezone: zone)
+        let span = (cells.map(\.midX).max() ?? 0) - (cells.map(\.midX).min() ?? 0)
+        return cells.isEmpty || right - left > span * 1.5 ? result.withKind(.calendarWeek) : result
     }
 
     /// True when the end is missing, unresolved, or not after the start.

@@ -66,6 +66,17 @@ public struct ClassificationResult: Sendable, Equatable {
                              isRemote: isRemote, remoteClient: remoteClient, theme: theme, calendarName: calendarName)
     }
 
+    func withApplication(_ value: String) -> ClassificationResult {
+        ClassificationResult(kind: kind, modelKind: modelKind, confidence: confidence, application: value, platformLook: platformLook,
+                             isRemote: isRemote, remoteClient: remoteClient, theme: theme, calendarName: calendarName)
+    }
+
+    /// The same answer used as another kind (the text of the picture showed the model's kind was wrong); `modelKind` stays.
+    public func withKind(_ value: ScreenKind) -> ClassificationResult {
+        ClassificationResult(kind: value, modelKind: modelKind, confidence: confidence, application: application, platformLook: platformLook,
+                             isRemote: isRemote, remoteClient: remoteClient, theme: theme, calendarName: calendarName)
+    }
+
     /// An answer the model is not sure about is used as `other`.
     public func resolved(threshold: Double = ClassificationResult.defaultThreshold) -> ClassificationResult {
         ClassificationResult(kind: confidence < threshold ? .other : modelKind, modelKind: modelKind, confidence: confidence,

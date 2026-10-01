@@ -20,7 +20,30 @@ public enum TagExtractor {
                             classification: ClassificationResult) -> [CaptureTag] {
         var seen = Set<String>()
         return (fromCapture(width: width, height: height, scale: scale, windows: windows) + fromLines(lines)
-                + fromClassification(classification)).filter { seen.insert("\($0.key)|\($0.value)").inserted }
+                + fromClassification(classification).map { doubted($0, windows: windows, lines: lines) })
+            .filter { seen.insert("\($0.key)|\($0.value)").inserted }
+    }
+
+    /// The model names an application, a platform and a remote session from the look of the picture and can be wrong (a calendar in
+    /// Teams read as Thunderbird on Linux over VNC). When the windows of the capture are known, a claim they contradict is kept but
+    /// counts as low confidence: an application that no window or text on screen carries, a remote session when no window is a
+    /// remote client, and a platform other than macOS when a window of the system itself (Finder, a `com.apple.` app) is there.
+    static func doubted(_ tag: CaptureTag, windows: [WindowInfo], lines: [RecognisedLine]) -> CaptureTag {
+        guard !windows.isEmpty else { return tag }
+        let apps = windows.flatMap { [$0.appName, $0.bundleID] }.compactMap { $0?.lowercased() }
+        let contradicted: Bool
+        switch tag.key {
+        case "application":
+            let name = tag.value.lowercased()
+            contradicted = !apps.contains { $0.contains(name) || name.contains($0) } && !lines.contains { $0.text.lowercased().contains(name) }
+        case "remote_session":
+            contradicted = !windows.contains { isRemoteClient(name: $0.appName, bundleID: $0.bundleID) }
+        case "platform_look":
+            contradicted = tag.value.lowercased() != "macos" && windows.contains { $0.bundleID?.lowercased().hasPrefix("com.apple.") == true }
+        default:
+            contradicted = false
+        }
+        return contradicted ? CaptureTag(key: tag.key, value: tag.value, confidence: min(tag.confidence, 0.4), source: tag.source) : tag
     }
 
     // MARK: From the capture

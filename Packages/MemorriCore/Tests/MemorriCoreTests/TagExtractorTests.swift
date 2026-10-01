@@ -12,6 +12,28 @@ import Testing
     private func value(_ tags: [CaptureTag], _ key: String) -> String? { tags.first { $0.key == key }?.value }
     private func values(_ tags: [CaptureTag], _ key: String) -> [String] { tags.filter { $0.key == key }.map(\.value) }
 
+    @Test func aVisualApplicationNoWindowOrTextConfirmsCountsAsLow() {
+        let model = ClassificationResult(kind: .calendarWeek, confidence: 0.9, application: "Thunderbird", platformLook: "linux", isRemote: false,
+                                         remoteClient: "", theme: "light", calendarName: "")
+        let windows = [window("Microsoft Teams"), window("Code")]
+        let tags = TagExtractor.tags(width: 10, height: 10, scale: 1, windows: windows, lines: lines(["Calendar"]), classification: model)
+        let application = tags.first { $0.key == "application" }
+        #expect(application?.value == "Thunderbird" && application?.isLow == true)
+        // No window is a remote client, and none is the system's own, so the remote session is doubted and the platform is not.
+        #expect(tags.first { $0.key == "platform_look" }?.isLow == false)
+        let remote = ClassificationResult(kind: .calendarWeek, confidence: 0.9, application: "Teams", platformLook: "linux", isRemote: true,
+                                          remoteClient: "VNC", theme: "light", calendarName: "")
+        let local = TagExtractor.tags(width: 10, height: 10, scale: 1, windows: windows + [window("Finder", bundle: "com.apple.finder")], lines: [], classification: remote)
+        #expect(local.first { $0.key == "remote_session" }?.isLow == true && local.first { $0.key == "platform_look" }?.isLow == true)
+        let viaClient = TagExtractor.tags(width: 10, height: 10, scale: 1, windows: [window("Microsoft Remote Desktop")], lines: [], classification: remote)
+        #expect(viaClient.first { $0.key == "remote_session" }?.isLow == false)
+        // Confirmed by a window, by the text, or when no windows are known: unchanged.
+        let teams = model.withApplication("Teams")
+        #expect(TagExtractor.tags(width: 10, height: 10, scale: 1, windows: windows, lines: [], classification: teams).first { $0.key == "application" }?.isLow == false)
+        #expect(TagExtractor.tags(width: 10, height: 10, scale: 1, windows: [], lines: [], classification: model).first { $0.key == "application" }?.isLow == false)
+        #expect(TagExtractor.tags(width: 10, height: 10, scale: 1, windows: windows, lines: lines(["Thunderbird"]), classification: model).first { $0.key == "application" }?.isLow == false)
+    }
+
     // MARK: From the capture
 
     @Test func theDisplayGivesItsSizeAndScale() {

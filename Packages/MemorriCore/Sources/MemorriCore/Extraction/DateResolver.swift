@@ -263,7 +263,7 @@ public enum DateResolver {
         let today = day(of: reference, zone: timezone)
         var hintMonth: Int?, hintYear: Int?
         var candidates: [(line: RecognisedLine, parsed: ParsedDate)] = []
-        for line in lines {
+        for line in lines + stackedHeaders(in: lines, locales: locales) {
             guard var parsed = DateParser.parse(line.text, locales: locales), parsed.hour == nil, parsed.relative == nil else { continue }
             // "mar 13" is March 13 in English and Tuesday 13 in Spanish; a header needs a weekday, so the other reading is tried too.
             if parsed.weekday == nil, locales.count > 1, let other = DateParser.parse(line.text, locales: Array(locales.reversed())),
@@ -291,7 +291,57 @@ public enum DateResolver {
             guard let day = chosen, valid(day, zone: timezone) else { return nil }
             return DateHeader(line: item.line.n, midX: item.line.box.midX, midY: item.line.box.midY, date: DateComponents(year: day.year, month: day.month, day: day.day))
         }
-        return found.sorted { $0.midX < $1.midX }
+        return filled(found.sorted { $0.midX < $1.midX }, zone: timezone)
+    }
+
+    /// A column whose header the reading missed (a highlighted "today" is the usual one) still gets its day: when two neighbouring
+    /// headers are more than a day apart, the days between them are added at even spacing across the gap. They have no line.
+    private static func filled(_ headers: [DateHeader], zone: TimeZone) -> [DateHeader] {
+        guard headers.count >= 3 else { return headers }
+        var result: [DateHeader] = []
+        for (index, header) in headers.enumerated() {
+            result.append(header)
+            guard index + 1 < headers.count, let from = header.date.year.flatMap({ y in header.date.month.flatMap { m in header.date.day.map { Day(year: y, month: m, day: $0) } } }),
+                  let toDay = headers[index + 1].date.year.flatMap({ y in headers[index + 1].date.month.flatMap { m in headers[index + 1].date.day.map { Day(year: y, month: m, day: $0) } } }),
+                  let start = makeDate(from, hour: nil, minute: nil, zone: zone), let end = makeDate(toDay, hour: nil, minute: nil, zone: zone),
+                  let days = calendar(zone).dateComponents([.day], from: start, to: end).day, days >= 2, days <= 6 else { continue }
+            let gap = headers[index + 1].midX - header.midX
+            for step in 1..<days {
+                let date = adding(step, to: from, zone: zone)
+                result.append(DateHeader(line: 0, midX: header.midX + gap * Double(step) / Double(days), midY: header.midY,
+                                         date: DateComponents(year: date.year, month: date.month, day: date.day)))
+            }
+        }
+        return result
+    }
+
+    /// Some calendars write a header as two lines: the day number with the weekday name right under it (or over it). Each such
+    /// pair becomes one line "Lunes 28" that keeps the number line's `n` and covers both boxes.
+    static func stackedHeaders(in lines: [RecognisedLine], locales: [Locale]) -> [RecognisedLine] {
+        let numbers = lines.filter { line in
+            let text = line.text.trimmingCharacters(in: .whitespaces)
+            return text.count <= 2 && (Int(text).map { (1...31).contains($0) } ?? false)
+        }
+        let names = lines.filter { line in
+            let text = line.text.trimmingCharacters(in: .whitespaces)
+            guard text.count >= 3, text.allSatisfy({ $0.isLetter || $0 == "." }), let parsed = DateParser.parse(text, locales: locales) else { return false }
+            return parsed.weekday != nil && parsed.day == nil && parsed.month == nil && parsed.hour == nil
+        }
+        var used = Set<Int>(), merged: [RecognisedLine] = []
+        for number in numbers {
+            let near = names.filter { name in
+                let reach = Double(max(number.box.height, name.box.height)) * 2.5
+                let sameColumn = abs(Double(name.box.x - number.box.x)) <= Double(max(number.box.width, name.box.width)) * 0.75
+                return !used.contains(name.n) && sameColumn && abs(name.box.midY - number.box.midY) <= reach && name.box.midY != number.box.midY
+            }
+            guard let name = near.min(by: { abs($0.box.midY - number.box.midY) < abs($1.box.midY - number.box.midY) }) else { continue }
+            used.insert(name.n)
+            let x = min(number.box.x, name.box.x), y = min(number.box.y, name.box.y)
+            let right = max(number.box.x + number.box.width, name.box.x + name.box.width), bottom = max(number.box.y + number.box.height, name.box.y + name.box.height)
+            merged.append(RecognisedLine(n: number.n, text: "\(name.text) \(number.text.trimmingCharacters(in: .whitespaces))",
+                                         box: PixelBox(x: x, y: y, width: right - x, height: bottom - y), confidence: min(number.confidence, name.confidence)))
+        }
+        return merged
     }
 
     // MARK: Month cells
