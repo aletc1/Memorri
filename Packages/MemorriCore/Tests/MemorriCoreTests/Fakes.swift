@@ -692,7 +692,8 @@ final class ReconcileFixture {
             var all: [String] = []
             all += try lines("item", """
                 SELECT id, kind, family, status, merged_into, context_id, title, all_day, start_at, end_at, due_at, remind_at, timezone, day_key,
-                       people_json, place, notes, confidence, user_touched, first_seen, last_seen FROM items
+                       people_json, place, notes, confidence, user_touched, first_seen, last_seen,
+                       needs_review, review_reasons_json, approved_at, approved_values_json FROM items
                 """)
             all += try lines("sighting", "SELECT id, item_id, image_id, title FROM sightings")
             all += try lines("observation", "SELECT id, item_id, sighting_id, field, value_json, source FROM observations")

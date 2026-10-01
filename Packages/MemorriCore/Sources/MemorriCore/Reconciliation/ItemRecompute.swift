@@ -31,7 +31,10 @@ extension ItemStore {
     @discardableResult
     static func recompute(_ db: Database, itemID: String, at date: Date) throws -> Bool {
         guard var item = try Self.item(db, id: itemID) else { return false }
-        if item.status == .merged { return true }      // kept as the record of a merge; nothing is built for it
+        if item.status == .merged {                     // kept as the record of a merge; nothing is built for it
+            if item.needsReview { try db.execute(sql: "UPDATE items SET needs_review = 0, review_reasons_json = '[]' WHERE id = ?", arguments: [itemID]) }
+            return true
+        }
         let sightings = try Row.fetchAll(db, sql: "SELECT id, captured_at, confidence, decision_json FROM sightings WHERE item_id = ? ORDER BY captured_at, id",
                                          arguments: [itemID])
         let locks = try Row.fetchAll(db, sql: "SELECT field, observation_id FROM field_locks WHERE item_id = ?", arguments: [itemID])
@@ -43,14 +46,8 @@ extension ItemStore {
         struct Seen { let id: String; let capturedAt: Date; let confidence: Double; let decision: SightingDecision? }
         let seen = sightings.map { Seen(id: $0["id"], capturedAt: $0["captured_at"], confidence: $0["confidence"],
                                         decision: SightingDecision.parse($0["decision_json"])) }
-        let observations = try Row.fetchAll(db, sql: "SELECT * FROM observations WHERE item_id = ?", arguments: [itemID]).compactMap { row -> ItemObservation? in
-            guard let field = ItemField(rawValue: row["field"]), let source = ObservationSource(rawValue: row["source"]),
-                  let value = try? JSONDecoder().decode(JSONValue.self, from: Data((row["value_json"] as String).utf8)) else { return nil }
-            return ItemObservation(id: row["id"], itemID: itemID, sightingID: row["sighting_id"], field: field, value: value, source: source,
-                               confidence: row["confidence"], observedAt: row["observed_at"])
-        }
-        var lockMap: [ItemField: String] = [:]
-        for row in locks { if let field = ItemField(rawValue: row["field"]) { lockMap[field] = row["observation_id"] } }
+        let observations = try Self.observations(db, itemID: itemID)
+        let lockMap = try Self.lockMap(db, itemID: itemID)
         let resolved = FieldResolver.resolve(observations, locks: lockMap)
 
         if !seen.isEmpty {
@@ -79,6 +76,7 @@ extension ItemStore {
         let timeSighting = timeObservation.flatMap { id in observations.first { $0.id == id }?.sightingID }
         if let zone = (seen.first { $0.id == timeSighting }?.decision?.timezone) ?? seen.last?.decision?.timezone { item.timezone = zone }
         item.dayKey = TimeAgreement.dayKey(item.family == .event ? item.start : (item.due ?? item.start), timezone: item.timezone)
+        try Self.applyReview(db, to: &item, observations: observations, locks: lockMap, resolved: resolved)
 
         try update(db, item, at: date)
         try db.execute(sql: "DELETE FROM item_aliases WHERE item_id = ?", arguments: [itemID])
@@ -89,5 +87,76 @@ extension ItemStore {
             try db.execute(sql: "INSERT INTO item_aliases (item_id, normalised, title) VALUES (?, ?, ?)", arguments: [itemID, form, title])
         }
         return true
+    }
+
+    // MARK: Review state (spec 006)
+
+    static func observations(_ db: Database, itemID: String) throws -> [ItemObservation] {
+        try Row.fetchAll(db, sql: "SELECT * FROM observations WHERE item_id = ?", arguments: [itemID]).compactMap { row -> ItemObservation? in
+            guard let field = ItemField(rawValue: row["field"]), let source = ObservationSource(rawValue: row["source"]),
+                  let value = try? JSONDecoder().decode(JSONValue.self, from: Data((row["value_json"] as String).utf8)) else { return nil }
+            return ItemObservation(id: row["id"], itemID: itemID, sightingID: row["sighting_id"], field: field, value: value, source: source,
+                                   confidence: row["confidence"], observedAt: row["observed_at"])
+        }
+    }
+
+    /// Field to the observation behind its lock.
+    static func lockMap(_ db: Database, itemID: String) throws -> [ItemField: String] {
+        var map: [ItemField: String] = [:]
+        for row in try Row.fetchAll(db, sql: "SELECT field, observation_id FROM field_locks WHERE item_id = ?", arguments: [itemID]) {
+            if let field = ItemField(rawValue: row["field"]) { map[field] = row["observation_id"] }
+        }
+        return map
+    }
+
+    /// Whether another item that is not merged away is an open possible duplicate of this one. A possible duplicate of a merged item
+    /// is moot, which is why the merged partner is left out.
+    static func hasOpenPossibleDuplicate(_ db: Database, itemID: String) throws -> Bool {
+        try Bool.fetchOne(db, sql: """
+            SELECT EXISTS (SELECT 1 FROM possible_duplicates p
+                           JOIN items o ON o.id = CASE WHEN p.item_a = ?1 THEN p.item_b ELSE p.item_a END
+                           WHERE (p.item_a = ?1 OR p.item_b = ?1) AND o.status != 'merged')
+            """, arguments: [itemID]) ?? false
+    }
+
+    /// Sets `needsReview` and `reviewReasons` of an item whose fields are current. The approval snapshot is read from the row.
+    static func applyReview(_ db: Database, to item: inout Item, observations: [ItemObservation], locks: [ItemField: String],
+                            resolved: ResolvedFields) throws {
+        var sources: [ItemField: ObservationSource] = [:]
+        for (field, id) in resolved.chosen { if let observation = observations.first(where: { $0.id == id }) { sources[field] = observation.source } }
+        var approved: [ItemField: JSONValue]?
+        if item.approvedAt != nil {
+            approved = ReviewRules.decode(try String.fetchOne(db, sql: "SELECT approved_values_json FROM items WHERE id = ?", arguments: [item.id]))
+        }
+        let reasons = ReviewRules.reasons(item: item, chosenSources: sources, locked: Set(locks.keys),
+                                          hasOpenPossibleDuplicate: item.status == .active ? try hasOpenPossibleDuplicate(db, itemID: item.id) : false,
+                                          approvedValues: approved, currentValues: ReviewRules.snapshot(of: item))
+        item.reviewReasons = reasons
+        item.needsReview = !reasons.isEmpty
+    }
+
+    /// Computes only the review columns of an item from what is stored (the one-off pass after the migration). Leaves everything else,
+    /// including the time of the last change, alone.
+    static func refreshReview(_ db: Database, itemID: String) throws {
+        guard var item = try Self.item(db, id: itemID) else { return }
+        let observations = try Self.observations(db, itemID: itemID)
+        let locks = try lockMap(db, itemID: itemID)
+        try applyReview(db, to: &item, observations: observations, locks: locks, resolved: FieldResolver.resolve(observations, locks: locks))
+        let reasons = (try? JSONEncoder().encode(item.reviewReasons.map(\.rawValue))).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
+        try db.execute(sql: "UPDATE items SET needs_review = ?, review_reasons_json = ? WHERE id = ?", arguments: [item.needsReview ? 1 : 0, reasons, itemID])
+    }
+
+    /// Recomputes other items whose review state depends on a change to this one (the partners of a possible duplicate).
+    static func recomputeReview(_ db: Database, itemIDs: [String], at date: Date) throws {
+        for id in Array(NSOrderedSet(array: itemIDs)) as? [String] ?? itemIDs {
+            if let item = try item(db, id: id), item.status != .merged { try recompute(db, itemID: id, at: date) }
+        }
+    }
+
+    /// The other items of every possible duplicate that names this one.
+    static func possibleDuplicatePartners(_ db: Database, of itemID: String) throws -> [String] {
+        try String.fetchAll(db, sql: """
+            SELECT CASE WHEN item_a = ?1 THEN item_b ELSE item_a END FROM possible_duplicates WHERE item_a = ?1 OR item_b = ?1 ORDER BY 1
+            """, arguments: [itemID])
     }
 }

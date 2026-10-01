@@ -28,14 +28,18 @@ public enum ItemContextFilter: Sendable, Hashable {
     }
 }
 
+/// Which items the window lists by their review state (spec 006, FR-016): everything, the Inbox, or what is approved.
+public enum ItemScope: String, Sendable, Equatable, CaseIterable { case all, inbox, approved }
+
 /// What the Items window shows (contracts/ui-contract.md).
 public struct ItemFilter: Sendable, Equatable {
     public var kind: ItemKindFilter
     public var context: ItemContextFilter
     public var showDismissed: Bool
+    public var scope: ItemScope
 
-    public init(kind: ItemKindFilter = .all, context: ItemContextFilter = .all, showDismissed: Bool = false) {
-        self.kind = kind; self.context = context; self.showDismissed = showDismissed
+    public init(kind: ItemKindFilter = .all, context: ItemContextFilter = .all, scope: ItemScope = .all, showDismissed: Bool = false) {
+        self.kind = kind; self.context = context; self.scope = scope; self.showDismissed = showDismissed
     }
 
     public var statuses: Set<ItemStatus> { showDismissed ? [.active, .dismissed] : [.active] }
@@ -51,6 +55,10 @@ public struct ItemRowText: Sendable, Equatable {
     public let possibleDuplicate: Bool
     public let locked: Bool
     public let dimmed: Bool
+    /// `Needs review`, `Approved`, `Approved by you` or `Dismissed`.
+    public let approval: String
+    /// Why the item needs review, in words (empty when it does not).
+    public let reasons: [String]
 }
 
 /// One of the values a merge cannot decide because the user locked both.
@@ -84,6 +92,11 @@ public enum ItemListModel {
     public static func visible(_ rows: [ItemRow], filter: ItemFilter) -> [ItemRow] {
         rows.filter { row in
             guard filter.statuses.contains(row.item.status) else { return false }
+            switch filter.scope {
+            case .all: break
+            case .inbox: guard row.item.status == .active, row.item.needsReview else { return false }
+            case .approved: guard row.item.status == .active, !row.item.needsReview else { return false }
+            }
             if let families = filter.families, !families.contains(row.item.family) { return false }
             switch filter.context {
             case .all: return true
@@ -91,6 +104,8 @@ public enum ItemListModel {
             case .context(let id): return row.item.contextID == id
             }
         }.sorted { a, b in
+            // The Inbox shows what was seen last first; the other lists go by date.
+            if filter.scope == .inbox, a.item.lastSeen != b.item.lastSeen { return a.item.lastSeen > b.item.lastSeen }
             switch (moment(a.item), moment(b.item)) {
             case let (x?, y?) where x != y: return x < y
             case (nil, .some): return false
@@ -107,7 +122,43 @@ public enum ItemListModel {
     public static func rowText(_ row: ItemRow, contextName: String?) -> ItemRowText {
         ItemRowText(title: row.item.title, when: dateText(row.item), context: contextName ?? "No context",
                     sightings: row.sightingCount == 1 ? "1 sighting" : "\(row.sightingCount) sightings",
-                    possibleDuplicate: row.possibleDuplicate, locked: row.locked, dimmed: row.item.status == .dismissed)
+                    possibleDuplicate: row.possibleDuplicate, locked: row.locked, dimmed: row.item.status == .dismissed,
+                    approval: approvalText(row.item), reasons: reviewText(row.item.reviewReasons))
+    }
+
+    // MARK: Review (spec 006)
+
+    /// One reason an item needs review, in words.
+    public static func reviewText(_ reasons: [ReviewReason]) -> [String] {
+        reasons.map { reason in
+            switch reason {
+            case .lowConfidence: "Low confidence"
+            case .guessedStart: "Guessed time"
+            case .guessedEnd: "Guessed end"
+            case .guessedDue: "Guessed due date"
+            case .possibleDuplicate: "Possible duplicate"
+            case .changedAfterApproval: "Changed after you approved it"
+            }
+        }
+    }
+
+    /// An item that does not need review counts as approved without any action (FR-013).
+    public static func approvalText(_ item: Item) -> String {
+        if item.status == .dismissed { return "Dismissed" }
+        if item.needsReview { return "Needs review" }
+        return item.approvedAt != nil ? "Approved by you" : "Approved"
+    }
+
+    /// `Approve` is offered when every selected item is waiting for review.
+    public static func canApprove(_ rows: [ItemRow]) -> Bool { !rows.isEmpty && rows.allSatisfy { $0.item.needsReview } }
+
+    /// What the list says when the scope has nothing to show.
+    public static func emptyText(scope: ItemScope) -> String {
+        switch scope {
+        case .all: "No items yet. Items appear after captures are analysed."
+        case .inbox: "Nothing needs review."
+        case .approved: "No approved items yet."
+        }
     }
 
     /// The date and time in the item's own zone: `Wed 14 Oct 09:00`, `Wed 14 Oct, all day`, `Due Wed 14 Oct 09:00` or `No date`.
@@ -217,6 +268,7 @@ public enum ItemListModel {
         case "unlock": "Unlocked"
         case "context": "Context changed"
         case "different": "Marked as different"
+        case "approve": "Approved"
         case "undo": "Undone"
         default: kind
         }

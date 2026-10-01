@@ -192,4 +192,75 @@ import Testing
         #expect(ItemListModel.missingCutOutText(nil) == "No cut-out yet.")
         #expect(ItemListModel.missingCutOutText(evidence("e", sighting: "a", at: 1)) == "The cut-out file is gone.")
     }
+
+    // MARK: review scope (spec 006, US2)
+
+    private func reviewed(_ title: String, reasons: [ReviewReason] = [], approved: Bool = false, status: ItemStatus = .active, lastSeen: TimeInterval = 0,
+                          start: Date? = ReconcileFixture.nine) -> ItemRow {
+        var made = item(title, start: start, status: status)
+        made.reviewReasons = reasons
+        made.needsReview = !reasons.isEmpty && status == .active
+        made.approvedAt = approved ? Date(timeIntervalSince1970: 1_800_000_000) : nil
+        made.lastSeen = Date(timeIntervalSince1970: 1_800_000_000 + lastSeen)
+        return row(made)
+    }
+
+    @Test func theInboxListsOnlyItemsNeedingReviewNewestSightingFirst() {
+        let rows = [reviewed("Older", reasons: [.lowConfidence], lastSeen: 10), reviewed("Fine"), reviewed("Newer", reasons: [.guessedEnd], lastSeen: 50),
+                    reviewed("Dismissed", reasons: [.lowConfidence], status: .dismissed, lastSeen: 99),
+                    reviewed("Undated newest", reasons: [.possibleDuplicate], lastSeen: 80, start: nil)]
+        let inbox = ItemListModel.visible(rows, filter: ItemFilter(scope: .inbox, showDismissed: true))
+        #expect(inbox.map(\.item.title) == ["Undated newest", "Newer", "Older"])
+    }
+
+    @Test func theApprovedScopeListsActiveItemsThatDoNotNeedReview() {
+        let rows = [reviewed("Fine"), reviewed("Checked", approved: true), reviewed("Doubtful", reasons: [.lowConfidence]),
+                    reviewed("Dismissed", status: .dismissed)]
+        #expect(Set(ItemListModel.visible(rows, filter: ItemFilter(scope: .approved, showDismissed: true)).map(\.item.title)) == ["Fine", "Checked"])
+        #expect(Set(ItemListModel.visible(rows, filter: ItemFilter(scope: .all)).map(\.item.title)) == ["Fine", "Checked", "Doubtful"])
+    }
+
+    @Test func theScopesWorkWithTheKindAndContextFilters() {
+        var a = reviewed("In context", reasons: [.lowConfidence]).item
+        a.contextID = "a"
+        var b = reviewed("Other context", reasons: [.lowConfidence]).item
+        b.contextID = "b"
+        let rows = [row(a), row(b), reviewed("Task", reasons: [.lowConfidence])]
+        #expect(ItemListModel.visible(rows, filter: ItemFilter(context: .context("a"), scope: .inbox)).map(\.item.title) == ["In context"])
+        #expect(ItemListModel.visible(rows, filter: ItemFilter(context: .none, scope: .inbox)).map(\.item.title) == ["Task"])
+    }
+
+    @Test func reasonsAreShownInWords() {
+        #expect(ItemListModel.reviewText([.lowConfidence, .guessedStart, .guessedEnd, .guessedDue, .possibleDuplicate, .changedAfterApproval])
+                == ["Low confidence", "Guessed time", "Guessed end", "Guessed due date", "Possible duplicate", "Changed after you approved it"])
+        #expect(ItemListModel.reviewText([]).isEmpty)
+    }
+
+    @Test func approvalIsShownInWords() {
+        #expect(ItemListModel.approvalText(reviewed("a", reasons: [.lowConfidence]).item) == "Needs review")
+        #expect(ItemListModel.approvalText(reviewed("b").item) == "Approved")
+        #expect(ItemListModel.approvalText(reviewed("c", approved: true).item) == "Approved by you")
+        #expect(ItemListModel.approvalText(reviewed("d", status: .dismissed).item) == "Dismissed")
+        let text = ItemListModel.rowText(reviewed("e", reasons: [.guessedEnd]), contextName: nil)
+        #expect(text.approval == "Needs review" && text.reasons == ["Guessed end"])
+    }
+
+    @Test func approveIsOfferedWhenEverySelectedItemNeedsReview() {
+        let doubtful = reviewed("a", reasons: [.lowConfidence]), fine = reviewed("b")
+        #expect(ItemListModel.canApprove([doubtful]) && ItemListModel.canApprove([doubtful, reviewed("c", reasons: [.guessedEnd])]))
+        #expect(!ItemListModel.canApprove([doubtful, fine]) && !ItemListModel.canApprove([fine]) && !ItemListModel.canApprove([]))
+    }
+
+    @Test func theEmptyStatesNameTheScope() {
+        #expect(ItemListModel.emptyText(scope: .inbox) == "Nothing needs review.")
+        #expect(ItemListModel.emptyText(scope: .all) == "No items yet. Items appear after captures are analysed.")
+        #expect(ItemListModel.emptyText(scope: .approved) == "No approved items yet.")
+    }
+
+    @Test func approvalsAreUndoableAndWorded() {
+        let ops = [OperationSummary(id: "2", kind: "approve", byUser: true, createdAt: Date(), undone: false),
+                   OperationSummary(id: "1", kind: "edit", byUser: true, createdAt: Date(), undone: false)]
+        #expect(ItemListModel.undoTarget(in: ops)?.id == "2")
+        #expect(ItemListModel.operationText("approve") == "Approved")
+    }
 }

@@ -72,6 +72,23 @@ public struct ItemOperations: Sendable {
         }
     }
 
+    /// The user checked the item: it leaves the Inbox and stays approved until a later sighting changes what was approved (FR-012).
+    @discardableResult
+    public func approve(_ itemID: String) throws -> OpID {
+        let date = now()
+        return try database.pool.write { db in
+            var item = try Self.live(db, itemID)
+            guard item.status == .active else { throw ItemOperationError.wrongStatus }
+            let before = try OperationLog.state(db, itemID: itemID)!
+            item.approvedAt = date
+            item.userTouched = true
+            try ItemStore.update(db, item, at: date)
+            try ItemStore.setApprovalValues(db, itemID: itemID, ReviewRules.snapshot(of: item))
+            try ItemStore.recompute(db, itemID: itemID, at: date)
+            return try OperationLog.record(db, kind: .approve, byUser: true, items: [itemID], before: [itemID: before], at: date)
+        }
+    }
+
     /// The item is remembered, hidden, and still collects sightings of the same event.
     @discardableResult
     public func dismiss(_ itemID: String) throws -> OpID { try setStatus(itemID, from: .active, to: .dismissed, kind: .dismiss) }
@@ -88,6 +105,7 @@ public struct ItemOperations: Sendable {
             item.status = to
             item.userTouched = true
             try ItemStore.update(db, item, at: date)
+            try ItemStore.recompute(db, itemID: itemID, at: date)         // a dismissed item needs no review; a restored one may
             return try OperationLog.record(db, kind: kind, byUser: true, items: [itemID], before: [itemID: before], at: date)
         }
     }

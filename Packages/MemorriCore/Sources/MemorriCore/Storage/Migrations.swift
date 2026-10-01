@@ -347,6 +347,10 @@ enum Migrations {
             try db.rename(table: "reconcile_ops_v6", to: "reconcile_ops")
             try db.create(index: "reconcile_ops_created_at", on: "reconcile_ops", columns: ["created_at"])
         }
+        // Items that exist already get their review state once, from what is stored (it is kept up to date by every recompute after this).
+        migrator.registerMigration("v6-review") { db in
+            for id in try String.fetchAll(db, sql: "SELECT id FROM items WHERE status != 'merged'") { try ItemStore.refreshReview(db, itemID: id) }
+        }
         return migrator
     }
 }

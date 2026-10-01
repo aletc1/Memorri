@@ -677,4 +677,35 @@ import Testing
             #expect(try db.tableExists("evidence"))
         }
     }
+
+    @Test func theMigrationComputesTheReviewStateOfItemsThatExist() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v6")
+            try pool.write { db in
+                try self.insertItem(db, id: "fine")
+                try self.insertItem(db, id: "faint")
+                try db.execute(sql: "UPDATE items SET confidence = 0.5 WHERE id = 'faint'")
+                try self.insertItem(db, id: "gone", status: "merged")
+                try db.execute(sql: "UPDATE items SET confidence = 0.5 WHERE id = 'gone'")
+                try self.insertItem(db, id: "dismissed", status: "dismissed")
+                try db.execute(sql: "UPDATE items SET confidence = 0.5 WHERE id = 'dismissed'")
+            }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.read { db in
+            func state(_ id: String) throws -> (Int, String) {
+                let row = try #require(try Row.fetchOne(db, sql: "SELECT needs_review, review_reasons_json FROM items WHERE id = ?", arguments: [id]))
+                return (row["needs_review"], row["review_reasons_json"])
+            }
+            let fine = try state("fine"), faint = try state("faint"), gone = try state("gone"), dismissed = try state("dismissed")
+            #expect(fine == (0, "[]"))
+            #expect(faint == (1, "[\"low-confidence\"]"))
+            #expect(gone == (0, "[]") && dismissed == (0, "[]"))
+        }
+    }
 }
