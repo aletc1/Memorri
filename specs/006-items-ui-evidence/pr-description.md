@@ -12,7 +12,7 @@ Spec 005 produced items; this spec lets the user trust and correct them.
 - Migrations `v6` (schema) and `v6-review` (computes the review state of existing items). `reconcile_ops` is rebuilt to allow the `approve` kind.
 
 ### How it was verified
-- `swift test --package-path Packages/MemorriCore`: 1,057 tests, all pass except `AnalysisQueueTests.tenJobsRunOneAtATimeOldestFirst` (see below).
+- `swift test --package-path Packages/MemorriCore`: 1,057 tests, all pass (see the note on `AnalysisQueueTests` below).
 - Scale (`EvidenceScaleTests`, 5,000 items, 20,000 sightings, best of three): item evidence and five cut-outs 1.6 ms, Inbox plus count 46 ms (targets 1 s and 0.5 s).
 - Clean Debug and Release builds with no code warnings; the Release binary has no ingest switches. Diff grepped for names, companies and e-mail addresses: none. `eval/` is unchanged.
 - Success criteria table: `specs/006-items-ui-evidence/research.md`, "Results".
@@ -27,6 +27,7 @@ Spec 005 produced items; this spec lets the user trust and correct them.
 - `Show whole capture` has never been seen on screen.
 - SC-004 (ten Inbox items in two minutes) was not timed.
 - SC-002 is three actions when the source of a title is not among the 5 newest sightings.
-- `AnalysisQueueTests.tenJobsRunOneAtATimeOldestFirst` is flaky here (fails in roughly a third to a half of full runs, passes alone); it is in code this PR does not touch.
+- `AnalysisQueueTests.tenJobsRunOneAtATimeOldestFirst` was slow under the full parallel run (0.4 to 4.4 s of its 5 s wait on `main`, up to 6.6 s here, 4 failures in 24 runs here, none on `main`). Not traced to one suite; its wait is raised to 30 s in this PR (test file only), 0 failures in 10 runs afterwards. The cause of the slowness is not explained.
+- Moving a start later than a guessed end is refused until the end is edited first (FR-007).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

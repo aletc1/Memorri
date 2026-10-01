@@ -49,7 +49,8 @@ import Testing
         let rig = try makeRig(runner: runner); defer { rig.temp.cleanUp() }
         let jobs = try (0..<10).map { try add(rig, createdAt: 1000 + Double($0)) }
         await rig.queue.start()
-        #expect(await waitUntil { (try? rig.store.counts().finished) == 10 })
+        // The jobs take 3 ms each, but under a full parallel run the queue's task was seen to need up to 6.6 s to get its turn (0.4 to 4.4 s on main).
+        #expect(await waitUntil(timeout: .seconds(30)) { (try? rig.store.counts().finished) == 10 })
         #expect(runner.maxActive == 1)
         #expect(runner.order == jobs.map(\.id))
         await rig.queue.stop()
