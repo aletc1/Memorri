@@ -29,22 +29,24 @@ eval/golden/<set>/<case>/sequence.json
         { "event": "standup-tue", "kind": "appointment", "title": "Daily standup",
           "start": "2026-10-14T07:00:00Z", "end": "2026-10-14T07:15:00Z", "allDay": false,
           "inferred": ["end"], "confidence": 0.8 } ] } ],
-  "actions": [ { "after": "c2", "dismiss": "standup-tue" } ]
+  "actions": [ { "after": "c2", "action": "dismiss", "event": "standup-tue" } ]
 }
 ```
 
 - `event` is the expected real-world event; findings with the same `event` should end in one item, different events in different items.
-- `actions` (optional) apply user operations by event after a capture: `dismiss`, `restore`, `editTitle`, `split`. Expectations then follow the spec (a dismissed event is not recreated; an edited title stays).
+- `actions` (optional) apply user operations by event after a capture, as `{after, action, event, title?}`: `dismiss`, `restore`, `editTitle` (with `title`), `split` (the newest sighting of the event). Expectations then follow the spec (a dismissed event is not recreated; an edited title stays).
 
 ## Report
 
 Per case and overall:
 - `mergeRecall`: same-event finding pairs that ended in the same item / all same-event pairs (SC-001, target ≥ 0.95 with `--models on`). With `--models off` it is computed without the translation cases, which are reported as `translatedFlagged` (share of translated pairs left as possible duplicates, target 1.0).
 - `wrongMergeRate`: items holding findings of more than one event / items (SC-002, target ≤ 0.02).
+- `translatedFlagged`: translated pairs (the two sightings written in different languages, `lang` on the finding) that ended merged or as a possible duplicate / all translated pairs (target 1.0 with `--models off`).
 - `judgedShare`: compared pairs sent to the reranker / compared pairs (SC-006, target < 0.10).
 - `msPerCapture`: mean reconciliation time per capture (SC-006, target < 2000 without reranker calls).
-- `userRules`: dismissed events recreated, user titles overwritten (SC-005, target 0).
-- Lists: `missedMerges` (pairs of finding titles), `wrongMerges` (item title and its events), `judged` pairs with scores and answer.
+- `recreatedDismissed` and `overwrittenTitles`: dismissed events that came back active, user titles overwritten (SC-005, target 0).
+- Lists per case: `missedMerges` (pairs of finding titles), `wrongMerges` (item title and its events). The report type is `SequenceReport` (the name `ReconcileReport` was taken by the capture-file reconciliation of spec 002).
+- `run --reconcile` prints, per case, findings against items and the items the second analysis created (`ReanalysisReport`).
 
 ## Synthetic set (tracked)
 

@@ -194,34 +194,39 @@ public struct ReconcileRunner: Sendable {
 
     // MARK: Reanalysis (run --reconcile)
 
-    /// Reconciles the findings of each case, then stores a second analysis of the same pictures and reconciles again (SC-003, SC-007):
-    /// a second reading of the same pictures should create no item.
-    public func reanalysis(first: [String: [FoundFinding]], second: [String: [FoundFinding]], progress: @Sendable (String) -> Void = { _ in }) async throws -> ReanalysisReport {
-        var rows: [ReanalysisCase] = []
+    /// Reconciles what the analysis found in every case into one database, the way the app would (each case is a picture), then stores a
+    /// second analysis of the same pictures and reconciles again (SC-003, SC-007): a second reading of the same pictures should create no item.
+    public func reanalysis(first: [String: [FoundFinding]], second: [String: [FoundFinding]], expectedEvents: Int? = nil,
+                           progress: @Sendable (String) -> Void = { _ in }) async throws -> ReanalysisReport {
+        let scratch = try Scratch.open(case: "reanalysis")
+        defer { scratch.remove() }
+        let names = first.keys.sorted()
         let base = Date(timeIntervalSince1970: 1_791_900_000)
-        for name in first.keys.sorted() {
-            progress("reconciling \(name)")
-            let scratch = try Scratch.open(case: name)
-            defer { scratch.remove() }
-            let at = base
-            let event = CaptureEventRecord(id: "e", capturedAt: at, trigger: "shortcut", status: "complete", failureReason: nil, displayCount: 1)
-            let image = CaptureImageRecord(id: "i", eventId: "e", displayId: 1, displayName: "Display", pixelWidth: 100, pixelHeight: 100, scale: 1,
-                                           fullPath: "full/i", modelPath: "model/i", modelWidth: 100, modelHeight: 100, fullBytes: 1, modelBytes: 1, missing: false)
+        var images: [String: String] = [:]
+        for (index, name) in names.enumerated() {
+            let at = base.addingTimeInterval(Double(index) * 60)
+            let event = CaptureEventRecord(id: "e\(index)", capturedAt: at, trigger: "shortcut", status: "complete", failureReason: nil, displayCount: 1)
+            let image = CaptureImageRecord(id: "i\(index)", eventId: event.id, displayId: 1, displayName: "Display", pixelWidth: 100, pixelHeight: 100, scale: 1,
+                                           fullPath: "full/\(index)", modelPath: "model/\(index)", modelWidth: 100, modelHeight: 100, fullBytes: 1, modelBytes: 1, missing: false)
             try scratch.captures.insert(event: event, images: [image])
-            let reconciler = Reconciler(database: scratch.database, judge: judge, thresholds: thresholds, now: { at })
-            func pass(_ found: [FoundFinding], tag: String) async throws -> Set<String> {
-                let findings = found.enumerated().map { Self.finding(from: $1, id: "\(tag)#\($0)") }
-                try Self.save(findings, imageID: image.id, context: nil, database: scratch.database, at: at)
-                let summary = await reconciler.reconcile(imageID: image.id)
-                if let error = summary.error { throw SequenceCaseError.invalid(case: name, reason: "reconcile failed: \(error)") }
-                return try await scratch.database.pool.read { db in Set(try String.fetchAll(db, sql: "SELECT id FROM items WHERE status != 'merged'")) }
-            }
-            let one = try await pass(first[name] ?? [], tag: "a")
-            let two = try await pass(second[name] ?? [], tag: "b")
-            rows.append(ReanalysisCase(name: name, findingsFirst: first[name]?.count ?? 0, findingsSecond: second[name]?.count ?? 0,
-                                       itemsFirst: one.count, itemsSecond: two.count, createdBySecond: two.subtracting(one).count))
+            images[name] = image.id
         }
-        return ReanalysisReport(cases: rows)
+        func pass(_ found: [String: [FoundFinding]], tag: String) async throws -> Set<String> {
+            for (index, name) in names.enumerated() {
+                progress("reconciling \(tag) \(name)")
+                let at = base.addingTimeInterval(Double(index) * 60 + (tag == "a" ? 0 : 3600))
+                let findings = (found[name] ?? []).enumerated().map { Self.finding(from: $1, id: "\(tag)-\(name)#\($0)") }
+                try Self.save(findings, imageID: images[name]!, context: nil, database: scratch.database, at: at)
+                let summary = await Reconciler(database: scratch.database, judge: judge, thresholds: thresholds, now: { at }).reconcile(imageID: images[name]!)
+                if let error = summary.error { throw SequenceCaseError.invalid(case: name, reason: "reconcile failed: \(error)") }
+            }
+            return try await scratch.database.pool.read { db in Set(try String.fetchAll(db, sql: "SELECT id FROM items WHERE status != 'merged'")) }
+        }
+        let one = try await pass(first, tag: "a")
+        let two = try await pass(second, tag: "b")
+        return ReanalysisReport(captures: names.count, findingsFirst: first.values.reduce(0) { $0 + $1.count },
+                                findingsSecond: second.values.reduce(0) { $0 + $1.count }, itemsFirst: one.count, itemsSecond: two.count,
+                                createdBySecond: two.subtracting(one).count, expectedEvents: expectedEvents)
     }
 
     static func finding(from found: FoundFinding, id: String) -> Finding {
@@ -346,28 +351,21 @@ struct Scratch {
     func remove() { try? FileManager.default.removeItem(at: root) }
 }
 
-public struct ReanalysisCase: Sendable, Equatable, Codable {
-    public let name: String
+/// What `run --reconcile` adds to the analysis report (SC-003 and SC-007).
+public struct ReanalysisReport: Sendable, Equatable, Codable {
+    public let captures: Int
     public let findingsFirst: Int
     public let findingsSecond: Int
     public let itemsFirst: Int
     public let itemsSecond: Int
     /// Items that exist after the second analysis and did not after the first.
     public let createdBySecond: Int
-}
-
-/// What `run --reconcile` adds to the analysis report (SC-003 and SC-007).
-public struct ReanalysisReport: Sendable, Equatable, Codable {
-    public let cases: [ReanalysisCase]
-    public var findingsFirst: Int { cases.reduce(0) { $0 + $1.findingsFirst } }
-    public var itemsFirst: Int { cases.reduce(0) { $0 + $1.itemsFirst } }
-    public var createdBySecond: Int { cases.reduce(0) { $0 + $1.createdBySecond } }
+    /// Findings the golden cases expect, when known: the analysis may find more (its own precision), reconciliation never adds items.
+    public let expectedEvents: Int?
 
     public var text: String {
-        var lines = ["reconcile: \(findingsFirst) findings became \(itemsFirst) items; the second analysis created \(createdBySecond) new items"]
-        for c in cases where c.createdBySecond > 0 || c.itemsFirst != c.findingsFirst {
-            lines.append("case \(c.name): findings \(c.findingsFirst) -> items \(c.itemsFirst); second pass \(c.findingsSecond) findings, items \(c.itemsSecond), new \(c.createdBySecond)")
-        }
-        return lines.joined(separator: "\n")
+        var line = "reconcile: \(captures) captures, \(findingsFirst) findings became \(itemsFirst) items"
+        if let expectedEvents { line += " (the cases expect \(expectedEvents) events)" }
+        return line + "; after the second analysis \(itemsSecond) items, \(createdBySecond) of them new"
     }
 }

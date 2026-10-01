@@ -130,4 +130,26 @@ import Testing
         #expect(report.overall.translatedFlagged ?? 1 >= 1, Comment(rawValue: report.text))
         #expect(report.overall.recreatedDismissed == 0 && report.overall.overwrittenTitles == 0, Comment(rawValue: report.text))
     }
+
+    // MARK: reanalysis (run --reconcile)
+
+    private func found(_ title: String, hour: Double = 2) -> FoundFinding {
+        FoundFinding(kind: "appointment", title: title, start: ReconcileFixture.nine.addingTimeInterval(hour * 3600),
+                     end: ReconcileFixture.nine.addingTimeInterval((hour + 1) * 3600))
+    }
+
+    @Test func aSecondAnalysisOfTheSamePicturesCreatesNoItemAndEventsSeenInTwoPicturesAreOneItem() async throws {
+        let first = ["month": [found("Sprint review"), found("Planning", hour: 5)], "week": [found("Sprint review"), found("Retro", hour: 7)]]
+        let report = try await ReconcileRunner(judge: NoMeaningJudge(), modelsOn: false).reanalysis(first: first, second: first, expectedEvents: 3)
+        #expect(report.captures == 2 && report.findingsFirst == 4 && report.itemsFirst == 3)
+        #expect(report.itemsSecond == 3 && report.createdBySecond == 0)
+        #expect(report.expectedEvents == 3 && report.text.contains("4 findings became 3 items"))
+    }
+
+    @Test func aSecondAnalysisThatReadsAnotherTitleIsCountedAsNewItems() async throws {
+        let first = ["month": [found("Sprint review")]]
+        let second = ["month": [found("Quarterly budget workshop")]]
+        let report = try await ReconcileRunner(judge: NoMeaningJudge(), modelsOn: false).reanalysis(first: first, second: second)
+        #expect(report.itemsFirst == 1 && report.createdBySecond == 1)
+    }
 }

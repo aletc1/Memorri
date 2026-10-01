@@ -253,6 +253,20 @@ Prompts and models decide whether the app finds the right items, so changes are 
 
 To try the pipeline on one picture without capturing your screen, run a Debug build with `--ingest-picture <png>` (and `--ingest-windows <json>` for window titles), or `--ingest-case <golden case folder>`, then watch the app's log: `/usr/bin/log stream --predicate 'subsystem == "com.aletc1.memorri" && category == "extraction"'` shows `read`, `classify`, `extract`, `resolve`, `context` and `analysis stored` lines (never text, titles or tag values). `scripts/fake-ollama.py --mode extract` (also `extract-bad-citation`, `extract-empty`, `classify-unsure`) stands in for the model. Settings → Analysis shows each picture's state, kind, context (with a picker), tags and findings, and has the Contexts block.
 
+### Changing how items are matched
+
+Matching findings into items (spec 005) is also measured. The thresholds are `ReconcileThresholds` (`Reconciliation/MatchScorer.swift`), the reranker instruction is `OllamaMeaningJudge.instruction` (version `rerank-v2`), and the cases are the tracked sequences in `eval/golden/synthetic-sequences/`, written by `MemorriCore/Evaluation/SyntheticSequences.swift`.
+
+1. Run both modes before the change and keep the reports (`--models on` needs Ollama with the embedding and reranker models of the Settings → Ollama "Matching models" group):
+   ```bash
+   swift run --package-path Packages/MemorriCore memorri-eval reconcile --models off --out eval/out/reconcile-off-before.json
+   swift run --package-path Packages/MemorriCore memorri-eval reconcile --models on --out eval/out/reconcile-on-before.json
+   ```
+2. Make the change, run both again, then `memorri-eval compare <before> <after>`. The report lists merge recall, wrong merges, the share of pairs sent to the judge, time per capture, and every missed or wrong merge by title.
+3. Merge recall must not go down and wrong merges must not go up. `--min-merge-recall` and `--max-wrong-merge` make the command exit 3 outside the limits. The off-mode gate also runs in `swift test` (`ReconcileRunnerTests`).
+4. Changing a sequence case means changing `SyntheticSequences.swift` and running `memorri-eval generate-sequences`; `SyntheticSequencesTests` fails while the tracked folder and the generator disagree.
+5. `memorri-eval run --reconcile` analyses the synthetic pictures twice and reconciles both results; the second reading must create no item.
+
 ## 9. Branches, commits and pull requests
 
 **Never commit to `main`.** Every change, including docs and chores, goes on a branch and reaches `main` through a pull request.

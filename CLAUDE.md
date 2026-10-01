@@ -1,6 +1,6 @@
 # Memorri
 
-Native macOS menu-bar app. It captures screenshots of every display (local apps, remote desktops and other sessions the user is permitted to capture), runs Apple Vision OCR plus a local Ollama vision model (`qwen3-vl:8b-instruct` by default, ADR 0019) to infer appointments, tasks and reminders, and stores them in a local SQLite index with cropped evidence and full-text search. The last step syncs them to a chosen macOS Calendar and Reminders list through EventKit.
+Native macOS menu-bar app. It captures screenshots of every display (local apps, remote desktops and other sessions the user is permitted to capture), runs Apple Vision OCR plus a local Ollama vision model (`qwen3-vl:8b-instruct` by default, ADR 0019) to infer appointments, tasks and reminders, and stores them in a local SQLite index (de-duplicated into items with their sightings, shown in the Items window) with cropped evidence and full-text search. The last step syncs them to a chosen macOS Calendar and Reminders list through EventKit.
 
 Read `.specify/memory/constitution.md` first. The roadmap is in `docs/roadmap.md`.
 
@@ -16,7 +16,7 @@ Read `.specify/memory/constitution.md` first. The roadmap is in `docs/roadmap.md
 - `swift test --package-path Packages/MemorriCore`
 - `scripts/create-signing-certificate.sh` (once per Mac) and `scripts/check-signing-identity.sh` (runs before every build)
 - `/usr/bin/log stream --predicate 'subsystem == "com.aletc1.memorri"'` to watch the app's log (use the full path; zsh has its own `log`)
-- `swift run --package-path Packages/MemorriCore memorri-eval run` scores the pipeline on `eval/golden` (needs Ollama; refuses while the app's queue is busy, `--allow-busy` overrides). Also `generate-synthetic`, `compare <a.json> <b.json>` and `sweep-size`.
+- `swift run --package-path Packages/MemorriCore memorri-eval run` scores the pipeline on `eval/golden` (needs Ollama; refuses while the app's queue is busy, `--allow-busy` overrides). Also `generate-synthetic`, `generate-sequences`, `reconcile [--models off|on]` (scores item matching on `eval/golden/synthetic-sequences`, no vision model needed), `run --reconcile` (analyses twice and counts items), `compare <a.json> <b.json>` and `sweep-size`.
 - Debug builds only: `Memorri --ingest-picture <png> [--ingest-windows <json>]` and `--ingest-case <golden case folder>` store a synthetic picture as a capture and queue its analysis.
 
 ## Workflow (Spec Kit)

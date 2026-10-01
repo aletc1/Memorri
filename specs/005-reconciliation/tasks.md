@@ -143,7 +143,7 @@ description: "Task list for spec 005: turn findings into one list of items witho
 - [x] T047 [US5] Add the `.items` window id (title `Memorri Items`, resizable, default 900 × 600, size remembered like Settings) to `App/Windows/WindowCoordinator.swift` and an `Items…` button above `Inbox` in `App/MenuContent.swift`
 - [x] T048 [US5] Create `App/Windows/ItemsView.swift` and `App/Windows/ItemDetailView.swift` per `contracts/ui-contract.md`: filter bar, multi-select list with badges, toolbar (`Merge`, `Dismiss` / `Restore`, `Undo last`), empty state text, header with editable title, `Fields` with source and lock, `Sightings` with checkboxes and `Split into new item`, `Other titles`, `Possible duplicates` with `Merge` and `Different`, `History` with per-op `Undo`, the lock-choice sheet, inline error messages; actions run off the main actor and the list updates from `observeItems()`; accessibility labels on every control
 - [x] T049 [US5] Add the `Matching models` group (`Meaning (embeddings)` and `Same-event judge (reranker)` pickers listing installed models plus `None`, with the note from `contracts/ui-contract.md`) to `App/Windows/OllamaSettingsView.swift`, saved in `OllamaSettings`; rebuilding the judge on change in `AppEnvironment`
-- [ ] T050 [US5] Build with `xcodegen generate` and `xcodebuild -scheme Memorri -configuration Debug -derivedDataPath .build/xcode build`; the build has no warnings; the Release build still has no debug ingest switches
+- [x] T050 [US5] Build with `xcodegen generate` and `xcodebuild -scheme Memorri -configuration Debug -derivedDataPath .build/xcode build`; the build has no warnings; the Release build still has no debug ingest switches
 
 **Checkpoint**: the app lists and repairs items; the eval measures matching.
 

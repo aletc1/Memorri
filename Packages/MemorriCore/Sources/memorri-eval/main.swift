@@ -127,7 +127,8 @@ func run(_ options: RunOptions) async -> Int32 {
             let first = analyser.findings
             _ = try await runner.run(cases: cases, only: options.only, replay: nil, allowBusy: true, progress: { print("second pass: " + $0) })
             let judge = await makeJudge(address: options.address, embeddingModel: nil, rerankerModel: nil)
-            let again = try await ReconcileRunner(judge: judge, modelsOn: true).reanalysis(first: first, second: analyser.findings, progress: { print($0) })
+            let expected = cases.reduce(0) { $0 + $1.expected.findings.count }
+            let again = try await ReconcileRunner(judge: judge, modelsOn: true).reanalysis(first: first, second: analyser.findings, expectedEvents: expected, progress: { print($0) })
             print(again.text)
         }
         if report.cases.allSatisfy({ $0.foundKind == "failed" }) {
