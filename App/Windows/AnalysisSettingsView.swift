@@ -190,6 +190,7 @@ private struct ContextsBlock: View {
             }
             Button { add() } label: { Label("Add context", systemImage: "plus") }.disabled(environment.contexts == nil)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear(perform: reload)
     }
 
@@ -258,6 +259,7 @@ private struct ContextEditor: View {
                     .gridCellColumns(2)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Recognise its pictures by").font(.subheadline).foregroundStyle(.secondary)
                 ForEach($hints) { $hint in
@@ -278,6 +280,7 @@ private struct ContextEditor: View {
             }
             if let message { Text(message).foregroundStyle(.red).font(.callout) }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.07)))
         .onChange(of: focused) { old, new in if old != nil, old != new { save() } }
