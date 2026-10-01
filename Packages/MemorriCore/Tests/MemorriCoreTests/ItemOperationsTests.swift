@@ -66,7 +66,8 @@ import Testing
         let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
         let id = try await oneItem(fixture)
         let ops = operations(fixture)
-        let bad: [(ItemField, JSONValue)] = [(.title, .int(3)), (.title, .string("   ")), (.start, .string("tomorrow")), (.start, .null),
+        let bad: [(ItemField, JSONValue)] = [(.title, .int(3)), (.title, .null), (.start, .string("tomorrow")), (.start, .null), (.end, .string("soon")),
+                                             (.due, .bool(true)), (.remind, .int(1)), (.people, .null), (.allDay, .null),
                                              (.allDay, .string("yes")), (.people, .string("Anna")), (.place, .bool(true))]
         for (field, value) in bad {
             #expect(throws: ItemOperationError.invalidValue) { try ops.edit(id, field: field, value: value) }
@@ -135,5 +136,120 @@ import Testing
         try ops.dismiss(id)
         #expect(throws: ItemOperationError.wrongStatus) { try ops.dismiss(id) }
         #expect(try fixture.count("reconcile_ops") == 1)
+    }
+
+    // MARK: validation and approving edits (spec 006, US3)
+
+    @Test func aBlankTitleIsRefusedWithItsOwnError() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)
+        for blank in ["", "   ", "\n\t"] {
+            #expect(throws: ItemOperationError.emptyTitle) { try operations(fixture).edit(id, field: .title, value: .string(blank)) }
+        }
+        #expect(try fixture.count("field_locks") == 0 && fixture.count("reconcile_ops") == 0)
+    }
+
+    @Test func aTitleIsStoredTrimmed() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)
+        try operations(fixture).edit(id, field: .title, value: .string("  My standup \n"))
+        #expect(try item(fixture, id).title == "My standup")
+    }
+
+    @Test func aStartAfterTheEndOrAnEndBeforeTheStartIsRefusedWhicheverIsEdited() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)                         // 09:00 to 10:00
+        let ops = operations(fixture)
+        #expect(throws: ItemOperationError.startAfterEnd) { try ops.edit(id, field: .start, value: .date(ReconcileFixture.minutes(61))) }
+        #expect(throws: ItemOperationError.startAfterEnd) { try ops.edit(id, field: .end, value: .date(ReconcileFixture.minutes(-1))) }
+        #expect(try fixture.count("field_locks") == 0 && fixture.count("reconcile_ops") == 0)
+        #expect(try item(fixture, id).start == ReconcileFixture.nine && item(fixture, id).end == ReconcileFixture.minutes(60))
+    }
+
+    @Test func aStartEqualToTheEndIsAccepted() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)
+        try operations(fixture).edit(id, field: .start, value: .date(ReconcileFixture.minutes(60)))
+        #expect(try item(fixture, id).start == item(fixture, id).end)
+    }
+
+    @Test func peopleAreTrimmedAndDeDuplicated() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)
+        try operations(fixture).edit(id, field: .people, value: .array([.string(" Anna "), .string("anna"), .string(""), .string("Ben"), .string("  ")]))
+        #expect(try item(fixture, id).people == ["Anna", "Ben"])
+    }
+
+    @Test func nullClearsAnOptionalFieldAsALockedEmptyValue() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)                         // has a place and a guessed end
+        let ops = operations(fixture)
+        try ops.edit(id, field: .place, value: .null)
+        try ops.edit(id, field: .end, value: .null)
+        try ops.edit(id, field: .notes, value: .null)
+        try ops.edit(id, field: .due, value: .null)
+        try ops.edit(id, field: .remind, value: .null)
+        let after = try item(fixture, id)
+        #expect(after.place == nil && after.end == nil && after.notes == nil && after.due == nil && after.remind == nil)
+        #expect(try fixture.count("field_locks") == 5)
+        let detail = try ItemStore(database: fixture.database).detail(itemID: id)
+        let place = try #require(detail.fields.first { $0.field == .place })
+        #expect(place.locked && (place.current == nil))
+        // a later sighting showing the old place does not bring it back
+        _ = await Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+            .reconcile(imageID: fixture.base.imageID)
+        #expect(try item(fixture, id).place == nil && item(fixture, id).end == nil)
+    }
+
+    @Test func anEditApprovesTheItemInTheSameTransaction() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)                         // a guessed end: needs review
+        #expect(try item(fixture, id).needsReview)
+        try operations(fixture).edit(id, field: .place, value: .string("Room 9"))
+        let after = try item(fixture, id)
+        #expect(after.approvedAt != nil && !after.needsReview && after.reviewReasons.isEmpty)
+        let stored = try fixture.read { try Date.fetchOne($0, sql: "SELECT approved_at FROM items WHERE id = ?", arguments: [id]) }
+        #expect(after.approvedAt == stored)
+        let snapshot = try #require(ReviewRules.decode(try fixture.read { try String.fetchOne($0, sql: "SELECT approved_values_json FROM items WHERE id = ?", arguments: [id]) }))
+        #expect(snapshot == ReviewRules.snapshot(of: after))
+        // one operation, not two
+        #expect(try fixture.count("reconcile_ops") == 1)
+    }
+
+    @Test func oneUndoRestoresTheFieldItsLockAndTheApprovalTogether() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)
+        let before = try fixture.snapshot()
+        let edit = try operations(fixture).edit(id, field: .place, value: .string("Room 9"))
+        #expect(try fixture.snapshot() != before)
+        let result = try await operations(fixture).undo(edit)
+        if case .undone = result {} else { Issue.record("expected the undo to work, got \(result)") }
+        #expect(ReconcileFixture.difference(try fixture.snapshot(), before) == "")
+        #expect(try item(fixture, id).approvedAt == nil && item(fixture, id).needsReview && item(fixture, id).place == "Room 4")
+    }
+
+    @Test func twoEditsInARowAreUndoneOneAtATime() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)
+        let ops = operations(fixture)
+        let first = try ops.edit(id, field: .place, value: .string("Room 9"))
+        let afterFirst = try fixture.snapshot()
+        let second = try ops.edit(id, field: .place, value: .string("Room 10"))
+        _ = try await ops.undo(second)
+        #expect(ReconcileFixture.difference(try fixture.snapshot(), afterFirst) == "")
+        #expect(try item(fixture, id).place == "Room 9")
+        _ = try await ops.undo(first)
+        #expect(try item(fixture, id).place == "Room 4" && item(fixture, id).approvedAt == nil)
+    }
+
+    @Test func anEditConfirmedBetweenPlanAndApplyKeepsTheUsersValue() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let id = try await oneItem(fixture)
+        let reconciler = Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+        let plan = try await reconciler.plan(imageID: fixture.base.imageID)
+        try operations(fixture).edit(id, field: .place, value: .string("Room 9"))       // confirmed while the plan waits
+        _ = try reconciler.apply(plan)
+        #expect(try item(fixture, id).place == "Room 9")
+        #expect(try fixture.count("field_locks") == 1)
     }
 }

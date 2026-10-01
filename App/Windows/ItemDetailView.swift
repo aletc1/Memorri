@@ -5,7 +5,6 @@ import SwiftUI
 struct ItemDetailView: View {
     let model: ItemsViewModel
     let detail: ItemDetail
-    @State private var titleDraft: String
     @State private var checked: Set<String> = []
     @State private var showAll = false
     @State private var wholeCapture: EvidenceEntry?
@@ -13,7 +12,6 @@ struct ItemDetailView: View {
     init(model: ItemsViewModel, detail: ItemDetail) {
         self.model = model
         self.detail = detail
-        _titleDraft = State(initialValue: detail.item.title)
     }
 
     var body: some View {
@@ -34,10 +32,7 @@ struct ItemDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            TextField("Title", text: $titleDraft)
-                .textFieldStyle(.roundedBorder).font(.title3)
-                .onSubmit { Task { await model.editTitle(titleDraft) } }
-                .accessibilityLabel("Title. Press Return to save.")
+            Text(detail.item.title).font(.title3).fontWeight(.semibold).textSelection(.enabled)
             Text("\(detail.item.kind.rawValue.capitalized) · \(ItemListModel.dateText(detail.item)) · \(model.contextName(detail.item.contextID) ?? "No context") · \(detail.item.status.rawValue.capitalized)")
                 .font(.callout).foregroundStyle(.secondary)
             HStack(spacing: 8) {
@@ -58,22 +53,10 @@ struct ItemDetailView: View {
     // MARK: Fields
 
     private var fields: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Fields").font(.headline)
-            ForEach(detail.fields, id: \.field) { field in
-                let text = ItemListModel.fieldText(field, timezone: detail.item.timezone)
-                HStack(alignment: .firstTextBaseline) {
-                    Text(field.field.rawValue.replacingOccurrences(of: "_", with: " ")).foregroundStyle(.secondary).frame(width: 80, alignment: .leading)
-                    Text(text.value).textSelection(.enabled)
-                    Spacer()
-                    if let source = text.source { Text(source).font(.caption).foregroundStyle(.secondary) }
-                    if field.locked {
-                        Button { Task { await model.unlock(field.field) } } label: { Image(systemName: "lock.fill") }
-                            .buttonStyle(.borderless)
-                            .help("Unlock: let new sightings change this value")
-                            .accessibilityLabel("Unlock \(field.field.rawValue)")
-                    }
-                }
+            ForEach(ItemField.allCases, id: \.self) { field in
+                FieldRowView(model: model, item: detail.item, field: field, history: detail.fields.first { $0.field == field })
             }
         }
     }

@@ -82,6 +82,19 @@ public struct EvidenceEntry: Sendable, Equatable, Identifiable {
     public var displayName: String? { sighting?.displayName ?? evidence?.displayName }
 }
 
+/// Why an edit typed into a field was not accepted (spec 006, FR-007). The message goes under the field.
+public enum EditError: Error, Equatable {
+    case invalidDate, emptyTitle, invalidValue
+
+    public var message: String {
+        switch self {
+        case .invalidDate: "Enter a date and time like 2026-10-14 09:00 (or a date like 2026-10-14)."
+        case .emptyTitle: "The title cannot be empty."
+        case .invalidValue: "That value is not valid."
+        }
+    }
+}
+
 /// The logic of the Items window, kept out of the views so it can be tested (spec 005, US5).
 public enum ItemListModel {
     public enum StatusAction: Sendable, Equatable { case dismiss, restore }
@@ -271,6 +284,57 @@ public enum ItemListModel {
         case "approve": "Approved"
         case "undo": "Undone"
         default: kind
+        }
+    }
+
+    // MARK: Editing (spec 006)
+
+    private static func editFormatter(_ format: String, timezone: String) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: timezone) ?? TimeZone(identifier: "UTC")
+        formatter.isLenient = false
+        formatter.dateFormat = format
+        return formatter
+    }
+
+    /// Turns what the user typed into the value `ItemOperations.edit` takes. Dates are read in the item's own zone; an empty text clears an
+    /// optional field.
+    public static func parse(_ text: String, field: ItemField, timezone: String) -> Result<JSONValue, EditError> {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch field {
+        case .title: return trimmed.isEmpty ? .failure(.emptyTitle) : .success(.string(trimmed))
+        case .place, .notes: return .success(trimmed.isEmpty ? .null : .string(trimmed))
+        case .people:
+            var seen: Set<String> = []
+            let names = trimmed.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { name in
+                !name.isEmpty && seen.insert(name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)).inserted
+            }
+            return .success(.array(names.map(JSONValue.string)))
+        case .allDay:
+            switch trimmed.lowercased() {
+            case "yes", "true", "1": return .success(.bool(true))
+            case "no", "false", "0": return .success(.bool(false))
+            default: return .failure(.invalidValue)
+            }
+        case .start, .end, .due, .remind:
+            if trimmed.isEmpty { return field == .start ? .failure(.invalidDate) : .success(.null) }
+            for format in ["yyyy-MM-dd HH:mm", "yyyy-MM-dd"] {
+                if let date = editFormatter(format, timezone: timezone).date(from: trimmed) { return .success(.date(date)) }
+            }
+            return .failure(.invalidDate)
+        }
+    }
+
+    /// The text an editor starts with: what `parse` reads back (`2026-10-14 09:00` in the item's zone, names joined by commas).
+    public static func editText(_ value: JSONValue?, field: ItemField, timezone: String) -> String {
+        guard let value, value != .null else { return "" }
+        switch field {
+        case .start, .end, .due, .remind:
+            return value.asDate.map { editFormatter("yyyy-MM-dd HH:mm", timezone: timezone).string(from: $0) } ?? ""
+        case .people: return (value.asStrings ?? []).joined(separator: ", ")
+        case .allDay: return value.asBool == true ? "yes" : "no"
+        case .title, .place, .notes: return value.asString ?? ""
         }
     }
 

@@ -28,3 +28,12 @@ Debug build compiled with no warnings. Scenarios 4 and 5 were **not driven in th
 - **4 Inbox**, covered by tests instead: `ReviewStateTests` (a guessed end puts a 0.9-confidence item in the Inbox; the count equals the rows needing review, per context; dismiss, restore, mark different, merge, split, undo and a re-analysis keep the columns right), `ApproveTests` (approve, undo of approve restores the Inbox state exactly), `ItemListModelTests` (Inbox scope newest first, Approve offered only when every selected item needs review, empty text). The menu count belongs to US4.
 - **5 Changed after approval**, covered by `ApproveTests.aLaterSightingThatChangesAnUnlockedApprovedValueReturnsTheItemToTheInbox` (reason `changed-after-approval`, unlocked value still updates, approval kept) and `aLaterSightingDoesNotChangeALockedFieldOrBringTheItemBack`.
 - Known gap: look at the Inbox scope control, the reason labels, Approve, Return and ⌫ by hand once.
+
+### US3: inline editing (2026-10-01)
+
+Debug build compiled with no code warnings (the only build message is Xcode's "Metadata extraction skipped, no AppIntents.framework dependency found"). Scenario 6 was **not driven in the app**, for the reason given under US2 (the user's own copy owns the running instance and the real data folder; typing into the app cannot be automated either). The typing paths are covered by tests:
+
+- `ItemOperationsTests`: blank title (`emptyTitle`), start after end and end before start (`startAfterEnd`), equal start and end accepted, people trimmed and de-duplicated, `null` clears place, notes, end, due and reminder as a locked empty value that later sightings do not refill, the edit approves in the same transaction, one Undo restores field, lock and approval together, two edits undo one at a time, an edit confirmed between plan and apply keeps the user's value.
+- `ItemListModelTests`: `parse` in the item's own zone, invalid dates, clearing, people, all-day, and `editText` round-trips through `parse`.
+- `EditLockTests`: edited start, place, people and notes survive a later capture showing the old values and stay locked; the other values stay visible as observations; Unlock gives the sightings' value back and `fieldText` says where it comes from.
+- Known gap: use the editors by hand once (date pickers in a zone other than the Mac's, Return/Esc, the red message).

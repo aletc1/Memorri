@@ -21,8 +21,9 @@ public enum FieldResolver {
         }, uniquingKeysWith: { first, _ in first })
 
         for field in ItemField.allCases {
-            if let lock = locks[field], let observation = byID[lock], observation.value != .null {
-                result.values[field] = observation.value
+            if let lock = locks[field], let observation = byID[lock] {
+                // A locked empty value is the user clearing the field: nothing is chosen, and the sightings cannot fill it again.
+                if observation.value != .null { result.values[field] = observation.value }
                 result.chosen[field] = observation.id
                 continue
             }

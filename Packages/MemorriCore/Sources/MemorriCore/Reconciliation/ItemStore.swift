@@ -270,6 +270,16 @@ public struct ItemStore: Sendable {
             """, arguments: StatementArguments(Array(values(for: item).dropFirst()) + [date, item.id]))
     }
 
+    /// Marks the item approved as it reads now: the time, the values it vouches for, and the review state that follows from it.
+    static func approve(_ db: Database, itemID: String, at date: Date) throws {
+        guard var item = try Self.item(db, id: itemID) else { return }
+        item.approvedAt = date
+        item.userTouched = true
+        try update(db, item, at: date)
+        try setApprovalValues(db, itemID: itemID, ReviewRules.snapshot(of: item))
+        try recompute(db, itemID: itemID, at: date)
+    }
+
     /// The values an approval vouches for (`approved_values_json`); `update` does not write them.
     static func setApprovalValues(_ db: Database, itemID: String, _ values: [ItemField: JSONValue]?) throws {
         try db.execute(sql: "UPDATE items SET approved_values_json = ? WHERE id = ?", arguments: [values.map(ReviewRules.encode), itemID])

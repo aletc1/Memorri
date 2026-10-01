@@ -263,4 +263,64 @@ import Testing
         #expect(ItemListModel.undoTarget(in: ops)?.id == "2")
         #expect(ItemListModel.operationText("approve") == "Approved")
     }
+
+    // MARK: parsing an edit (spec 006, US3)
+
+    private func parsed(_ text: String, _ field: ItemField, zone: String = "Europe/Madrid") -> JSONValue? {
+        if case .success(let value) = ItemListModel.parse(text, field: field, timezone: zone) { value } else { nil }
+    }
+    private func failure(_ text: String, _ field: ItemField, zone: String = "Europe/Madrid") -> EditError? {
+        if case .failure(let error) = ItemListModel.parse(text, field: field, timezone: zone) { error } else { nil }
+    }
+
+    @Test func datesAreReadInTheItemsOwnZone() {
+        // 09:00 in Madrid in October (UTC+2) is 07:00 UTC; the same wall clock in New York (UTC-4) is 13:00 UTC.
+        #expect(parsed("2026-10-14 09:00", .start) == .date(ReconcileFixture.nine))
+        #expect(parsed("2026-10-14 09:00", .start, zone: "America/New_York") == .date(ReconcileFixture.nine.addingTimeInterval(6 * 3600)))
+        #expect(parsed("  2026-10-14 09:00 ", .end) == .date(ReconcileFixture.nine))
+        #expect(parsed("2026-10-14", .due) == .date(ReconcileFixture.nine.addingTimeInterval(-9 * 3600)))
+    }
+
+    @Test func anInvalidDateIsRefusedWithAMessage() {
+        for text in ["tomorrow", "2026-13-40 09:00", "09:00", "2026-10-14 25:00"] {
+            #expect(failure(text, .start) == .invalidDate)
+        }
+        #expect(failure("", .start) == .invalidDate)               // a start cannot be cleared
+        #expect(!EditError.invalidDate.message.isEmpty && EditError.invalidDate.message.contains("2026-10-14 09:00"))
+    }
+
+    @Test func anEmptyOptionalFieldMeansClear() {
+        for field in [ItemField.end, .due, .remind, .place, .notes] { #expect(parsed("  ", field) == .null) }
+        #expect(parsed("", .people) == .array([]))
+    }
+
+    @Test func titlePlaceAndNotesAreTrimmedAndATitleCannotBeEmpty() {
+        #expect(parsed("  Standup \n", .title) == .string("Standup"))
+        #expect(parsed(" Room 4 ", .place) == .string("Room 4"))
+        #expect(parsed("line one\nline two  ", .notes) == .string("line one\nline two"))
+        #expect(failure("   ", .title) == .emptyTitle)
+        #expect(EditError.emptyTitle.message == "The title cannot be empty.")
+    }
+
+    @Test func peopleAreSplitOnCommasTrimmedAndDeDuplicated() {
+        #expect(parsed("Anna, Ben ,, anna,  ", .people) == .array([.string("Anna"), .string("Ben")]))
+    }
+
+    @Test func theAllDayFlagIsReadAsYesOrNo() {
+        #expect(parsed("yes", .allDay) == .bool(true) && parsed("No", .allDay) == .bool(false))
+        #expect(failure("maybe", .allDay) == .invalidValue)
+    }
+
+    @Test func theEditorsInitialTextRoundTripsThroughParse() {
+        let zone = "Europe/Madrid"
+        let cases: [(ItemField, JSONValue)] = [(.title, .string("Standup")), (.start, .date(ReconcileFixture.nine)), (.end, .date(ReconcileFixture.minutes(90))),
+                                               (.due, .date(ReconcileFixture.minutes(600))), (.people, .array([.string("Anna"), .string("Ben")])),
+                                               (.place, .string("Room 4")), (.notes, .string("agenda"))]
+        for (field, value) in cases {
+            let text = ItemListModel.editText(value, field: field, timezone: zone)
+            #expect(parsed(text, field, zone: zone) == value, "\(field)")
+        }
+        #expect(ItemListModel.editText(nil, field: .place, timezone: zone) == "" && ItemListModel.editText(.null, field: .end, timezone: zone) == "")
+        #expect(ItemListModel.editText(.date(ReconcileFixture.nine), field: .start, timezone: zone) == "2026-10-14 09:00")
+    }
 }

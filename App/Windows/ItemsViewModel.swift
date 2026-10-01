@@ -207,10 +207,25 @@ final class ItemsViewModel {
         await refresh()
     }
 
-    func editTitle(_ text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let item = detail?.item, !trimmed.isEmpty, trimmed != item.title else { return }
-        await run { _ = try $0.edit(item.id, field: .title, value: .string(trimmed)) }
+    /// Sets a field of the open item to the user's value. Returns why it was refused, to show next to the field, or nil when it was saved.
+    func edit(field: ItemField, value: JSONValue) async -> String? {
+        guard let id = detail?.item.id, let operations = environment.itemOperations else { return "Editing is not available right now." }
+        do {
+            try await Task.detached { _ = try operations.edit(id, field: field, value: value) }.value
+        } catch {
+            return Self.text(for: error)
+        }
+        await refresh()
+        return nil
+    }
+
+    /// The same for text the user typed: it is read in the item's zone first.
+    func edit(field: ItemField, text: String) async -> String? {
+        guard let zone = detail?.item.timezone else { return nil }
+        switch ItemListModel.parse(text, field: field, timezone: zone) {
+        case .failure(let failure): return failure.message
+        case .success(let value): return await edit(field: field, value: value)
+        }
     }
 
     func unlock(_ field: ItemField) async {
@@ -247,6 +262,8 @@ final class ItemsViewModel {
         case .notLocked?: "That field is not locked."
         case .wrongStatus?: "That is not possible in the item's current state."
         case .invalidValue?: "That value is not valid."
+        case .startAfterEnd?: "The start cannot be after the end."
+        case .emptyTitle?: "The title cannot be empty."
         case .invalidSightings?: "Check at least one sighting and leave at least one unchecked."
         case .sameItem?: "Select two different items."
         case .noReconciler?: "Matching is not available right now."
