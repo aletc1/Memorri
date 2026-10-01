@@ -7,6 +7,8 @@ struct EvidenceCardView: View {
     let entry: EvidenceEntry
     let model: ItemsViewModel
     let isChecked: Binding<Bool>?
+    /// This sighting gave the item's current title (FR-005).
+    var isTitleSource = false
     let onShowWhole: () -> Void
     @State private var cutOut: CGImage?
     @State private var loaded = false
@@ -23,6 +25,9 @@ struct EvidenceCardView: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 cutOutView
+                if isTitleSource {
+                    Label("Source of the current title", systemImage: "checkmark.seal").font(.caption).foregroundStyle(.green)
+                }
                 Text(when)
                 Text(details).font(.callout).foregroundStyle(.secondary)
                 if let sighting = entry.sighting {

@@ -65,3 +65,13 @@ extension ItemStore {
 ## List model
 
 `ItemKindFilter` gains `.reminders` (and `.tasks` means task and deadline). `ItemFilter` gains `scope: .all | .inbox`. `ItemListModel` gains `reviewText(_ reasons:) -> [String]`, `approvalText(_ item:) -> String` (`Needs review`, `Approved`, `Approved by you`), and `parse(_ text: String, field: ItemField, timezone: String) -> Result<JSONValue, EditError>` for the editors.
+
+## As built (differences from the plan above)
+
+- `ReviewReason` is declared in `Reconciliation/Item.swift`. `ReviewRules` also has `approvedFields`, `snapshot(of:)` (what an approval stores and what a later state is compared with) and the stored form of a snapshot. An item with an approval snapshot is judged only on `changed-after-approval`: the approval covers the doubts that were there. Dismissed and merged items never need review.
+- `ItemStore`: `items(status:kinds:contextID:review:)` and `observeItems(...review:)` take a review filter; `reviewCount(contextID:)` defaults to every context. Internal: `refreshReview` (review columns only, used by migration `v6-review`), `approve`, `setApprovalValues`, `clearApproval`, `recomputeReview`.
+- Migration `v6-review` follows `v6` and computes the review columns of existing items; `v6` itself only changes the schema.
+- `OperationKind.approve`; `ItemState` has optional `approvedAt` and `approvedValues`.
+- `ItemOperations.edit`: a blank title throws `emptyTitle`, a start after the end (or an end before the start) throws `startAfterEnd`; `null` clears `end`, `due`, `remind`, `place` and `notes` as a locked empty value (`FieldResolver` treats a locked `null` as "cleared"); a start, title, all-day flag and people list always have a value; title and people are normalised; the edit approves in the same operation.
+- `ItemFilter(kind:context:scope:showDismissed:)` with `ItemScope` (`.all`, `.inbox`, `.approved`); `ItemKindFilter` is `all`, `appointments`, `tasks` (task and deadline), `reminders` and has `kinds`.
+- `ItemListModel` also has `inboxCount`, `emptyText(scope:)`, `canApprove`, `editText`, `EditError` (with `message`), `provenance(_:timezone:)` and `sourceSightingID(_:)` (FR-005). `editText` (not `valueText`) is the text an editor starts with and round-trips through `parse`.

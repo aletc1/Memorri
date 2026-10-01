@@ -375,4 +375,32 @@ import Testing
         }
         #expect(try store.reviewCount() == 3)
     }
+
+    // MARK: provenance (spec 006, FR-005)
+
+    private func history(_ entries: [(String, JSONValue, ObservationSource, String?, TimeInterval)], chosen: String?, locked: Bool = false) -> FieldHistory {
+        FieldHistory(field: .place, current: nil, chosenObservationID: chosen, locked: locked,
+                     entries: entries.map { FieldHistory.Entry(observationID: $0.0, value: $0.1, source: $0.2, confidence: 0.8,
+                                                                observedAt: Date(timeIntervalSince1970: 1_791_961_200 + $0.4), sightingID: $0.3, imageID: nil, citedLines: []) })
+    }
+
+    @Test func everyValueBehindAFieldIsListedWithItsSourceAndTheCurrentOneMarked() {
+        let field = history([("c", .string("Room 4"), .read, "s2", 7200), ("b", .string("Room 9"), .user, nil, 3600), ("a", .string("Room 3"), .inferred, "s1", 0)],
+                            chosen: "b", locked: true)
+        let rows = ItemListModel.provenance(field, timezone: "UTC")
+        #expect(rows.map(\.value) == ["Room 4", "Room 9", "Room 3"])
+        #expect(rows.map(\.source) == ["read", "you", "guessed"])
+        #expect(rows.map(\.isCurrent) == [false, true, false])
+        #expect(rows.map(\.confidence) == ["0.80", nil, "0.80"])
+        #expect(rows[1].when == "Wed 14 Oct 08:00")
+    }
+
+    @Test func theSightingBehindTheCurrentValueIsKnownUnlessTheUserSetIt() {
+        let seen = history([("a", .string("Room 4"), .read, "s1", 0), ("b", .string("Room 9"), .read, "s2", 3600)], chosen: "b")
+        #expect(ItemListModel.sourceSightingID(seen) == "s2")
+        let set = history([("a", .string("Room 4"), .read, "s1", 0), ("u", .string("Room 9"), .user, nil, 3600)], chosen: "u", locked: true)
+        #expect(ItemListModel.sourceSightingID(set) == nil)
+        #expect(ItemListModel.sourceSightingID(nil) == nil)
+        #expect(ItemListModel.sourceSightingID(history([], chosen: nil)) == nil)
+    }
 }

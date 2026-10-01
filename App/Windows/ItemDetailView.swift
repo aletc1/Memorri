@@ -74,6 +74,7 @@ struct ItemDetailView: View {
                                      Binding(get: { checked.contains(sighting.id) },
                                              set: { if $0 { checked.insert(sighting.id) } else { checked.remove(sighting.id) } })
                                  },
+                                 isTitleSource: entry.sighting?.id == ItemListModel.sourceSightingID(detail.fields.first { $0.field == .title }),
                                  onShowWhole: { wholeCapture = entry })
             }
             if let more = visible.moreText {

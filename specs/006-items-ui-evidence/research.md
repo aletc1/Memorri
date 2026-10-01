@@ -50,3 +50,24 @@ Decisions for [plan.md](plan.md). Each has a decision, the reason and what else 
 ## R9. Detail size
 
 - **Decision**: 5 newest sightings with cut-outs, then `Show all N sightings` (clarification 5); cut-outs are loaded asynchronously and cached in memory per window (NSCache, 100 images).
+
+## Results (2026-10-01)
+
+Measured with `swift test --package-path Packages/MemorriCore` (1,057 tests) and the Debug and Release builds. The app itself was only driven for US1 (see `quickstart.md`); everything else rests on tests, because a copy of Memorri running on the user's real data owned the single-instance guard and nothing may touch real data.
+
+| Criterion | Evidence | Status |
+|---|---|---|
+| SC-001 cut-out holds every cited line, nothing beyond a margin | `EvidenceGeometryTests` (every box inside, margin, clamping), `EvidenceWriterTests` (cited lines inside, uncited ones outside) on drawn pictures | Met on drawn pictures; not run on real model output |
+| SC-002 source of the current title in two actions | Select the item (1), the card with the cut-out and `Source of the current title` is in the detail (2); seen in the app for US1 (cut-out), the title mark came later and is not seen on screen | Met when the source is among the 5 newest sightings; otherwise `Show all N sightings` makes it three. Known gap |
+| SC-003 Inbox lists exactly the doubtful items; menu count equals list | `ReviewStateTests`, `ItemListModelTests` (scope, count equals list and equals `reviewCount` per context), `ItemStoreTests` (observed count) | Met in the states tested; the menu and the list were not compared on screen; not run through the real model on the synthetic set |
+| SC-004 clear ten Inbox items in under two minutes | Not timed by hand | Not measured |
+| SC-005 edits survive later captures; unlock restores | `EditLockTests`, `ItemOperationsTests` (cleared fields stay cleared, edit between plan and apply) | Met in the cases tested |
+| SC-006 undo restores item, fields, locks and approval exactly | `ApproveTests`, `ItemOperationsTests` (edit undo with snapshot equality), `UndoTests` (edit, unlock, dismiss, restore, merge; the snapshot now includes the review columns), `ReviewStateTests` (approve, merge, mark different) | Met in the cases tested |
+| SC-007 5,000 items, 20,000 sightings: item with cut-outs under 1 s, Inbox under 0.5 s | `EvidenceScaleTests`, best of three: 1.6 ms (rows and five cut-outs; decoding is lazy and happens off the main actor in the view), 46 ms (Inbox query with 1,000 items waiting, plus count) | Met |
+| SC-008 rejected edits keep the stored value and show a message beside the field | `ItemOperationsTests` (blank title, start after end, invalid values change nothing and write no operation), `ItemListModelTests` (messages of `parse`) | Met in the core; the red message beside the field is view code that was not seen on screen |
+
+Known gaps, plainly:
+- The Items window was not driven after US1: Inbox scope, Approve, Return and ⌫, the field editors, the title mark, the values-behind disclosure, the kind control and the menu's `Inbox (N)` have only been compiled and tested at the core. Each needs a look by hand.
+- `Show whole capture` has never been seen on screen.
+- The synthetic pictures were not re-run through the vision model for this spec, so the claims about how many real findings land in the Inbox are untested. Spec 005's finding stands: analysis precision (46 items for 44 events) is what limits the Inbox's usefulness.
+- `AnalysisQueueTests.tenJobsRunOneAtATimeOldestFirst` fails in roughly a third to a half of the full runs here and passes alone and in its own suite. It is in code this spec does not touch (the analysis queue's loop) and needs its own investigation.

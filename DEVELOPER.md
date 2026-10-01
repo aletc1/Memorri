@@ -63,6 +63,7 @@ Captures and the database live in `~/Library/Application Support/Memorri/` (mode
 ```text
 memorri.sqlite (+ -wal, -shm)        records (capture_events, capture_images, analysis_jobs, model_runs)
 captures/<yyyy-MM>/<eventID>/        full-resolution and analysis pictures (HEIC)
+evidence/<yyyy-MM>/<id>.heic         cut-outs of the cited lines, kept with their item (spec 006)
 staging/                             captures being written; emptied at every start
 ```
 
@@ -266,6 +267,15 @@ Matching findings into items (spec 005) is also measured. The thresholds are `Re
 3. Merge recall must not go down and wrong merges must not go up. `--min-merge-recall` and `--max-wrong-merge` make the command exit 3 outside the limits. The off-mode gate also runs in `swift test` (`ReconcileRunnerTests`).
 4. Changing a sequence case means changing `SyntheticSequences.swift` and running `memorri-eval generate-sequences`; `SyntheticSequencesTests` fails while the tracked folder and the generator disagree.
 5. `memorri-eval run --reconcile` analyses the synthetic pictures twice and reconciles both results; the second reading must create no item.
+
+### Evidence cut-outs and the Inbox
+
+Spec 006 (ADR 0021).
+
+- **Evidence**: after a capture is analysed and reconciled, `EvidenceWriter` cuts the union of each sighting's cited lines (plus a margin) from the full-size picture and saves it under `evidence/`. Rows are in the `evidence` table, tied to the item (`ON DELETE CASCADE`), so they outlive the capture; they go with the item, with a reanalysis of their picture and with "Delete everything". Launch and opening an item backfill older sightings. Inspect: `sqlite3 "$HOME/Library/Application Support/Memorri/memorri.sqlite" "select reason, count(*), sum(bytes) from evidence group by reason;"`. Cut-outs show your real screen, so look at them only on a prepared test screen. Log category `evidence`.
+- **Review state**: `items.needs_review` and `review_reasons_json` are computed by `ItemStore.recompute` through `ReviewRules` and read by the Inbox, the menu count (`ItemStore.reviewCount`) and spec 009. **Approved** means `status = 'active' AND needs_review = 0`. An approval (`ItemOperations.approve`, or any edit) stores `approved_at` and a snapshot in `approved_values_json`; after that only `changed-after-approval` can send the item back.
+- **Changing the review level**: it is the constant `ReviewRules.level` (0.75). After changing it, add a migration that calls `ItemStore.refreshReview(db, itemID:)` for every item that is not merged (see `v6-review` in `Storage/Migrations.swift`), so stored states match the new level. Never edit a migration that has shipped.
+- **A new path that changes `possible_duplicates`, a status, a lock or an approval** must call `ItemStore.recompute` for the items it touches (and for the other item of a duplicate pair), otherwise the Inbox count goes stale. `ReviewStateTests` has a case for each existing path.
 
 ## 9. Branches, commits and pull requests
 

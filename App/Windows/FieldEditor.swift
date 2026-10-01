@@ -15,6 +15,7 @@ struct FieldRowView: View {
     @State private var flag = false
     @State private var error: String?
     @State private var saving = false
+    @State private var showValues = false
 
     private var name: String { field == .remind ? "reminder" : field.rawValue.replacingOccurrences(of: "_", with: " ") }
     private var isDate: Bool { [.start, .end, .due, .remind].contains(field) }
@@ -23,10 +24,30 @@ struct FieldRowView: View {
     private var isEmpty: Bool { current == nil || current == .null || (field == .people && (current?.asStrings ?? []).isEmpty) }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(name.capitalized).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
-            if editing { editor } else { display }
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(name.capitalized).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
+                if editing { editor } else { display }
+            }
+            if showValues, !editing, let history { values(of: history) }
         }
+    }
+
+    /// Every value seen or set for the field, with the current one marked (FR-005).
+    private func values(of history: FieldHistory) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(ItemListModel.provenance(history, timezone: item.timezone)) { row in
+                HStack(spacing: 6) {
+                    Image(systemName: row.isCurrent ? "checkmark.circle.fill" : "circle").foregroundStyle(row.isCurrent ? Color.green : .secondary)
+                        .imageScale(.small).accessibilityLabel(row.isCurrent ? "Current value" : "Earlier value")
+                    Text(row.value).lineLimit(2)
+                    Text([row.source, row.confidence.map { "confidence \($0)" }, row.when].compactMap { $0 }.joined(separator: " · "))
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+            }
+        }
+        .padding(.leading, 92)
     }
 
     // MARK: Showing
@@ -43,6 +64,12 @@ struct FieldRowView: View {
                     .onTapGesture(count: 2) { begin() }
                 Spacer(minLength: 8)
                 if let source = text.source { Text(source).font(.caption).foregroundStyle(.secondary) }
+                if let history, history.entries.count > 1 || history.locked {
+                    Button { showValues.toggle() } label: { Image(systemName: showValues ? "chevron.up" : "chevron.down") }
+                        .buttonStyle(.borderless)
+                        .help(showValues ? "Hide the values behind it" : "Show the values behind it")
+                        .accessibilityLabel(showValues ? "Hide the values behind \(name)" : "Show the values behind \(name)")
+                }
                 if history?.locked == true {
                     Button { Task { await model.unlock(field) } } label: { Image(systemName: "lock.fill") }
                         .buttonStyle(.borderless)

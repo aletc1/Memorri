@@ -46,3 +46,9 @@ Existing rows: the migration computes `needs_review` for every item with the rul
 - **Merge**: the survivor's approval stays only when both items were approved; otherwise both approval columns are cleared.
 - **Split**: the new item has no approval.
 - **Files**: removed when their row is deleted (item removal, reanalysis, "Delete everything"); orphans removed at launch.
+
+## As built
+
+- Migration `"v6"` changes the schema; `"v6-review"` computes `needs_review` and `review_reasons_json` once for existing items (review columns only, nothing else is rebuilt).
+- An item with an approval snapshot is judged only on `changed-after-approval` (the approval covers earlier doubts). Merging two approved items takes a new snapshot of the joined item; merging with an unapproved one clears the approval. A possible duplicate whose other item is merged away does not count as open.
+- A locked `null` observation means the user cleared the field.

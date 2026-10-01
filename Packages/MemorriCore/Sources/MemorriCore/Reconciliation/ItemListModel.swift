@@ -107,6 +107,20 @@ public enum EditError: Error, Equatable {
     }
 }
 
+/// One value that was seen or set for a field, for the list of values behind the current one (spec 006, FR-005).
+public struct ProvenanceRow: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let value: String
+    /// `read`, `guessed` or `you`.
+    public let source: String
+    /// The sighting's confidence as text; nil for a value the user set.
+    public let confidence: String?
+    /// When it was seen or set, in the item's zone.
+    public let when: String
+    public let isCurrent: Bool
+    public let sightingID: String?
+}
+
 /// The logic of the Items window, kept out of the views so it can be tested (spec 005, US5).
 public enum ItemListModel {
     public enum StatusAction: Sendable, Equatable { case dismiss, restore }
@@ -271,6 +285,25 @@ public enum ItemListModel {
     public static func fieldText(_ field: FieldHistory, timezone: String) -> (value: String, source: String?) {
         let chosen = field.entries.first { $0.observationID == field.chosenObservationID } ?? field.entries.first
         return (valueText(field.current, field: field.field, timezone: timezone), chosen.map { sourceText($0.source) })
+    }
+
+    /// Every value seen or set for a field, newest first, with the one that is current marked (FR-005).
+    public static func provenance(_ field: FieldHistory, timezone: String) -> [ProvenanceRow] {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: timezone) ?? TimeZone(identifier: "UTC")
+        formatter.dateFormat = "EEE d MMM HH:mm"
+        return field.entries.map { entry in
+            ProvenanceRow(id: entry.observationID, value: valueText(entry.value, field: field.field, timezone: timezone), source: sourceText(entry.source),
+                          confidence: entry.sightingID == nil ? nil : String(format: "%.2f", entry.confidence), when: formatter.string(from: entry.observedAt),
+                          isCurrent: entry.observationID == field.chosenObservationID, sightingID: entry.sightingID)
+        }
+    }
+
+    /// The sighting the current value of a field came from; nil for a value the user set or a field with no value.
+    public static func sourceSightingID(_ field: FieldHistory?) -> String? {
+        guard let field, let chosen = field.chosenObservationID else { return nil }
+        return field.entries.first { $0.observationID == chosen }?.sightingID
     }
 
     /// Why a sighting joined its item or started a new one, from the stored decision: `text-time (text 1.00, time 1.00)`.

@@ -26,3 +26,11 @@ Adds `Evidence: <size>` under the pictures figure. The `Delete everything` confi
 
 ## Log lines (category `evidence`)
 - `evidence image=<id> written=<n> skipped=<n> ms=<n>`; `evidence backfill written=<n>`; `evidence failed image=<id> reason=<short>` (no text, no titles).
+
+## As built (differences from the plan above)
+
+- The scope control has three segments: `Items`, `Inbox (N)` and `Approved`. N is the number the Inbox lists with the current kind and context filters; the menu's `Inbox (N)` counts every context.
+- Rows show the reasons in orange under the line of context and sightings; there is no separate approval mark for approved items. Return approves and ⌫ dismisses only while the list has focus in the Inbox scope; after an approval the selection moves to the next item.
+- The title is edited in `Fields` like every other field (the header shows it as text). A field row shows a pencil (or a double-click on the value) and, when more than one value was seen or it is locked, a chevron that lists every value behind it with its source, confidence and time and marks the current one (FR-005). The evidence card of the sighting that gave the current title says `Source of the current title`.
+- Date fields use a date and time picker in the item's zone with `Save`, `Cancel` and, for optional fields, `Clear`; text fields use `parse`, so a rejected value shows its message under the field.
+- The window's `Kind` control is `All · Appointments · Tasks · Reminders`; `Tasks` includes deadlines.
