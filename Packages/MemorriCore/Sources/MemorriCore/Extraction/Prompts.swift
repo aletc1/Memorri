@@ -17,7 +17,7 @@ public enum ExtractionPrompts {
             + "Use empty strings for what you cannot tell."
     }
 
-    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v6" }
+    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v7" }
 
     private static func description(of kind: ScreenKind) -> String {
         switch kind {
@@ -85,6 +85,8 @@ public enum ExtractionPrompts {
             + "A sentence like \"Maria needs the budget figures by Friday 23 October\" is a task: title \"Budget figures\", "
             + "people [\"Maria\"], due_text \"Friday 23 October\". "
             + "A deadline is something due by a date: put the date in due_text, and a reminder time only if the text gives one. "
+            + "due_text, remind_text, date_text and start_text hold only a date or a time as written, never a sentence about what someone will do: "
+            + "when the text gives no date or time, leave them out. "
             + "Leave out every field that has nothing to say instead of writing an empty one."
             + hint(for: kind) + "\n\nLines:\n" + list
         return (prompt, capped)

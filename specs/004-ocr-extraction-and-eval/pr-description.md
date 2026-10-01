@@ -40,6 +40,7 @@ The last column re-scores the stored model answers without calling the model (`m
 ## Known gaps
 - SC-012's clause "a wrong tag is rarely reported with high confidence" is missed narrowly (2 in 27 against 1 in 20): visual tags reuse the classification's single confidence. Noted in `spec.md`.
 - The model adds a dateless task for polite requests in two cases, paraphrases a title in three, puts a message's sender in `people` in four; `language` is missing on pictures with few sentences.
+- Real-picture runs (a month view on a 3440 px display, a chat) were done by hand and are not in the golden set. On the month view 169 of 173 findings got a date before the last fix; the model still repeats a recurring entry for each day, extraction of a full month takes about 5 minutes (SC-008's 3 minutes is missed there), and a chat's dateless to-dos arrive as tasks with an unresolved date text.
 - Block heights were only verified on drawn pictures. The 2048 default was not compared with 3072 because the synthetic pictures are 1600 px wide.
 - `Packages/MemorriCore/Package.resolved`: Xcode adds a `keyboardshortcuts` pin when it builds the app and `swift build` removes it again, so it is not committed.
 
