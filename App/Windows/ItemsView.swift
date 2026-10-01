@@ -43,40 +43,46 @@ struct ItemsView: View {
 
     private func toolbar(model: ItemsViewModel) -> some View {
         @Bindable var model = model
-        return HStack(spacing: 12) {
-            Picker("Kind", selection: $model.filter.kind) {
-                Text("All").tag(ItemKindFilter.all)
-                Text("Appointments").tag(ItemKindFilter.appointments)
-                Text("Tasks & reminders").tag(ItemKindFilter.tasks)
-            }
-            .pickerStyle(.segmented).labelsHidden().frame(width: 300)
-            .accessibilityLabel("Kind filter")
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Picker("Kind", selection: $model.filter.kind) {
+                    Text("All").tag(ItemKindFilter.all)
+                    Text("Appointments").tag(ItemKindFilter.appointments)
+                    Text("Tasks").tag(ItemKindFilter.tasks)
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+                .help("Tasks include reminders and deadlines")
+                .accessibilityLabel("Kind filter")
 
-            Picker("Context", selection: $model.filter.context) {
-                Text("All contexts").tag(ItemContextFilter.all)
-                ForEach(model.contexts, id: \.id) { Text($0.name).tag(ItemContextFilter.context($0.id)) }
-                Text("No context").tag(ItemContextFilter.none)
-            }
-            .labelsHidden().frame(width: 150)
-            .accessibilityLabel("Context filter")
+                Picker("Context", selection: $model.filter.context) {
+                    Text("All contexts").tag(ItemContextFilter.all)
+                    ForEach(model.contexts, id: \.id) { Text($0.name).tag(ItemContextFilter.context($0.id)) }
+                    Text("No context").tag(ItemContextFilter.none)
+                }
+                .labelsHidden().fixedSize()
+                .accessibilityLabel("Context filter")
 
-            Toggle("Show dismissed", isOn: $model.filter.showDismissed)
-                .accessibilityLabel("Show dismissed items")
+                Toggle("Show dismissed", isOn: $model.filter.showDismissed)
+                    .fixedSize()
+                    .accessibilityLabel("Show dismissed items")
 
-            Spacer()
-
-            if model.canMerge {
-                Button("Merge") { Task { await model.merge() } }
-                    .accessibilityLabel("Merge the two selected items")
+                Spacer(minLength: 0)
             }
-            if let action = model.statusAction {
-                Button(action == .dismiss ? "Dismiss" : "Restore") { Task { await model.dismissOrRestore() } }
-                    .accessibilityLabel(action == .dismiss ? "Dismiss the selected items" : "Restore the selected items")
+            HStack(spacing: 8) {
+                if model.canMerge {
+                    Button("Merge") { Task { await model.merge() } }
+                        .accessibilityLabel("Merge the two selected items")
+                }
+                if let action = model.statusAction {
+                    Button(action == .dismiss ? "Dismiss" : "Restore") { Task { await model.dismissOrRestore() } }
+                        .accessibilityLabel(action == .dismiss ? "Dismiss the selected items" : "Restore the selected items")
+                }
+                Spacer(minLength: 0)
+                Button("Undo last") { Task { await model.undoLast() } }
+                    .disabled(model.undoTarget == nil)
+                    .help(model.undoTarget.map { "Undo: \(ItemListModel.operationText($0.kind))" } ?? "Nothing to undo")
+                    .accessibilityLabel("Undo your last operation")
             }
-            Button("Undo last") { Task { await model.undoLast() } }
-                .disabled(model.undoTarget == nil)
-                .help(model.undoTarget.map { "Undo: \(ItemListModel.operationText($0.kind))" } ?? "Nothing to undo")
-                .accessibilityLabel("Undo your last operation")
         }
         .padding(10)
     }
