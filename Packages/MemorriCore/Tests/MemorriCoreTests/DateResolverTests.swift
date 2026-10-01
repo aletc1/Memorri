@@ -314,4 +314,41 @@ import Testing
                      line(4, "Friday", x: 20), line(5, "10:00 Mon 12", x: 20)]
         #expect(DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid).isEmpty)
     }
+
+    // MARK: a month that is not the capture's month
+
+    @Test func aWeekViewTitledWithAnotherMonthThanTheCapturesIsReadInThatMonth() {
+        let lines = headerLines([("Mon 9", 100), ("Tue 10", 400), ("Wed 11", 700), ("Thu 12", 1000), ("Fri 13", 1300)], title: "February 2026")
+        let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
+        #expect(headers.map(\.date.day) == [9, 10, 11, 12, 13] && headers.allSatisfy { $0.date.month == 2 && $0.date.year == 2026 && !$0.monthAssumed })
+        let spanish = headerLines([("lun 9", 100), ("mar 10", 400), ("mié 11", 700)], title: "Febrero de 2026")
+        #expect(DateResolver.headers(in: spanish, locales: es, reference: capture, timezone: madrid).allSatisfy { $0.date.month == 2 && $0.date.year == 2026 })
+    }
+
+    @Test func aWeekAcrossTwoMonthsTakesTheOtherMonthForDaysThatDoNotFitTheTitlesMonth() {
+        let lines = headerLines([("Mon 26", 100), ("Tue 27", 400), ("Wed 28", 700), ("Thu 29", 1000), ("Fri 30", 1300), ("Sat 31", 1600), ("Sun 1", 1900)],
+                                title: "February 2026")
+        let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
+        let days = headers.map { "\($0.date.year!)-\($0.date.month!)-\($0.date.day!)" }
+        #expect(days == ["2026-1-26", "2026-1-27", "2026-1-28", "2026-1-29", "2026-1-30", "2026-1-31", "2026-2-1"])
+    }
+
+    @Test func daysWithNoMonthAnywhereAreGuessedFromTheCaptureAndSaidSo() {
+        let lines = headerLines([("Mon 12", 100), ("Tue 13", 400), ("Wed 14", 700)])
+        let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
+        #expect(headers.allSatisfy { $0.date.month == 10 && $0.monthAssumed })
+        let named = DateResolver.headers(in: headerLines([("Mon 12", 100), ("Tue 13", 400)], title: "October 2026"), locales: en, reference: capture, timezone: madrid)
+        #expect(named.allSatisfy { !$0.monthAssumed })
+    }
+
+    @Test func aDateReadFromAGuessedMonthIsFlaggedAsInferred() {
+        let draft = FindingDraft(kind: .appointment, title: "Team sync", citedLines: [2], startText: "09:00", columnLine: nil)
+        let guessed = ResolutionContext(captureTime: capture, timezone: madrid, headers: [DateHeader(line: 1, midX: 130, date: DateComponents(year: 2026, month: 10, day: 12), monthAssumed: true)],
+                                        lines: [line(1, "Mon 12", x: 100), line(2, "09:00 Team sync", x: 110)], locales: en)
+        let value = DateResolver.resolve(text: "09:00", field: "start", draft: draft, in: guessed)
+        #expect(value.provenance?.origin == .inferred && value.provenance?.reason == "month-assumed")
+        let named = ResolutionContext(captureTime: capture, timezone: madrid, headers: [DateHeader(line: 1, midX: 130, date: DateComponents(year: 2026, month: 10, day: 12))],
+                                      lines: [line(1, "Mon 12", x: 100), line(2, "09:00 Team sync", x: 110)], locales: en)
+        #expect(DateResolver.resolve(text: "09:00", field: "start", draft: draft, in: named).provenance?.origin == .read)
+    }
 }

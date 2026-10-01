@@ -442,6 +442,7 @@ import Testing
     /// A drawn week view: headers, an hour scale and one block (`hours` long from 13:00 on Wednesday).
     private func weekPicture(hours: Double, title: String = "Design review", labels: Bool = true) throws -> (CGImage, [RecognisedLine]) {
         let canvas = SyntheticCanvas(width: 1600, height: 1000, background: RGB(0xFFFFFF))
+        canvas.text("October 2026", x: 700, y: 10, size: 20, color: RGB(0))          // the month is named, so the days are read and not guessed
         for (i, header) in ["Mon 12", "Tue 13", "Wed 14", "Thu 15", "Fri 16"].enumerated() { canvas.text(header, x: 110 + Double(i) * 300 + 10, y: 50, size: 18, color: RGB(0)) }
         if labels {
             for i in 0..<9 { canvas.text(String(format: "%02d:00", 9 + i), x: 12, y: 90 + Double(i) * 80 - 9, size: 18, color: RGB(0)) }

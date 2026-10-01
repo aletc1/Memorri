@@ -153,8 +153,20 @@ public struct AnalysisPipeline: Sendable {
         let locales = Self.locales(input.locales, preferring: tags.first { $0.key == "language" }?.value)
         let resolved = Self.corrected(first, lines: lines, locales: locales, reference: input.captureTime, zone: zone)
         let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
-        let headers = calendarKind ? DateResolver.headers(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
-        let cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
+        var headers = calendarKind ? DateResolver.headers(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
+        var cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: lines, locales: locales, reference: input.captureTime, timezone: zone) : []
+        // A desktop shows several windows. Once the calendar's grid is found, its title, month labels and day numbers are looked for again
+        // in that window alone, so the text of another window cannot name the month (spec 006 follow-up, postmortem 2026-10-01).
+        if let anchor = cells.first ?? headers.first, let own = SubjectRegion.visibleLines(lines, around: (anchor.midX, anchor.midY), windows: input.windows),
+           own.count < lines.count {
+            if resolved.kind == .calendarMonth {
+                let narrowed = DateResolver.monthCells(in: own, locales: locales, reference: input.captureTime, timezone: zone)
+                if narrowed.count >= MonthEntries.minimumCells { cells = narrowed }
+            } else if calendarKind {
+                let narrowed = DateResolver.headers(in: own, locales: locales, reference: input.captureTime, timezone: zone)
+                if narrowed.count >= headers.count { headers = narrowed }
+            }
+        }
         let order = tags.first { $0.key == "date_order" }.flatMap { DateOrder(rawValue: $0.value) }
         let base = ResolutionContext(captureTime: input.captureTime, timezone: zone, headers: headers, lines: lines, dateOrder: order,
                                      locales: locales, cells: cells)
