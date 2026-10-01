@@ -161,7 +161,7 @@ public struct AnalysisPipeline: Sendable {
 
         // Extract: the model lists what the picture shows, with literal texts and the lines they come from.
         // Only the calendar's own grid goes to the model when other windows share the picture.
-        let shown = SubjectRegion.lines(lines, kind: resolved.kind, headers: headers, cells: cells)
+        let shown = SubjectRegion.lines(lines, kind: resolved.kind, headers: headers, cells: cells, windows: input.windows)
         // A month grid is read from its lines and cells, with no model call (ADR 0018); anything else goes to the model.
         let byGeometry = resolved.kind == .calendarMonth && cells.count >= MonthEntries.minimumCells
         var capped = false

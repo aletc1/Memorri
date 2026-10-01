@@ -8,12 +8,16 @@ public struct WindowInfo: Sendable, Equatable {
     public let title: String?
     /// In the pixel space of the display's picture, clipped to it.
     public let frame: PixelBox
+    /// Its place in the stack of windows on the display, 0 for the one in front; nil when it was not recorded (captures made before
+    /// the stack was kept, and fixtures).
+    public let stack: Int?
 
-    public init(appName: String?, bundleID: String?, title: String?, frame: PixelBox) {
+    public init(appName: String?, bundleID: String?, title: String?, frame: PixelBox, stack: Int? = nil) {
         self.appName = appName
         self.bundleID = bundleID
         self.title = title
         self.frame = frame
+        self.stack = stack
     }
 }
 
@@ -38,7 +42,7 @@ public enum WindowSelection {
             let x1 = min(f.x + f.width, pictureWidth), y1 = min(f.y + f.height, pictureHeight)
             guard x1 > x0, y1 > y0 else { return nil }
             return WindowInfo(appName: window.appName, bundleID: window.bundleID, title: window.title,
-                              frame: PixelBox(x: x0, y: y0, width: x1 - x0, height: y1 - y0))
+                              frame: PixelBox(x: x0, y: y0, width: x1 - x0, height: y1 - y0), stack: window.stack)
         }
         let ordered = clipped.enumerated().sorted { a, b in
             let areaA = a.element.frame.width * a.element.frame.height, areaB = b.element.frame.width * b.element.frame.height

@@ -215,7 +215,7 @@ import Testing
     private static let v3Columns: [(String, [String])] = [
         ("contexts", ["id", "name", "timezone", "created_at", "updated_at"]),
         ("context_hints", ["id", "context_id", "kind", "value"]),
-        ("capture_windows", ["id", "image_id", "z", "app_name", "bundle_id", "title", "x", "y", "width", "height"]),
+        ("capture_windows", ["id", "image_id", "z", "app_name", "bundle_id", "title", "x", "y", "width", "height", "stack"]),   // stack: migration v4
         ("ocr_reads", ["image_id", "read_at", "line_count", "recogniser", "duration_ms"]),
         ("ocr_lines", ["image_id", "n", "text", "x", "y", "width", "height", "confidence"]),
         ("image_analysis", ["image_id", "screen_kind", "kind_confidence", "classify_version", "prompt_version", "schema_version",
@@ -252,7 +252,7 @@ import Testing
     }
 
     private func fillPictureTables(_ db: Database, image: String = "img-1") throws {
-        try db.execute(sql: "INSERT INTO capture_windows VALUES ('w1', ?, 0, 'App', 'com.app', 'Title', 0, 0, 10, 10)", arguments: [image])
+        try db.execute(sql: "INSERT INTO capture_windows (id, image_id, z, app_name, bundle_id, title, x, y, width, height) VALUES ('w1', ?, 0, 'App', 'com.app', 'Title', 0, 0, 10, 10)", arguments: [image])
         try db.execute(sql: "INSERT INTO ocr_reads VALUES (?, datetime('now'), 1, 'vision', 5)", arguments: [image])
         try db.execute(sql: "INSERT INTO ocr_lines VALUES (?, 1, 'text', 0, 0, 10, 10, 0.9)", arguments: [image])
         try db.execute(sql: """

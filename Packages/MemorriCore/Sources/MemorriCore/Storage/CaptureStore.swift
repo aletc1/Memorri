@@ -112,10 +112,10 @@ public struct CaptureStore: CaptureStoring {
             for (imageID, list) in windows {
                 for (z, window) in list.enumerated() {
                     try db.execute(sql: """
-                        INSERT INTO capture_windows (id, image_id, z, app_name, bundle_id, title, x, y, width, height)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO capture_windows (id, image_id, z, app_name, bundle_id, title, x, y, width, height, stack)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, arguments: [UUID().uuidString, imageID, z, window.appName, window.bundleID, window.title,
-                                         window.frame.x, window.frame.y, window.frame.width, window.frame.height])
+                                         window.frame.x, window.frame.y, window.frame.width, window.frame.height, window.stack])
                 }
             }
         }
@@ -126,7 +126,7 @@ public struct CaptureStore: CaptureStoring {
         try database.pool.read { db in
             try Row.fetchAll(db, sql: "SELECT * FROM capture_windows WHERE image_id = ? ORDER BY z", arguments: [imageID]).map { row in
                 WindowInfo(appName: row["app_name"], bundleID: row["bundle_id"], title: row["title"],
-                           frame: PixelBox(x: row["x"], y: row["y"], width: row["width"], height: row["height"]))
+                           frame: PixelBox(x: row["x"], y: row["y"], width: row["width"], height: row["height"]), stack: row["stack"])
             }
         }
     }

@@ -22,6 +22,8 @@ struct ScreenCaptureKitCapturer: DisplayCapturing {
         guard !displays.isEmpty else { throw CaptureFailure.noDisplays }
         let names = await Self.displayNames()
 
+        // Memorri's own windows (Settings, the inbox) are not part of what the user was looking at: they are left out of the pictures.
+        let own = OwnWindows(windows: content.windows.filter { $0.owningApplication?.bundleIdentifier == Bundle.main.bundleIdentifier })
         var captured: [CapturedDisplay] = []
         var firstError: Error?
         var failed = 0
@@ -30,7 +32,7 @@ struct ScreenCaptureKitCapturer: DisplayCapturing {
                 let name = names[display.displayID]
                 let box = DisplayBox(display: display)
                 let windows = Self.windows(on: display, in: content)
-                group.addTask { await Self.capture(box.display, name: name, windows: windows) }
+                group.addTask { await Self.capture(box.display, name: name, windows: windows, excluding: own.windows) }
             }
             for await result in group {
                 switch result {
@@ -51,9 +53,12 @@ struct ScreenCaptureKitCapturer: DisplayCapturing {
     /// `SCDisplay` is a read-only description of a display; ScreenCaptureKit uses it from any thread.
     private struct DisplayBox: @unchecked Sendable { let display: SCDisplay }
 
-    private static func capture(_ display: SCDisplay, name: String?, windows: [WindowInfo]) async -> Result<CapturedDisplay, Error> {
+    /// `SCWindow` values are read-only descriptions too.
+    private struct OwnWindows: @unchecked Sendable { let windows: [SCWindow] }
+
+    private static func capture(_ display: SCDisplay, name: String?, windows: [WindowInfo], excluding own: [SCWindow]) async -> Result<CapturedDisplay, Error> {
         do {
-            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let filter = SCContentFilter(display: display, excludingWindows: own)
             let scale = Double(filter.pointPixelScale)
             let configuration = SCStreamConfiguration()
             configuration.width = Int((Double(filter.contentRect.width) * scale).rounded())
@@ -72,6 +77,11 @@ struct ScreenCaptureKitCapturer: DisplayCapturing {
         let scale = Double(SCContentFilter(display: display, excludingWindows: []).pointPixelScale)
         let origin = display.frame.origin
         let ownBundle = Bundle.main.bundleIdentifier
+        // The system lists on-screen windows from the front one to the back one: that order says which window covers which.
+        let order = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? [])
+            .compactMap { $0[kCGWindowNumber as String] as? CGWindowID }
+        var rank: [CGWindowID: Int] = [:]
+        for (index, id) in order.enumerated() where rank[id] == nil { rank[id] = index }
         return content.windows.compactMap { window in
             guard window.isOnScreen, window.windowLayer == 0, window.frame.intersects(display.frame),
                   window.owningApplication?.bundleIdentifier != ownBundle else { return nil }
@@ -81,7 +91,7 @@ struct ScreenCaptureKitCapturer: DisplayCapturing {
                                  width: Int((window.frame.width * scale).rounded()),
                                  height: Int((window.frame.height * scale).rounded()))
             return WindowInfo(appName: window.owningApplication?.applicationName, bundleID: window.owningApplication?.bundleIdentifier,
-                              title: (title?.isEmpty ?? true) ? nil : title, frame: frame)
+                              title: (title?.isEmpty ?? true) ? nil : title, frame: frame, stack: rank[window.windowID])
         }
     }
 

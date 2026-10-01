@@ -35,11 +35,19 @@ import Testing
         let store = CaptureStore(database: try opened(temp))
         let event = makeEventRecord()
         let image = makeImageRecord(eventID: event.id)
-        let windows = [WindowInfo(appName: "A", bundleID: "a", title: "first", frame: PixelBox(x: 0, y: 0, width: 10, height: 10)),
-                       WindowInfo(appName: "B", bundleID: nil, title: nil, frame: PixelBox(x: 5, y: 5, width: 20, height: 20))]
+        let windows = [WindowInfo(appName: "A", bundleID: "a", title: "first", frame: PixelBox(x: 0, y: 0, width: 10, height: 10), stack: 3),
+                       WindowInfo(appName: "B", bundleID: nil, title: nil, frame: PixelBox(x: 5, y: 5, width: 20, height: 20), stack: 0),
+                       WindowInfo(appName: "C", bundleID: nil, title: nil, frame: PixelBox(x: 1, y: 1, width: 2, height: 2))]      // no stack recorded
         try store.insert(event: event, images: [image], windows: [image.id: windows])
         #expect(try store.windows(imageID: image.id) == windows)
         #expect(try store.windows(imageID: "unknown").isEmpty)
+    }
+
+    @Test func selectionKeepsEachWindowsStackPlace() {
+        let windows = [WindowInfo(appName: "Small", bundleID: nil, title: nil, frame: PixelBox(x: 0, y: 0, width: 10, height: 10), stack: 0),
+                       WindowInfo(appName: "Big", bundleID: nil, title: nil, frame: PixelBox(x: 0, y: 0, width: 100, height: 100), stack: 1)]
+        let selected = WindowSelection.select(windows, pictureWidth: 200, pictureHeight: 200)
+        #expect(selected.map(\.appName) == ["Big", "Small"] && selected.map(\.stack) == [1, 0])
     }
 
     @Test func theOldInsertFormStillWorksAndStoresNoWindows() throws {

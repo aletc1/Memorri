@@ -184,6 +184,10 @@ enum Migrations {
 
             try db.execute(sql: "ALTER TABLE model_runs ADD COLUMN step TEXT NOT NULL DEFAULT 'test'")
         }
+        // The stack order of the windows of a picture (0 in front), so a window drawn over a calendar can be told from one behind it.
+        migrator.registerMigration("v4") { db in
+            try db.execute(sql: "ALTER TABLE capture_windows ADD COLUMN stack INTEGER")
+        }
         return migrator
     }
 }
