@@ -257,4 +257,55 @@ import Testing
         #expect(try ItemStore(database: fixture.database).sweep(at: Date(timeIntervalSince1970: 1_800_300_000)) == 0)
         #expect(try ItemStore(database: fixture.database).items(status: [.active], kinds: nil, contextID: nil).map(\.item) == before)
     }
+
+    // MARK: review (spec 006, US4)
+
+    @Test func theReviewFilterListsOnlyItemsNeedingReview() throws {
+        let fixture = try makePipelineFixture(); defer { fixture.cleanUp() }
+        try fixture.database.pool.write { db in
+            for (id, review) in [("fine", false), ("doubtful", true), ("also", true)] {
+                var item = Item.sample(id: id)
+                item.needsReview = review
+                item.reviewReasons = review ? [.lowConfidence] : []
+                try ItemStore.insert(db, item, at: Date(timeIntervalSince1970: 1))
+            }
+        }
+        let s = store(fixture)
+        #expect(try s.items(status: [.active], kinds: nil, contextID: nil, review: true).map(\.item.id).sorted() == ["also", "doubtful"])
+        #expect(try s.items(status: [.active], kinds: nil, contextID: nil).count == 3)
+        // an index serves the review filter
+        let plan = try fixture.database.pool.read { try Row.fetchAll($0, sql: "EXPLAIN QUERY PLAN SELECT id FROM items WHERE status = 'active' AND needs_review = 1") }
+        #expect(plan.contains { ($0["detail"] as String).contains("items_review") })
+    }
+
+    @Test func theReviewCountIsObservedAfterApproveDismissEditMergeAndANewCapture() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let reconciler = Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+        let ops = ItemOperations(database: fixture.database, reconciler: reconciler, now: { Date(timeIntervalSince1970: 1_800_200_000) })
+        func see(_ title: String, at minutes: Int) async throws {
+            let picture = fixture.imageIDs.count == 1 && minutes == 0 ? fixture.base.imageID : try fixture.addPicture(at: Date(timeIntervalSince1970: 1_800_000_000 + Double(minutes) * 60))
+            try fixture.save([fixture.finding(title, start: ReconcileFixture.minutes(minutes), confidence: 0.6)], imageID: picture)
+            _ = await reconciler.reconcile(imageID: picture)
+        }
+        func ids() throws -> [String] { try fixture.read { try String.fetchAll($0, sql: "SELECT id FROM items ORDER BY first_seen, id") } }
+        var iterator = ItemStore(database: fixture.database).observeReviewCount().makeAsyncIterator()
+        #expect(await iterator.next() == 0)
+        try await see("Standup", at: 0)
+        #expect(await iterator.next() == 1)                                  // a new capture
+        try await see("Dentist", at: 300)
+        #expect(await iterator.next() == 2)
+        try await see("Lunch", at: 600)
+        #expect(await iterator.next() == 3)
+        let all = try ids()
+        try ops.approve(all[0])
+        #expect(await iterator.next() == 2)                                  // approve
+        try ops.dismiss(all[1])
+        #expect(await iterator.next() == 1)                                  // dismiss
+        try ops.restore(all[1])
+        #expect(await iterator.next() == 2)
+        try ops.merge(all[1], all[2])
+        #expect(await iterator.next() == 1)                                  // merge
+        try ops.edit(all[1], field: .place, value: .string("Room 1"))
+        #expect(await iterator.next() == 0)                                  // an edit approves
+    }
 }

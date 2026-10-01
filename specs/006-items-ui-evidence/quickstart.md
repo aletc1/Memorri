@@ -37,3 +37,11 @@ Debug build compiled with no code warnings (the only build message is Xcode's "M
 - `ItemListModelTests`: `parse` in the item's own zone, invalid dates, clearing, people, all-day, and `editText` round-trips through `parse`.
 - `EditLockTests`: edited start, place, people and notes survive a later capture showing the old values and stay locked; the other values stay visible as observations; Unlock gives the sightings' value back and `fieldText` says where it comes from.
 - Known gap: use the editors by hand once (date pickers in a zone other than the Mac's, Return/Esc, the red message).
+
+### US4: kinds, context and the count (2026-10-01)
+
+Debug build compiled with no code warnings. Scenario 7 was **not driven in the app** (same reason as US2: the user's own copy holds the running instance). Covered by tests:
+
+- `ItemListModelTests`: Appointments, Tasks (task and deadline), Reminders and All each list exactly their kinds; the Inbox combines with the kind and context filters; the number in the scope label (`inboxCount`) equals what the Inbox lists and, for each context, `ItemStore.reviewCount(contextID:)`.
+- `ItemStoreTests`: the review filter lists only items needing review and the `items_review` index serves it; `observeReviewCount()` emits again after a new capture, approve, dismiss, restore, merge and an edit.
+- The menu's `Inbox (N)` follows the same observation (`AppState.reviewCount`) and opens the Items window on the Inbox scope; the placeholder `Inbox` window is gone. Not seen on screen. Known gap: open the menu by hand once and compare N with the Inbox.

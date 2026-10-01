@@ -1,13 +1,24 @@
 import Foundation
 
 public enum ItemKindFilter: String, Sendable, Equatable, CaseIterable {
-    case all, appointments, tasks
+    case all, appointments, tasks, reminders
 
+    /// The to-do family covers tasks, deadlines and reminders; `kinds` tells them apart.
     public var families: Set<KindFamily>? {
         switch self {
         case .all: nil
         case .appointments: [.event]
-        case .tasks: [.todo]
+        case .tasks, .reminders: [.todo]
+        }
+    }
+
+    /// Tasks include deadlines (spec 006).
+    public var kinds: Set<FindingKind>? {
+        switch self {
+        case .all: nil
+        case .appointments: [.appointment]
+        case .tasks: [.task, .deadline]
+        case .reminders: [.reminder]
         }
     }
 }
@@ -44,6 +55,7 @@ public struct ItemFilter: Sendable, Equatable {
 
     public var statuses: Set<ItemStatus> { showDismissed ? [.active, .dismissed] : [.active] }
     public var families: Set<KindFamily>? { kind.families }
+    public var kinds: Set<FindingKind>? { kind.kinds }
 }
 
 /// The words of one row.
@@ -110,7 +122,7 @@ public enum ItemListModel {
             case .inbox: guard row.item.status == .active, row.item.needsReview else { return false }
             case .approved: guard row.item.status == .active, !row.item.needsReview else { return false }
             }
-            if let families = filter.families, !families.contains(row.item.family) { return false }
+            if let kinds = filter.kinds, !kinds.contains(row.item.kind) { return false }
             switch filter.context {
             case .all: return true
             case .none: return row.item.contextID == nil
@@ -140,6 +152,11 @@ public enum ItemListModel {
     }
 
     // MARK: Review (spec 006)
+
+    /// How many items the Inbox lists with the filter's kind and context (the number in the scope label, FR-017).
+    public static func inboxCount(_ rows: [ItemRow], filter: ItemFilter) -> Int {
+        visible(rows, filter: ItemFilter(kind: filter.kind, context: filter.context, scope: .inbox)).count
+    }
 
     /// One reason an item needs review, in words.
     public static func reviewText(_ reasons: [ReviewReason]) -> [String] {

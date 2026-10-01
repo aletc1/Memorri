@@ -4,8 +4,10 @@ import SwiftUI
 /// The Items window (contracts/ui-contract.md): the list of items with filters on the left, the open item on the right.
 struct ItemsView: View {
     @State private var model: ItemsViewModel
+    private let environment: AppEnvironment
 
     init(environment: AppEnvironment) {
+        self.environment = environment
         _model = State(initialValue: ItemsViewModel(environment: environment))
     }
 
@@ -30,13 +32,20 @@ struct ItemsView: View {
                     .accessibilityLabel("Error: \(message)")
             }
         }
-        .onAppear { model.start() }
+        .onAppear { model.start(); open(environment.state.itemsScopeRequest) }
+        .onChange(of: environment.state.itemsScopeRequest) { _, request in open(request) }
         .onChange(of: model.selection) { model.selectionChanged() }
         .sheet(item: $model.lockSheet) { sheet in
             LockChoiceSheet(sheet: sheet,
                             onCancel: { model.lockSheet = nil },
                             onMerge: { picked in Task { await model.resolveLockSheet(sheet, picked: picked) } })
         }
+    }
+
+    /// The menu's `Inbox` opens this window on the Inbox scope.
+    private func open(_ request: AppState.ScopeRequest?) {
+        guard let request else { return }
+        model.filter.scope = request.scope
     }
 
     // MARK: Filters and buttons
@@ -49,9 +58,10 @@ struct ItemsView: View {
                     Text("All").tag(ItemKindFilter.all)
                     Text("Appointments").tag(ItemKindFilter.appointments)
                     Text("Tasks").tag(ItemKindFilter.tasks)
+                    Text("Reminders").tag(ItemKindFilter.reminders)
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("Tasks include reminders and deadlines")
+                .help("Tasks include deadlines")
                 .accessibilityLabel("Kind filter")
 
                 Picker("Context", selection: $model.filter.context) {

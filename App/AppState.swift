@@ -9,6 +9,13 @@ final class AppState {
     var isFlashing = false
     var isWarning = false
 
+    /// How many items need review (the Inbox), kept current by the item store's observation (spec 006).
+    var reviewCount = 0
+
+    /// A request to open the Items window on a scope (the menu's `Inbox`). The id changes with every request so the window notices a repeat.
+    struct ScopeRequest: Equatable { let id = UUID(); let scope: ItemScope }
+    var itemsScopeRequest: ScopeRequest?
+
     /// The model queue: counts, pause flag and why it is holding (spec 003).
     var analysisProgress = QueueProgress(counts: JobCounts(waiting: 0, running: 0, finished: 0, failed: 0), paused: false, holdingReason: nil)
 

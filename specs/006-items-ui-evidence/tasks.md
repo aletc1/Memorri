@@ -129,14 +129,14 @@ description: "Task list for spec 006: evidence cut-outs, review and the Inbox, i
 
 ### Tests first
 
-- [ ] T035 [P] [US4] Write failing tests in `Tests/MemorriCoreTests/ItemListModelTests.swift` (extend): `ItemKindFilter.reminders` lists only reminders, `.tasks` lists tasks and deadlines, `.appointments` only appointments, `.all` all (the existing `filtersByKindFamilyContextAndDismissed` test is updated because `.tasks` no longer includes reminders); the Inbox scope combines with kind and context filters; the count in the scope label equals `ItemStore.reviewCount(contextID:)` for the same context in every combination tested; rows show kind, title, date and time in the item's zone, context, approval mark and lock
-- [ ] T036 [P] [US4] Write failing tests in `Tests/MemorriCoreTests/ItemStoreTests.swift` (extend): `observeReviewCount()` emits again after approve, dismiss, edit, merge and a new capture; `items(...)` takes a review filter and an index serves it (explain-query test or the scale test of T040)
+- [x] T035 [P] [US4] Write failing tests in `Tests/MemorriCoreTests/ItemListModelTests.swift` (extend): `ItemKindFilter.reminders` lists only reminders, `.tasks` lists tasks and deadlines, `.appointments` only appointments, `.all` all (the existing `filtersByKindFamilyContextAndDismissed` test is updated because `.tasks` no longer includes reminders); the Inbox scope combines with kind and context filters; the count in the scope label equals `ItemStore.reviewCount(contextID:)` for the same context in every combination tested; rows show kind, title, date and time in the item's zone, context, approval mark and lock
+- [x] T036 [P] [US4] Write failing tests in `Tests/MemorriCoreTests/ItemStoreTests.swift` (extend): `observeReviewCount()` emits again after approve, dismiss, edit, merge and a new capture; `items(...)` takes a review filter and an index serves it (explain-query test or the scale test of T040)
 
 ### Implementation
 
-- [ ] T037 [US4] Extend `ItemKindFilter` (`.reminders`, `.tasks` = task and deadline) and the row text in `ItemListModel.swift`; add the review filter to `ItemStore.items` and `observeItems`; T035 and T036 pass
-- [ ] T038 [US4] Add `reviewCount` to `App/AppState.swift`, follow `observeReviewCount()` in `App/AppEnvironment.swift`, show `Inbox (N)` in `App/MenuContent.swift` (opening the Items window on the Inbox scope through `WindowCoordinator`), remove the placeholder `.inbox` window id and `PlaceholderView.inbox`, and update the kind control to `All · Appointments · Tasks · Reminders` in `App/Windows/ItemsView.swift`
-- [ ] T039 [US4] Build with no warnings and run quickstart scenario 7 in an isolated home, recording results in `quickstart.md`
+- [x] T037 [US4] Extend `ItemKindFilter` (`.reminders`, `.tasks` = task and deadline) and the row text in `ItemListModel.swift`; add the review filter to `ItemStore.items` and `observeItems`; T035 and T036 pass
+- [x] T038 [US4] Add `reviewCount` to `App/AppState.swift`, follow `observeReviewCount()` in `App/AppEnvironment.swift`, show `Inbox (N)` in `App/MenuContent.swift` (opening the Items window on the Inbox scope through `WindowCoordinator`), remove the placeholder `.inbox` window id and `PlaceholderView.inbox`, and update the kind control to `All · Appointments · Tasks · Reminders` in `App/Windows/ItemsView.swift`
+- [x] T039 [US4] Build with no warnings and run quickstart scenario 7 in an isolated home, recording results in `quickstart.md` (not driven in the app, see quickstart Results)
 
 **Checkpoint**: all four stories.
 

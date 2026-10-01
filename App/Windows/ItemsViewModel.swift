@@ -55,7 +55,7 @@ final class ItemsViewModel {
     var canMerge: Bool { ItemListModel.canMerge(selectedRows) }
     var canApprove: Bool { ItemListModel.canApprove(selectedRows) }
     /// How many items the Inbox lists with the kind and context filters as they are (FR-017).
-    var inboxCount: Int { ItemListModel.visible(rows, filter: ItemFilter(kind: filter.kind, context: filter.context, scope: .inbox)).count }
+    var inboxCount: Int { ItemListModel.inboxCount(rows, filter: filter) }
     var statusAction: ItemListModel.StatusAction? { ItemListModel.statusAction(for: selectedRows) }
     var isAvailable: Bool { environment.items != nil }
 

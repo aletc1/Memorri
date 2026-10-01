@@ -137,10 +137,26 @@ final class AppEnvironment {
             #endif
         }
         followAnalysisProgress()
+        followReviewCount()
         // Sightings from before evidence existed get their cut-outs a few at a time, newest first.
         if let evidenceWriter { Task.detached(priority: .utility) { _ = await evidenceWriter.backfill(limit: 200) } }
         if let storage { StartupAlerts.showIfNeeded(for: storage) }
         startRetention()
+    }
+
+    /// Keeps the menu's `Inbox (N)` current.
+    private func followReviewCount() {
+        guard let items else { return }
+        let stream = items.observeReviewCount()
+        Task { [state] in
+            for await count in stream { state.reviewCount = count }
+        }
+    }
+
+    /// Opens the Items window on a scope (the menu's `Inbox` opens it on the Inbox).
+    func showItems(scope: ItemScope) {
+        state.itemsScopeRequest = AppState.ScopeRequest(scope: scope)
+        windows.show(.items)
     }
 
     /// Keeps the menu line and the settings block current.
@@ -285,7 +301,6 @@ final class AppEnvironment {
     private func content(for id: WindowID) -> AnyView {
         switch id {
         case .items: AnyView(ItemsView(environment: self))
-        case .inbox: AnyView(PlaceholderView.inbox)
         case .search: AnyView(PlaceholderView.search)
         case .settings: AnyView(SettingsView(environment: self))
         case .onboarding: AnyView(OnboardingView(environment: self))

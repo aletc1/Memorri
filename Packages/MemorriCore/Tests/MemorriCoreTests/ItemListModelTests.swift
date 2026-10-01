@@ -24,10 +24,12 @@ import Testing
         #expect(titles(ItemFilter()) == ["Pay rent", "Standup", "Call"])
         #expect(titles(ItemFilter(showDismissed: true)).contains("Old"))
         #expect(Set(titles(ItemFilter(kind: .appointments))) == ["Standup"])
-        #expect(Set(titles(ItemFilter(kind: .tasks))) == ["Pay rent", "Call"])
+        #expect(Set(titles(ItemFilter(kind: .tasks))) == ["Pay rent"])             // reminders have their own filter (spec 006)
+        #expect(Set(titles(ItemFilter(kind: .reminders))) == ["Call"])
         #expect(titles(ItemFilter(context: .context("a"))) == ["Pay rent"])
         #expect(titles(ItemFilter(context: .none)) == ["Standup"])
-        #expect(Set(titles(ItemFilter(kind: .tasks, context: .context("b")))) == ["Call"])
+        #expect(Set(titles(ItemFilter(kind: .reminders, context: .context("b")))) == ["Call"])
+        #expect(titles(ItemFilter(kind: .tasks, context: .context("b"))).isEmpty)
     }
 
     @Test func sortsByStartOrDueThenTitleWithUndatedLast() {
@@ -322,5 +324,55 @@ import Testing
         }
         #expect(ItemListModel.editText(nil, field: .place, timezone: zone) == "" && ItemListModel.editText(.null, field: .end, timezone: zone) == "")
         #expect(ItemListModel.editText(.date(ReconcileFixture.nine), field: .start, timezone: zone) == "2026-10-14 09:00")
+    }
+
+    // MARK: kinds, scopes and the count (spec 006, US4)
+
+    @Test func eachKindFilterListsOnlyItsKinds() {
+        let rows = [row(item("Standup")), row(item("Pay rent", kind: .task, start: nil, due: ReconcileFixture.nine)),
+                    row(item("Contract", kind: .deadline, start: nil, due: ReconcileFixture.nine)), row(item("Call", kind: .reminder, start: nil))]
+        func titles(_ kind: ItemKindFilter) -> Set<String> { Set(ItemListModel.visible(rows, filter: ItemFilter(kind: kind)).map(\.item.title)) }
+        #expect(titles(.all) == ["Standup", "Pay rent", "Contract", "Call"])
+        #expect(titles(.appointments) == ["Standup"])
+        #expect(titles(.tasks) == ["Pay rent", "Contract"])
+        #expect(titles(.reminders) == ["Call"])
+        #expect(ItemKindFilter.allCases == [.all, .appointments, .tasks, .reminders])
+    }
+
+    @Test func theInboxCombinesWithKindAndContextAndItsCountIsWhatItLists() {
+        var rows: [ItemRow] = []
+        for (title, kind, context, doubtful) in [("A1", FindingKind.appointment, "a", true), ("A2", .appointment, "a", false), ("T1", .task, "a", true),
+                                                  ("R1", .reminder, "b", true), ("R2", .reminder, nil, true), ("T2", .task, "b", true)] as [(String, FindingKind, String?, Bool)] {
+            var made = item(title, kind: kind, start: kind == .appointment ? ReconcileFixture.nine : nil, context: context)
+            made.needsReview = doubtful
+            made.reviewReasons = doubtful ? [.lowConfidence] : []
+            rows.append(row(made))
+        }
+        func listed(_ filter: ItemFilter) -> Set<String> { Set(ItemListModel.visible(rows, filter: filter).map(\.item.title)) }
+        #expect(listed(ItemFilter(scope: .inbox)) == ["A1", "T1", "R1", "R2", "T2"])
+        #expect(listed(ItemFilter(kind: .reminders, scope: .inbox)) == ["R1", "R2"])
+        #expect(listed(ItemFilter(kind: .tasks, context: .context("b"), scope: .inbox)) == ["T2"])
+        #expect(listed(ItemFilter(context: .none, scope: .inbox)) == ["R2"])
+        for filter in [ItemFilter(), ItemFilter(context: .context("a")), ItemFilter(kind: .tasks), ItemFilter(kind: .reminders, context: .none)] {
+            #expect(ItemListModel.inboxCount(rows, filter: filter) == listed(ItemFilter(kind: filter.kind, context: filter.context, scope: .inbox)).count)
+        }
+    }
+
+    @Test func theScopeLabelCountEqualsTheStoresReviewCountForTheSameContext() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        try fixture.addContext("a", "A"); try fixture.addContext("b", "B")
+        let reconciler = Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+        let specs: [(String, Double, String?)] = [("Standup", 0.6, "a"), ("Lunch", 0.9, "a"), ("Dentist", 0.6, "b"), ("Review", 0.5, nil)]
+        for (index, (title, confidence, context)) in specs.enumerated() {
+            let picture = index == 0 ? fixture.base.imageID : try fixture.addPicture(at: Date(timeIntervalSince1970: 1_800_000_000 + Double(index) * 7200))
+            try fixture.save([fixture.finding(title, start: ReconcileFixture.minutes(index * 300), confidence: confidence)], imageID: picture, contextID: context)
+            _ = await reconciler.reconcile(imageID: picture)
+        }
+        let store = ItemStore(database: fixture.database)
+        let rows = try store.items(status: [.active, .dismissed], kinds: nil, contextID: nil)
+        for (filter, context) in [(ItemContextFilter.all, String??.none), (.context("a"), .some("a")), (.context("b"), .some("b")), (.none, .some(nil))] {
+            #expect(ItemListModel.inboxCount(rows, filter: ItemFilter(context: filter)) == (try store.reviewCount(contextID: context)))
+        }
+        #expect(try store.reviewCount() == 3)
     }
 }

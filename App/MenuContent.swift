@@ -23,7 +23,7 @@ struct MenuContent: View {
             }
         }
         Button("Items…") { environment.windows.show(.items) }
-        Button("Inbox") { environment.windows.show(.inbox) }
+        Button(environment.state.reviewCount > 0 ? "Inbox (\(environment.state.reviewCount))" : "Inbox") { environment.showItems(scope: .inbox) }
         Button("Search") { environment.windows.show(.search) }
 
         Divider()

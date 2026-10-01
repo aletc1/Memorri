@@ -74,8 +74,9 @@ public struct ItemStore: Sendable {
     // MARK: Reading
 
     /// `contextID`: nil for any context, `.some(nil)` for items without one, `.some(id)` for one context.
-    public func items(status: Set<ItemStatus>, kinds: Set<KindFamily>?, contextID: String??) throws -> [ItemRow] {
-        try database.pool.read { try Self.rows($0, status: status, kinds: kinds, contextID: contextID) }
+    /// `review`: only the items that need review (the Inbox).
+    public func items(status: Set<ItemStatus>, kinds: Set<KindFamily>?, contextID: String??, review: Bool = false) throws -> [ItemRow] {
+        try database.pool.read { try Self.rows($0, status: status, kinds: kinds, contextID: contextID, review: review) }
     }
 
     /// How many items need review: what the Inbox lists (FR-017). `contextID` as in `items`.
@@ -179,8 +180,8 @@ public struct ItemStore: Sendable {
     }
 
     /// The list, again after every change to the tables it reads.
-    public func observeItems(status: Set<ItemStatus>, kinds: Set<KindFamily>? = nil, contextID: String?? = nil) -> AsyncStream<[ItemRow]> {
-        let observation = ValueObservation.tracking { db in try Self.rows(db, status: status, kinds: kinds, contextID: contextID) }
+    public func observeItems(status: Set<ItemStatus>, kinds: Set<KindFamily>? = nil, contextID: String?? = nil, review: Bool = false) -> AsyncStream<[ItemRow]> {
+        let observation = ValueObservation.tracking { db in try Self.rows(db, status: status, kinds: kinds, contextID: contextID, review: review) }
         let pool = database.pool
         return AsyncStream { continuation in
             let task = Task {
@@ -191,8 +192,9 @@ public struct ItemStore: Sendable {
         }
     }
 
-    static func rows(_ db: Database, status: Set<ItemStatus>, kinds: Set<KindFamily>?, contextID: String??) throws -> [ItemRow] {
+    static func rows(_ db: Database, status: Set<ItemStatus>, kinds: Set<KindFamily>?, contextID: String??, review: Bool = false) throws -> [ItemRow] {
         var clauses = ["i.status IN (\(status.map { _ in "?" }.joined(separator: ", ")))"]
+        if review { clauses.append("i.needs_review = 1") }
         var arguments: [any DatabaseValueConvertible] = status.map(\.rawValue).sorted()
         if let kinds {
             clauses.append("i.family IN (\(kinds.map { _ in "?" }.joined(separator: ", ")))")
