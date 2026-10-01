@@ -25,8 +25,8 @@ description: "Task list for spec 005: turn findings into one list of items witho
 
 **Purpose**: Make the stand-in server answer the two new call shapes so tests and the quickstart need no real models.
 
-- [ ] T001 Extend `scripts/fake-ollama.py` with `/api/embed` (returns one deterministic 8-dimension vector per input: counts of the lowercased text's character trigrams hashed into 8 buckets, then normalised, so equal texts give equal vectors and a truncated title is close) and `/api/generate` with `raw`, `logprobs` and `top_logprobs` (returns `yes` when the prompt's two titles share their first 8 normalised characters, else `no`, with plausible log probabilities); the existing modes (`invalid`, `slow`, `error`, `flaky`, `hang`) apply to both; document the new routes in the file header
-- [ ] T002 [P] Confirm `.gitignore` tracks `eval/golden/synthetic-sequences/` (the existing rule ignores every other folder under `eval/golden/`); add the exception if missing and extend `eval/golden/README.md` with one paragraph on sequence cases (format in `contracts/eval-cli.md`)
+- [x] T001 Extend `scripts/fake-ollama.py` with `/api/embed` (returns one deterministic 8-dimension vector per input: counts of the lowercased text's character trigrams hashed into 8 buckets, then normalised, so equal texts give equal vectors and a truncated title is close) and `/api/generate` with `raw`, `logprobs` and `top_logprobs` (returns `yes` when the prompt's two titles share their first 8 normalised characters, else `no`, with plausible log probabilities); the existing modes (`invalid`, `slow`, `error`, `flaky`, `hang`) apply to both; document the new routes in the file header
+- [x] T002 [P] Confirm `.gitignore` tracks `eval/golden/synthetic-sequences/` (the existing rule ignores every other folder under `eval/golden/`); add the exception if missing and extend `eval/golden/README.md` with one paragraph on sequence cases (format in `contracts/eval-cli.md`)
 
 **Checkpoint**: `python3 scripts/fake-ollama.py` answers `/api/embed` and a raw `/api/generate` in every mode.
 

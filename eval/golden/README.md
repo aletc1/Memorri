@@ -13,3 +13,7 @@ case-name/
   `swift run --package-path Packages/MemorriCore memorri-eval generate-synthetic`. The same code always writes the same bytes, so `git status` shows a change only when a drawing or an expected answer changed.
 - Everything else under `eval/golden/` (your own cases with `"origin": "local"`) stays on this Mac and is git-ignored. Real screenshots and real model answers are never committed.
 - Reports go to `eval/out/` (git-ignored). A report made from local cases is never written under `synthetic/`.
+
+## Sequence cases (spec 005)
+
+`synthetic-sequences/<case>/sequence.json` holds findings per capture, written by the program, and the real-world event each finding stands for. `memorri-eval reconcile` runs them through the reconciler and scores merges (see `specs/005-reconciliation/contracts/eval-cli.md`). They contain only invented titles and are tracked; regenerate with `swift run --package-path Packages/MemorriCore memorri-eval generate-sequences`.
