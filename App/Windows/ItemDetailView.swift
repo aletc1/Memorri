@@ -40,6 +40,18 @@ struct ItemDetailView: View {
                 .accessibilityLabel("Title. Press Return to save.")
             Text("\(detail.item.kind.rawValue.capitalized) · \(ItemListModel.dateText(detail.item)) · \(model.contextName(detail.item.contextID) ?? "No context") · \(detail.item.status.rawValue.capitalized)")
                 .font(.callout).foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                if detail.item.needsReview {
+                    Image(systemName: "circle.fill").foregroundStyle(.orange).imageScale(.small)
+                    Text("Needs review").fontWeight(.medium)
+                    Text(ItemListModel.reviewText(detail.item.reviewReasons).joined(separator: " · ")).foregroundStyle(.orange)
+                    Button("Approve") { Task { await model.approve() } }
+                        .accessibilityLabel("Approve this item")
+                } else {
+                    Text(ItemListModel.approvalText(detail.item)).foregroundStyle(.secondary)
+                }
+            }
+            .font(.callout)
         }
     }
 

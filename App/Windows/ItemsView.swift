@@ -69,6 +69,17 @@ struct ItemsView: View {
                 Spacer(minLength: 0)
             }
             HStack(spacing: 8) {
+                Picker("Show", selection: $model.filter.scope) {
+                    Text("Items").tag(ItemScope.all)
+                    Text("Inbox (\(model.inboxCount))").tag(ItemScope.inbox)
+                    Text("Approved").tag(ItemScope.approved)
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+                .accessibilityLabel("Show items, the Inbox or approved items")
+                if model.canApprove {
+                    Button("Approve") { Task { await model.approve() } }
+                        .accessibilityLabel("Approve the selected items")
+                }
                 if model.canMerge {
                     Button("Merge") { Task { await model.merge() } }
                         .accessibilityLabel("Merge the two selected items")
@@ -93,11 +104,11 @@ struct ItemsView: View {
     private func list(model: ItemsViewModel) -> some View {
         @Bindable var model = model
         if model.rows.isEmpty {
-            Text("No items yet. Items appear after captures are analysed.")
+            Text(ItemListModel.emptyText(scope: .all))
                 .foregroundStyle(.secondary).multilineTextAlignment(.center).padding(24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.visibleRows.isEmpty {
-            Text("No items match the filters.")
+            Text(model.filter.scope == .all ? "No items match the filters." : ItemListModel.emptyText(scope: model.filter.scope))
                 .foregroundStyle(.secondary).padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             List(selection: $model.selection) {
@@ -105,6 +116,15 @@ struct ItemsView: View {
                     ItemRowView(row: row, text: ItemListModel.rowText(row, contextName: model.contextName(row.item.contextID)))
                         .tag(row.item.id)
                 }
+            }
+            .onKeyPress(.return) {
+                guard model.filter.scope == .inbox, model.canApprove else { return .ignored }
+                Task { await model.approve() }
+                return .handled
+            }
+            .onDeleteCommand {
+                guard model.filter.scope == .inbox, model.statusAction == .dismiss else { return }
+                Task { await model.dismissOrRestore() }
             }
         }
     }
@@ -144,14 +164,17 @@ private struct ItemRowView: View {
                 HStack(spacing: 8) {
                     Text(text.context)
                     Text(text.sightings)
-                    if text.possibleDuplicate {
-                        Label("Possible duplicate", systemImage: "square.on.square").foregroundStyle(.orange)
-                    }
                     if text.locked {
                         Image(systemName: "lock.fill").accessibilityLabel("Has a value you set")
                     }
                 }
                 .font(.caption).foregroundStyle(.secondary)
+                if !text.reasons.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "circle.fill").foregroundStyle(.orange).imageScale(.small).accessibilityLabel(text.approval)
+                        ForEach(text.reasons, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
+                    }
+                }
             }
         }
         .opacity(text.dimmed ? 0.5 : 1)

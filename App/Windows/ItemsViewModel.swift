@@ -53,6 +53,9 @@ final class ItemsViewModel {
     /// All rows, not only the visible ones: a dismissed item stays selected (and can be restored) after the filter hides it.
     var selectedRows: [ItemRow] { rows.filter { selection.contains($0.item.id) } }
     var canMerge: Bool { ItemListModel.canMerge(selectedRows) }
+    var canApprove: Bool { ItemListModel.canApprove(selectedRows) }
+    /// How many items the Inbox lists with the kind and context filters as they are (FR-017).
+    var inboxCount: Int { ItemListModel.visible(rows, filter: ItemFilter(kind: filter.kind, context: filter.context, scope: .inbox)).count }
     var statusAction: ItemListModel.StatusAction? { ItemListModel.statusAction(for: selectedRows) }
     var isAvailable: Bool { environment.items != nil }
 
@@ -153,6 +156,26 @@ final class ItemsViewModel {
     func resolveLockSheet(_ sheet: LockSheet, picked: [ItemField: String]) async {
         lockSheet = nil
         await merge(keep: sheet.keep, other: sheet.other, choices: picked)
+    }
+
+    /// Approves the selected items. In the Inbox the selection moves on to the next item so the user can keep going with the keyboard.
+    func approve() async {
+        guard canApprove else { return }
+        let ids = selectedRows.map(\.item.id)
+        let next = filter.scope == .inbox ? nextSelection(leaving: Set(ids)) : nil
+        await run { operations in
+            for id in ids { _ = try operations.approve(id) }
+        }
+        if let next { selection = next }
+    }
+
+    /// The item after the selected ones in the list, else the one before; nothing when the list would be empty.
+    private func nextSelection(leaving ids: Set<String>) -> Set<String> {
+        let list = visibleRows.map(\.item.id)
+        guard let last = list.lastIndex(where: ids.contains), let first = list.firstIndex(where: ids.contains) else { return [] }
+        if let after = list[(last + 1)...].first(where: { !ids.contains($0) }) { return [after] }
+        if let before = list[..<first].last(where: { !ids.contains($0) }) { return [before] }
+        return []
     }
 
     func dismissOrRestore() async {
