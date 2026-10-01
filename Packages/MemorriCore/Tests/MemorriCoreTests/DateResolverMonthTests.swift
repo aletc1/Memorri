@@ -76,7 +76,9 @@ import Testing
         // A clock and a page number far to the left of the calendar, in columns of their own.
         let strays = [RecognisedLine(n: 200, text: "1", box: PixelBox(x: -650, y: 40, width: 11, height: 18), confidence: 0.9),
                       RecognisedLine(n: 201, text: "88", box: PixelBox(x: -300, y: 480, width: 22, height: 18), confidence: 0.9),
-                      RecognisedLine(n: 202, text: "00", box: PixelBox(x: -300, y: 300, width: 22, height: 18), confidence: 0.9)]
+                      RecognisedLine(n: 202, text: "00", box: PixelBox(x: -300, y: 300, width: 22, height: 18), confidence: 0.9),
+                      RecognisedLine(n: 203, text: "18", box: PixelBox(x: -296, y: 380, width: 22, height: 18), confidence: 0.9),
+                      RecognisedLine(n: 204, text: "11", box: PixelBox(x: -296, y: 420, width: 22, height: 18), confidence: 0.9)]
         let lines = grid() + strays
         let headers = cells(lines)
         #expect(dayOf(lines, headers, row: 0, column: 3) == "2026-10-1" && dayOf(lines, headers, row: 1, column: 0) == "2026-10-5")

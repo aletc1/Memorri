@@ -206,7 +206,11 @@ public enum DateResolver {
         }
         // The line that places the entry: the first cited line that is not just a clock label of the hour scale.
         let cited = draft.citedLines.compactMap { n in context.lines.first { $0.n == n } }
-        let first = cited.first { !isClockLabel($0.text) } ?? cited.first
+        // In a month view the day label of the cell is often cited too ("oct" beside the 1st is one); it sits at the edge of its cell,
+        // so it is not what places the entry.
+        let labelLines = Set(context.cells.map(\.line))
+        let first = cited.first { !isClockLabel($0.text) && !labelLines.contains($0.n) && (context.cells.isEmpty || !isCellLabel($0.text, locales: context.locales)) }
+            ?? cited.first { !isClockLabel($0.text) } ?? cited.first
         if !context.cells.isEmpty {
             // The cell the line sits in decides the day; the model's pick is only used for a line that has no position.
             guard let line = first else {
@@ -455,8 +459,9 @@ public enum DateResolver {
         }
     }
 
-    /// The labels whose horizontal centre falls in a column (labels closer than a label's height apart share one) that holds at
-    /// least a third as many labels as the fullest column.
+    /// The labels that sit in the day columns of a grid: columns (labels closer than a label's height apart share one) with at least
+    /// two labels, evenly spaced. Numbers of other windows (a clock, a page count) form columns of their own, far from the grid or
+    /// not evenly spaced with it, so the longest chain of columns at the usual spacing, counted in labels, is the calendar's.
     private static func labelsInCommonColumns(_ labels: [RecognisedLine]) -> [RecognisedLine] {
         let heights = labels.map(\.box.height).sorted()
         let tolerance = Double(max(8, heights[heights.count / 2]))
@@ -465,8 +470,21 @@ public enum DateResolver {
             if let last = columns.last, label.box.midX - last.centre <= tolerance { columns[columns.count - 1].members.append(label) }
             else { columns.append((label.box.midX, [label])) }
         }
-        let most = columns.map(\.members.count).max() ?? 0
-        return columns.filter { $0.members.count * 3 >= most && $0.members.count >= 2 }.flatMap(\.members)
+        columns = columns.filter { $0.members.count >= 2 }
+        guard columns.count >= 2 else { return columns.flatMap(\.members) }
+        let gaps = zip(columns, columns.dropFirst()).map { $1.centre - $0.centre }.sorted()
+        let usual = gaps[gaps.count / 2]
+        var best: [RecognisedLine] = []
+        for start in columns.indices {
+            var chain = columns[start].members, last = columns[start].centre
+            for column in columns[(start + 1)...] {
+                let gap = column.centre - last
+                guard abs(gap - usual) <= usual * 0.25 else { break }
+                chain += column.members; last = column.centre
+            }
+            if chain.count > best.count { best = chain }
+        }
+        return best
     }
 
     // MARK: Calendar arithmetic

@@ -71,11 +71,14 @@ public struct AnalysisResult: Sendable {
     public let pictureLongEdge: Int
     /// The model calls made in this run (none for a step that was reused), in order.
     public let steps: [StepRecord]
+    /// The version of the code that read the findings when the model did not (a month grid); nil when the model did.
+    public let readBy: String?
 
     public init(lines: [RecognisedLine], classification: ClassificationResult, tags: [CaptureTag] = [], findings: [Finding] = [],
                 discards: [CitationCheck.Discard] = [], decision: ContextDecision = .unassigned, timezone: TimeZone = .current,
                 timezoneSource: String = "mac", lineCapApplied: Bool = false, model: String = "", pictureLongEdge: Int = 0,
-                steps: [StepRecord] = []) {
+                steps: [StepRecord] = [], readBy: String? = nil) {
+        self.readBy = readBy
         self.lines = lines; self.classification = classification; self.tags = tags; self.findings = findings; self.discards = discards
         self.decision = decision; self.timezone = timezone; self.timezoneSource = timezoneSource; self.lineCapApplied = lineCapApplied
         self.model = model; self.pictureLongEdge = pictureLongEdge; self.steps = steps
@@ -159,33 +162,41 @@ public struct AnalysisPipeline: Sendable {
         // Extract: the model lists what the picture shows, with literal texts and the lines they come from.
         // Only the calendar's own grid goes to the model when other windows share the picture.
         let shown = SubjectRegion.lines(lines, kind: resolved.kind, headers: headers, cells: cells)
-        let (prompt, capped) = ExtractionPrompts.extractPrompt(kind: resolved.kind, lines: shown,
-                                                              pictureSize: (input.image.width, input.image.height))
-        // A long list takes the model longer to write out: wait in proportion, never less than the configured time.
-        let extractSettings = ModelStepSettings(model: settings.model, think: settings.think,
-                                                timeout: max(settings.timeout, min(900, 90 + 1.5 * Double(shown.count))), modelThinks: settings.modelThinks)
-        let placeholder = "[picture \(input.analysisSize.width)x\(input.analysisSize.height)]"
-        let extraction = await ModelStep.call(using: model, settings: extractSettings, step: "extract", prompt: prompt, picture: input.analysisJPEG,
-                                              placeholder: placeholder, schema: ExtractionSchemas.extractSchema(for: resolved.kind),
-                                              promptVersion: ExtractionPrompts.version(for: resolved.kind),
-                                              schemaVersion: ExtractionSchemas.schemaVersion(for: resolved.kind), startedAt: time.now())
-        let items: [JSONValue]
-        switch extraction {
-        case .failure(let failure):
-            steps.append(failure.record)
-            throw AnalysisFailure(error: failure.error, steps: steps)
-        case .success(let value):
-            steps.append(value.record)
-            items = value.value["findings"]?.arrayValue ?? []
-        }
-
+        // A month grid is read from its lines and cells, with no model call (ADR 0018); anything else goes to the model.
+        let byGeometry = resolved.kind == .calendarMonth && cells.count >= MonthEntries.minimumCells
+        var capped = false
         var drafts: [FindingDraft] = [], discards: [CitationCheck.Discard] = []
-        for item in items {
-            if let draft = FindingDraft.parse(item) {
-                let inCalendar = resolved.kind == .calendarMonth || calendarKind
-                drafts.append(inCalendar && draft.kind != .appointment ? draft.asAppointment() : draft)
+        if byGeometry {
+            drafts = MonthEntries.drafts(lines: shown, cells: cells, locales: locales)
+        } else {
+            let (prompt, wasCapped) = ExtractionPrompts.extractPrompt(kind: resolved.kind, lines: shown,
+                                                                      pictureSize: (input.image.width, input.image.height))
+            capped = wasCapped
+            // A long list takes the model longer to write out: wait in proportion, never less than the configured time.
+            let extractSettings = ModelStepSettings(model: settings.model, think: settings.think,
+                                                    timeout: max(settings.timeout, min(900, 90 + 1.5 * Double(shown.count))), modelThinks: settings.modelThinks)
+            let placeholder = "[picture \(input.analysisSize.width)x\(input.analysisSize.height)]"
+            let extraction = await ModelStep.call(using: model, settings: extractSettings, step: "extract", prompt: prompt, picture: input.analysisJPEG,
+                                                  placeholder: placeholder, schema: ExtractionSchemas.extractSchema(for: resolved.kind),
+                                                  promptVersion: ExtractionPrompts.version(for: resolved.kind),
+                                                  schemaVersion: ExtractionSchemas.schemaVersion(for: resolved.kind), startedAt: time.now())
+            let items: [JSONValue]
+            switch extraction {
+            case .failure(let failure):
+                steps.append(failure.record)
+                throw AnalysisFailure(error: failure.error, steps: steps)
+            case .success(let value):
+                steps.append(value.record)
+                items = value.value["findings"]?.arrayValue ?? []
             }
-            else { discards.append(CitationCheck.Discard(title: item["title"]?.stringValue ?? "", reason: "unreadable finding", citedLines: [])) }
+            for item in items {
+                if let draft = FindingDraft.parse(item) {
+                    let inCalendar = resolved.kind == .calendarMonth || calendarKind
+                    let appointment = inCalendar && draft.kind != .appointment ? draft.asAppointment() : draft
+                    drafts.append(resolved.kind == .calendarMonth ? Self.withRowTime(appointment, lines: lines, cells: cells, locales: locales) : appointment)
+                }
+                else { discards.append(CitationCheck.Discard(title: item["title"]?.stringValue ?? "", reason: "unreadable finding", citedLines: [])) }
+            }
         }
         let checked = CitationCheck.apply(drafts, lineCount: lines.count)
         discards += checked.discarded
@@ -194,7 +205,8 @@ public struct AnalysisPipeline: Sendable {
         let findings = checked.kept.map { Self.assemble($0, lines: lines, context: base, geometry: geometry, tags: tags) }
         return AnalysisResult(lines: lines, classification: resolved, tags: tags, findings: findings, discards: discards, decision: decision,
                               timezone: zone, timezoneSource: zoneSource, lineCapApplied: capped, model: settings.model,
-                              pictureLongEdge: max(input.analysisSize.width, input.analysisSize.height), steps: steps)
+                              pictureLongEdge: max(input.analysisSize.width, input.analysisSize.height), steps: steps,
+                              readBy: byGeometry ? MonthEntries.version : nil)
     }
 
     /// True when the end text is written in a cited line that is not just a clock label of the hour scale at the side.
@@ -208,16 +220,42 @@ public struct AnalysisPipeline: Sendable {
 
     /// The cited line that is the block's own first line: not a clock label of the scale, not a date header (models often cite the
     /// header too), and preferably the one that shows the start time, else the one with the title.
-    static func blockTitleLine(_ draft: FindingDraft, lines: [RecognisedLine], headers: [DateHeader]) -> RecognisedLine? {
+    static func blockTitleLine(_ draft: FindingDraft, lines: [RecognisedLine], headers: [DateHeader], locales: [Locale] = []) -> RecognisedLine? {
         let skipped = Set(headers.map(\.line))
         let candidates = draft.citedLines.compactMap { n in lines.first { $0.n == n } }
-            .filter { !DateResolver.isClockLabel($0.text) && !skipped.contains($0.n) }
+            .filter { !DateResolver.isClockLabel($0.text) && !skipped.contains($0.n) && (locales.isEmpty || !DateResolver.isCellLabel($0.text, locales: locales)) }
         func compact(_ text: String?) -> String { (text ?? "").filter { !$0.isWhitespace }.lowercased() }
         if let start = draft.startText.map(compact), !start.isEmpty, let line = candidates.first(where: { compact($0.text).contains(start) }) { return line }
         let title = compact(draft.title)
         if !title.isEmpty, let line = candidates.first(where: { compact($0.text).contains(title) }) { return line }
         return candidates.min { $0.box.y < $1.box.y }
     }
+
+    /// In a month view an entry's time is written on its own row, at the right of its cell, and the model often takes another one
+    /// (the neighbouring cell's) or none. The time is read from the row: a line that is only a time, at the height of the entry's
+    /// own line, to its right and inside its cell; else a time at the end of the entry's own line. An entry with no time on its row
+    /// has none (it is all day).
+    static func withRowTime(_ draft: FindingDraft, lines: [RecognisedLine], cells: [DateHeader], locales: [Locale]) -> FindingDraft {
+        guard !cells.isEmpty, let title = blockTitleLine(draft, lines: lines, headers: cells, locales: locales) else { return draft }
+        let range = NSRange(title.text.startIndex..., in: title.text)
+        for expression in [trailingClock, leadingClock] {
+            if let own = expression.firstMatch(in: title.text, range: range), let found = Range(own.range, in: title.text) {
+                return draft.withStartText(String(title.text[found]).trimmingCharacters(in: .whitespaces))
+            }
+        }
+        // The columns are the same in every row, so any cell of the entry's column gives the span.
+        guard let cell = cells.first(where: { $0.cellWidth > 0 && title.box.x >= Int($0.midX - $0.cellWidth / 2) - 2 && Double(title.box.x) < $0.midX + $0.cellWidth / 2 })
+        else { return draft }
+        let left = cell.midX - cell.cellWidth / 2, right = cell.midX + cell.cellWidth / 2
+        let row = lines.filter { line in
+            DateResolver.isClockLabel(line.text) && line.box.x > title.box.x && line.box.midX >= left && line.box.midX < right
+                && abs(line.box.midY - title.box.midY) <= max(4, Double(title.box.height) * 0.6)
+        }
+        return draft.withStartText(row.min { $0.box.x < $1.box.x }?.text.trimmingCharacters(in: .whitespaces))
+    }
+
+    private static let leadingClock = try! NSRegularExpression(pattern: #"^\d{1,2}:\d{2}(?:\s?[ap]\.?m\.?)?(?=\s|$)"#, options: .caseInsensitive)
+    private static let trailingClock = try! NSRegularExpression(pattern: #"\b\d{1,2}:\d{2}(?:\s?[ap]\.?m\.?)?$"#, options: .caseInsensitive)
 
     /// A week view with a month picker beside it reads as a month view to the model. When date headers (a weekday name with its day
     /// number) run across the picture, much wider than any grid of day labels, the picture is a week view (or a day view).

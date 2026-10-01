@@ -47,7 +47,7 @@ public struct AnalysisResultStore: Sendable {
                     model, picture_long_edge, timezone, timezone_source, finding_count, line_cap_applied, discarded_json, extract_run_id, analysed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, arguments: [imageID, kind.rawValue, result.classification.confidence, ExtractionPrompts.classifyVersion,
-                                 ExtractionPrompts.version(for: kind), ExtractionSchemas.schemaVersion(for: kind), result.model,
+                                 result.readBy ?? ExtractionPrompts.version(for: kind), result.readBy == nil ? ExtractionSchemas.schemaVersion(for: kind) : "none", result.model,
                                  result.pictureLongEdge, result.timezone.identifier, result.timezoneSource, result.findings.count,
                                  result.lineCapApplied ? 1 : 0, Self.encode(result.discards), runID, date])
             for tag in result.tags {

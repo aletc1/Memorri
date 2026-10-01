@@ -113,7 +113,9 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         if let classify = steps.first(where: { $0.step == "classify" }) {
             Self.logger.info("classify image=\(imageID, privacy: .public) kind=\(analysis.classification.kind.rawValue, privacy: .public) confidence=\(analysis.classification.confidence) ms=\(classify.durationMs)")
         }
-        if let extract = steps.first(where: { $0.step == "extract" }) {
+        if let readBy = analysis.readBy {
+            Self.logger.info("extract image=\(imageID, privacy: .public) kind=\(analysis.classification.kind.rawValue, privacy: .public) by=\(readBy, privacy: .public) findings=\(analysis.findings.count)")
+        } else if let extract = steps.first(where: { $0.step == "extract" }) {
             Self.logger.info("extract image=\(imageID, privacy: .public) kind=\(analysis.classification.kind.rawValue, privacy: .public) findings=\(analysis.findings.count) discarded=\(analysis.discards.count) ms=\(extract.durationMs)")
         }
         let contextName = knownContexts.first { $0.id == analysis.decision.contextID }?.name

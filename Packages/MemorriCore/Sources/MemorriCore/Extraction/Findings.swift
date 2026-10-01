@@ -75,6 +75,12 @@ public struct FindingDraft: Sendable, Equatable {
                             columnLine: column, sentText: text("sent_text"), messageTimeText: text("message_time_text"))
     }
 
+    func withStartText(_ text: String?) -> FindingDraft {
+        FindingDraft(kind: kind, title: title, citedLines: citedLines, startText: text, endText: endText, dateText: dateText,
+                     dueText: dueText, remindText: remindText, allDay: allDay, people: people, place: place, notes: notes,
+                     columnLine: columnLine, sentText: sentText, messageTimeText: messageTimeText)
+    }
+
     /// The same finding as an appointment: everything a calendar view shows is one, whatever kind the model wrote.
     func asAppointment() -> FindingDraft {
         FindingDraft(kind: .appointment, title: title, citedLines: citedLines, startText: startText, endText: endText, dateText: dateText,

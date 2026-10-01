@@ -374,7 +374,47 @@ import Testing
         #expect(result.findings[1].start == SyntheticTime.date(2026, 10, 21, zone: "Europe/Madrid") && result.findings[1].allDay)
     }
 
-    @Test func textOfOtherWindowsOutsideAMonthGridIsNotSentToTheModel() async throws {
+    @Test func aMonthEntrysTimeComesFromItsOwnRowNotFromTheModel() async throws {
+        var lines: [RecognisedLine] = []
+        for (i, number) in (Array(28...30) + Array(1...31) + [1, 2]).enumerated() {
+            lines.append(RecognisedLine(n: i + 1, text: "\(number)", box: PixelBox(x: (i % 7) * 200 + 10, y: 60 + (i / 7) * 150, width: 22, height: 18), confidence: 0.9))
+        }
+        let rowY = 60 + 150 + 40            // Monday 5 and Tuesday 6 share a row
+        lines.append(RecognisedLine(n: 37, text: "Budget meeting", box: PixelBox(x: 10, y: rowY, width: 110, height: 14), confidence: 0.9))
+        lines.append(RecognisedLine(n: 38, text: "09:00", box: PixelBox(x: 150, y: rowY + 2, width: 36, height: 12), confidence: 0.9))
+        lines.append(RecognisedLine(n: 39, text: "Lunch", box: PixelBox(x: 210, y: rowY, width: 60, height: 14), confidence: 0.9))
+        lines.append(RecognisedLine(n: 40, text: "13:30", box: PixelBox(x: 350, y: rowY + 2, width: 36, height: 12), confidence: 0.9))
+        lines.append(RecognisedLine(n: 41, text: "Birthday", box: PixelBox(x: 10, y: rowY + 30, width: 70, height: 14), confidence: 0.9))
+        let (rig, input) = dateInput(lines: lines)
+        rig.model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer.replacingOccurrences(of: "calendar_week", with: "calendar_month"))
+        // The model gives the neighbour's time to the first, none to the second, and a time to the third that has none on its row.
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Budget meeting","cited_lines":[37],"start_text":"13:30"},{"kind":"appointment","title":"Lunch","cited_lines":[39]},{"kind":"appointment","title":"Birthday","cited_lines":[41],"start_text":"09:00"}]}"#)
+        let result = try await rig.pipeline.analyse(input, settings: settings)
+        #expect(result.findings[0].start == SyntheticTime.date(2026, 10, 5, 9, 0, zone: "Europe/Madrid"))
+        #expect(result.findings[1].start == SyntheticTime.date(2026, 10, 6, 13, 30, zone: "Europe/Madrid"))
+        #expect(result.findings[2].start == SyntheticTime.date(2026, 10, 5, zone: "Europe/Madrid") && result.findings[2].allDay)
+    }
+
+    @Test func aCitedDayLabelAtTheEdgeOfItsCellDoesNotPlaceTheEntry() async throws {
+        var lines: [RecognisedLine] = []
+        for (i, number) in (Array(28...30) + Array(1...31) + [1, 2]).enumerated() {
+            // Labels at the right edge of 244-wide cells; the 1st (index 3) is read as the month name only.
+            let text = i == 3 ? "oct" : "\(number)"
+            let width = i == 3 ? 30 : (number >= 10 ? 22 : 11)          // a right edge that stays put when the digits change
+            lines.append(RecognisedLine(n: i + 1, text: text, box: PixelBox(x: (i % 7) * 244 + 222 - width, y: 60 + (i / 7) * 150, width: width, height: 18), confidence: 0.9))
+        }
+        // An entry in the 4th column (x 732...976): its text at the left of the cell, its time at the right.
+        lines.append(RecognisedLine(n: 37, text: "Dentist", box: PixelBox(x: 740, y: 60 + 150 + 30, width: 80, height: 14), confidence: 0.9))
+        lines.append(RecognisedLine(n: 38, text: "11:00", box: PixelBox(x: 905, y: 60 + 150 + 32, width: 32, height: 12), confidence: 0.9))
+        let (rig, input) = dateInput(lines: lines)
+        rig.model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer.replacingOccurrences(of: "calendar_week", with: "calendar_month"))
+        // The model cites the "oct" label first, then the entry and its time.
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Dentist","cited_lines":[4,37,38],"start_text":"11:00","column_line":4}]}"#)
+        let result = try await rig.pipeline.analyse(input, settings: settings)
+        #expect(result.findings.first?.start == SyntheticTime.date(2026, 10, 8, 11, 0, zone: "Europe/Madrid"))
+    }
+
+    @Test func aMonthGridIsReadFromItsLinesWithoutAModelCallAndOtherWindowsAreLeftOut() async throws {
         var lines: [RecognisedLine] = []
         for (i, number) in (Array(28...30) + Array(1...31) + [1, 2]).enumerated() {
             lines.append(RecognisedLine(n: i + 1, text: "\(number)", box: PixelBox(x: 1000 + (i % 7) * 200 + 10, y: 60 + (i / 7) * 150, width: 22, height: 18), confidence: 0.9))
@@ -383,12 +423,11 @@ import Testing
         lines.append(RecognisedLine(n: 38, text: "text of another window", box: PixelBox(x: 20, y: 300, width: 300, height: 18), confidence: 0.9))
         let (rig, base) = dateInput(lines: lines)
         rig.model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer.replacingOccurrences(of: "calendar_week", with: "calendar_month"))
-        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Budget meeting","cited_lines":[37],"start_text":"09:00"}]}"#)
         let input = PipelineInput(image: makeTestImage(width: 3400, height: 1000), classificationJPEG: base.classificationJPEG, classificationSize: base.classificationSize,
                                   analysisJPEG: base.analysisJPEG, analysisSize: base.analysisSize, macTimezone: madrid, captureTime: captureTime, locales: base.locales)
         let result = try await rig.pipeline.analyse(input, settings: settings)
-        let prompt = try #require(rig.model.requests(whereSchemaHas: "findings").first).prompt
-        #expect(prompt.contains("Budget meeting") && !prompt.contains("another window"))
+        #expect(rig.model.requests(whereSchemaHas: "findings").isEmpty && result.steps.map(\.step) == ["classify"])
+        #expect(result.findings.map(\.title) == ["Budget meeting"] && result.readBy == MonthEntries.version)
         #expect(result.findings.first?.start == SyntheticTime.date(2026, 10, 5, 9, 0, zone: "Europe/Madrid"))
         #expect(result.lines.count == 38)                       // the stored lines are all of them
     }
