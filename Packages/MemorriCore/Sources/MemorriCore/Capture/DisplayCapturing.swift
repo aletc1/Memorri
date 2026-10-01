@@ -7,12 +7,15 @@ public struct CapturedDisplay: @unchecked Sendable {
     public let name: String?
     public let image: CGImage
     public let scale: Double
+    /// The windows visible on this display, largest first (empty when they could not be listed).
+    public let windows: [WindowInfo]
 
-    public init(displayID: UInt32, name: String?, image: CGImage, scale: Double) {
+    public init(displayID: UInt32, name: String?, image: CGImage, scale: Double, windows: [WindowInfo] = []) {
         self.displayID = displayID
         self.name = name
         self.image = image
         self.scale = scale
+        self.windows = windows
     }
 }
 

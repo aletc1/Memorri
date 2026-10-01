@@ -66,10 +66,13 @@ public struct ModelRunRecord: Sendable, Equatable, Codable, FetchableRecord, Per
     public var failureReason: String?
     public var requestJson: String
     public var rawAnswer: String?
+    /// `test`, `classify` or `extract` (migration v3); rows from spec 003 read as `test`.
+    public var step: String
 
     public init(id: String = UUID().uuidString, jobId: String, imageId: String?, attempt: Int, model: String, think: String,
                 temperature: Double, imageLongEdge: Int, promptVersion: String, schemaVersion: String, startedAt: Date,
-                durationMs: Int, outcome: Outcome, failureReason: String?, requestJson: String, rawAnswer: String?) {
+                durationMs: Int, outcome: Outcome, failureReason: String?, requestJson: String, rawAnswer: String?,
+                step: String = "test") {
         self.id = id
         self.jobId = jobId
         self.imageId = imageId
@@ -86,6 +89,7 @@ public struct ModelRunRecord: Sendable, Equatable, Codable, FetchableRecord, Per
         self.failureReason = failureReason
         self.requestJson = requestJson
         self.rawAnswer = rawAnswer
+        self.step = step
     }
 
     enum CodingKeys: String, CodingKey {
@@ -102,6 +106,7 @@ public struct ModelRunRecord: Sendable, Equatable, Codable, FetchableRecord, Per
         case failureReason = "failure_reason"
         case requestJson = "request_json"
         case rawAnswer = "raw_answer"
+        case step
     }
 }
 
@@ -136,6 +141,10 @@ public protocol AnalysisJobStoring: Sendable {
     func record(run: ModelRunRecord) throws
     /// The newest attempt of a job, if it has one.
     func latestRun(jobID: String) throws -> ModelRunRecord?
+    /// The newest successful run of a step with this prompt version for a picture: a retry reuses it instead of asking again.
+    func latestSuccessfulRun(imageID: String, step: String, promptVersion: String) throws -> ModelRunRecord?
+    /// True when a waiting or running `analyse` or `analyse-force` job exists for the picture.
+    func hasPendingAnalysis(imageID: String) throws -> Bool
     func counts() throws -> JobCounts
     func recentFailures(limit: Int) throws -> [AnalysisJobRecord]
     /// Failed jobs back to `waiting` with fresh attempts; returns how many.
@@ -221,6 +230,23 @@ public struct AnalysisStore: AnalysisJobStoring {
             try ModelRunRecord.fetchOne(db, sql: "SELECT * FROM model_runs WHERE job_id = ? ORDER BY attempt DESC, started_at DESC LIMIT 1",
                                         arguments: [jobID])
         }
+    }
+
+    public func latestSuccessfulRun(imageID: String, step: String, promptVersion: String) throws -> ModelRunRecord? {
+        try database.pool.read { db in
+            try ModelRunRecord.fetchOne(db, sql: """
+                SELECT * FROM model_runs WHERE image_id = ? AND step = ? AND prompt_version = ? AND outcome = 'success'
+                ORDER BY started_at DESC, attempt DESC LIMIT 1
+                """, arguments: [imageID, step, promptVersion])
+        }
+    }
+
+    public func hasPendingAnalysis(imageID: String) throws -> Bool {
+        try database.pool.read { db in
+            try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM analysis_jobs WHERE image_id = ? AND kind IN ('analyse', 'analyse-force') AND state IN ('waiting', 'running')
+                """, arguments: [imageID]) ?? 0
+        } > 0
     }
 
     public func counts() throws -> JobCounts {

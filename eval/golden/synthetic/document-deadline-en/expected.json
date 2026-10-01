@@ -1,0 +1,84 @@
+{
+  "findings" : [
+    {
+      "allDay" : true,
+      "due" : "2026-11-05T23:00:00Z",
+      "inferred" : [
+        "remind"
+      ],
+      "kind" : "deadline",
+      "people" : [
+
+      ],
+      "remind" : "2026-11-05T08:00:00Z",
+      "title" : "Submit the grant proposal"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        16,
+        9,
+        150,
+        18
+      ],
+      "text" : "Grant proposal.docx"
+    },
+    {
+      "box" : [
+        330,
+        120,
+        235,
+        41
+      ],
+      "text" : "Grant proposal"
+    },
+    {
+      "box" : [
+        330,
+        200,
+        516,
+        23
+      ],
+      "text" : "This document describes the plan for the next funding round."
+    },
+    {
+      "box" : [
+        330,
+        238,
+        372,
+        23
+      ],
+      "text" : "The budget section still needs a final review."
+    },
+    {
+      "box" : [
+        330,
+        276,
+        356,
+        23
+      ],
+      "text" : "Submit the grant proposal by 2026-11-06."
+    },
+    {
+      "box" : [
+        330,
+        314,
+        398,
+        23
+      ],
+      "text" : "Contact the research office with any questions."
+    }
+  ],
+  "screenKind" : "document",
+  "tags" : [
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

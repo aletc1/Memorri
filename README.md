@@ -2,7 +2,7 @@
 
 A private "second brain" for the macOS menu bar. It reads screenshots of your screen and turns what it sees into appointments, tasks and reminders.
 
-> **Status: pre-alpha.** The menu-bar app runs: menu, global hotkey, Screen Recording permission onboarding and Settings. It captures every display and keeps the pictures locally (with storage figures, clean-up and a retention policy in Settings). It now connects to a local Ollama server, lets you choose a vision model and runs test jobs in a durable background queue shown in the menu. It does not read your screenshots yet. Run it from source (see [`DEVELOPER.md`](DEVELOPER.md)). See the [roadmap](docs/roadmap.md).
+> **Status: pre-alpha.** The menu-bar app runs: menu, global hotkey, Screen Recording permission onboarding and Settings. It captures every display and keeps the pictures locally (with storage figures, clean-up and a retention policy in Settings). It now connects to a local Ollama server, lets you choose a vision model and runs test jobs in a durable background queue shown in the menu. It now reads each capture (Apple Vision OCR plus the local model) and finds appointments, tasks, reminders and deadlines with their dates, shown in Settings → Analysis together with the context each picture belongs to; nothing is synced anywhere yet, and a `memorri-eval` tool measures how well the reading works. Run it from source (see [`DEVELOPER.md`](DEVELOPER.md)). See the [roadmap](docs/roadmap.md).
 
 ## Why
 
@@ -33,7 +33,7 @@ The full list is in the [constitution](.specify/memory/constitution.md).
 ## Requirements (planned)
 
 - macOS 26 or later
-- [Ollama](https://ollama.com) with a vision model (developed against `qwen3.8:27b-mlx`)
+- [Ollama](https://ollama.com) with a vision model (`qwen3-vl:8b-instruct` by default; `qwen3.8:27b-mlx` is more accurate and about twice as slow)
 - Screen Recording permission, plus Calendar and Reminders access for sync
 
 Memorri is not signed or notarized. It is built and run locally only.

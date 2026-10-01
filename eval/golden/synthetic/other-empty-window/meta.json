@@ -1,0 +1,23 @@
+{
+  "capturedAt" : "2026-10-14T07:12:00Z",
+  "displaySize" : [
+    1600,
+    1000
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "TextEdit",
+      "bundleID" : "com.apple.TextEdit",
+      "frame" : [
+        0,
+        0,
+        1600,
+        1000
+      ],
+      "title" : "Untitled"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "capturedAt" : "2026-10-14T23:40:00Z",
+  "context" : {
+    "hints" : [
+      {
+        "kind" : "domain",
+        "value" : "customer-a.example"
+      },
+      {
+        "kind" : "window_title",
+        "value" : "Customer A"
+      }
+    ],
+    "name" : "Customer A",
+    "timezone" : "America/New_York"
+  },
+  "displaySize" : [
+    1600,
+    1000
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "Microsoft Teams",
+      "bundleID" : "com.microsoft.teams2",
+      "frame" : [
+        0,
+        0,
+        1600,
+        1000
+      ],
+      "title" : "Chat | Customer A | Microsoft Teams"
+    }
+  ]
+}

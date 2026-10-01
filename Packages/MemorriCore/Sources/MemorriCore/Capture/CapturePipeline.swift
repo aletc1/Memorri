@@ -21,12 +21,15 @@ public actor CapturePipeline {
     private let paths: AppPaths
     private let settings: StorageSettings
     private let time: any TimeSource
+    private let enqueuer: (any AnalysisEnqueuing)?
+    private let analysisSettings: AnalysisSettings?
 
     private var isRunning = false
 
     public init(capturer: any DisplayCapturing, encoder: any ImageEncoding, disk: any DiskSpaceChecking,
                 files: CaptureFileStore, store: any CaptureStoring, paths: AppPaths,
-                settings: StorageSettings, time: any TimeSource = SystemTimeSource()) {
+                settings: StorageSettings, time: any TimeSource = SystemTimeSource(),
+                enqueuer: (any AnalysisEnqueuing)? = nil, analysisSettings: AnalysisSettings? = nil) {
         self.capturer = capturer
         self.encoder = encoder
         self.disk = disk
@@ -35,6 +38,8 @@ public actor CapturePipeline {
         self.paths = paths
         self.settings = settings
         self.time = time
+        self.enqueuer = enqueuer
+        self.analysisSettings = analysisSettings
     }
 
     /// `nil` when another capture is already running.
@@ -97,6 +102,7 @@ public actor CapturePipeline {
 
         do {
             var images: [CaptureImageRecord] = []
+            var windows: [String: [WindowInfo]] = [:]
             let folder = CaptureFileStore.monthFolder(for: capturedAt)
             for item in encoded {
                 let imageID = UUID().uuidString
@@ -110,6 +116,7 @@ public actor CapturePipeline {
                     scale: item.display.scale, fullPath: "\(base)/\(fullName)", modelPath: "\(base)/\(modelName)",
                     modelWidth: item.model.width, modelHeight: item.model.height,
                     fullBytes: item.full.data.count, modelBytes: item.model.data.count, missing: false))
+                windows[imageID] = WindowSelection.select(item.display.windows, pictureWidth: item.full.width, pictureHeight: item.full.height)
             }
             committed = try files.commit(staging: staging, eventID: eventID, capturedAt: capturedAt)
 
@@ -119,10 +126,12 @@ public actor CapturePipeline {
                 status: partial ? "partial" : "complete",
                 failureReason: partial ? "\(result.failedDisplayCount) of \(attempted) displays could not be captured" : nil,
                 displayCount: attempted)
-            try store.insert(event: event, images: images)
+            try store.insert(event: event, images: images, windows: windows)
 
             let status = partial ? "partial" : "complete"
             Self.logger.notice("capture finished status=\(status, privacy: .public) displays=\(attempted) images=\(images.count) ms=\(Self.milliseconds(since: started))")
+            // The capture is done and stored; queueing its analysis can never turn it into a failure.
+            if let enqueuer, analysisSettings?.automatic ?? true { await enqueuer.enqueueAnalysis(imageIDs: images.map(\.id)) }
             return partial ? .partial(captured: result.displays.count, of: attempted) : .complete(displays: attempted)
         } catch {
             files.discard(staging: staging)

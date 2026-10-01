@@ -29,7 +29,7 @@ Do these once per Mac.
    brew install xcodegen
    specify --version && xcodegen --version
    ```
-2. Install Ollama and pull the model the app uses: `ollama pull qwen3.8:27b-mlx`.
+2. Install Ollama and pull the model the app uses: `ollama pull qwen3-vl:8b-instruct` (about 6 GB; `qwen3.8:27b-mlx` is the slower, more accurate alternative).
 3. Create the local signing certificate. Without it, macOS forgets the Screen Recording permission on every rebuild:
    ```bash
    scripts/create-signing-certificate.sh
@@ -76,7 +76,7 @@ staging/                             captures being written; emptied at every st
 
 The app talks to a local Ollama server (spec 003). It cannot read screenshots yet; it only tests the model and runs test jobs.
 
-- **Install**: `brew install ollama` (or the Ollama app), start it, then `ollama pull qwen3.8:27b-mlx`. The app chooses that model by itself on first use when it is installed. Settings → Ollama shows the connection status, the model picker (vision models only), thinking, the timeout, **Test the model** and the queue.
+- **Install**: `brew install ollama` (or the Ollama app), start it, then `ollama pull qwen3-vl:8b-instruct`. The app chooses that model by itself on first use when it is installed. Settings → Ollama shows the connection status, the model picker (vision models only), thinking, the timeout, **Test the model** and the queue.
 - **Local only**: the address must be `localhost`, `127.0.0.1` or `::1`; anything else is rejected. `OllamaURLSessionTransport.swift` is the only file allowed to use URLSession, so captured content cannot leave the Mac by accident. `NoNetworkTests` fails if any other file names it, including in a comment. See ADR 0011.
 - **Fake server**: `python3 scripts/fake-ollama.py --port 11999 --mode ok|invalid|slow|error|flaky|hang [--delay 5] [--no-vision] [--no-capabilities] [--thinking]` stands in for Ollama when you need failure cases. Point Settings at `http://localhost:11999` (or `defaults write com.aletc1.memorri memorri.ollama.address http://localhost:11999` and relaunch; the model is `fake-vision:1b`). Reset with `http://localhost:11434`.
 - **Logs**: categories `ollama` (`check …`, `request …`) and `analysis` (`job started/finished/failed`, `queue holding/resumed/paused`, `recovered running=<n>`). Info lines need `--level info`: `/usr/bin/log stream --level info --predicate 'subsystem == "com.aletc1.memorri" AND category == "analysis"'`.
@@ -235,18 +235,23 @@ Write an ADR when you choose a library, change how data is stored, change how mo
 
 ## 8. Change a prompt, schema or model
 
-Prompts and models decide whether the app finds the right items, so changes are measured, not guessed.
+Prompts and models decide whether the app finds the right items, so changes are measured, not guessed. The harness is `memorri-eval`, in `Packages/MemorriCore/Sources/memorri-eval` over `MemorriCore/Evaluation`; it runs the same `AnalysisPipeline` as the app's queue.
 
-1. Make the change in the `Extraction` module, and increase the prompt version number.
-2. Run the eval harness and note the numbers before and after:
+1. Make the change in `Extraction` and increase the prompt version (`ExtractionPrompts`) or schema version (`ExtractionSchemas`). Both are stored with every analysis.
+2. Check that the app is not analysing (pause it from the menu) and that Ollama is running with the model chosen in Settings. Then run the set and keep the report:
    ```bash
-   swift run --package-path Packages/MemorriCore memorri-eval
+   swift run --package-path Packages/MemorriCore memorri-eval run --out eval/out/before.json   # the old version
+   # ...make the change...
+   swift run --package-path Packages/MemorriCore memorri-eval run --out eval/out/after.json
+   swift run --package-path Packages/MemorriCore memorri-eval compare eval/out/before.json eval/out/after.json
    ```
-3. Precision and recall must not go down. If a case is new, add it to `eval/golden/` first, so the harness shows the failure before your fix.
-4. Only use synthetic or redacted screenshots in commits. Real screenshots stay in the gitignored part of `eval/golden/`.
-5. Put the before and after numbers in the pull request description.
+   The report lists precision, recall and field accuracy overall and by kind, classification, tags, context, reading accuracy, and every missed or unexpected finding with its dates. `run` refuses while the app's queue has a running job; `--allow-busy` overrides that and the report says so. `--only <case>` runs one case and `--replay <report.json>` scores the stored model answers again without calling the model (use it after changing only the code that resolves dates, durations, tags or contexts).
+3. Precision and recall must not go down. If a case is new, add it first so the harness shows the failure before your fix.
+4. **Golden cases** are folders with `screenshot.png`, `meta.json` (capture time, the Mac's time zone, context, windows, display size) and `expected.json` (kind, tags, context, drawn lines, findings). Only `eval/golden/synthetic/` is tracked; it is drawn by code (`memorri-eval generate-synthetic --out eval/golden/synthetic`, deterministic) so nothing real is stored. A case from a real session goes into the gitignored part of `eval/golden/`, never into a commit. Change a synthetic case in `MemorriCore/Evaluation/Synthetic*.swift` and regenerate.
+5. `memorri-eval sweep-size` runs the set at 1024, 1536, 2048 and 3072 px and recommends the smallest size within 0.02 of the best (ADR 0017).
+6. Put the before and after numbers in the pull request description.
 
-(The harness arrives with spec 004. Before that, there is nothing to run.)
+To try the pipeline on one picture without capturing your screen, run a Debug build with `--ingest-picture <png>` (and `--ingest-windows <json>` for window titles), or `--ingest-case <golden case folder>`, then watch the app's log: `/usr/bin/log stream --predicate 'subsystem == "com.aletc1.memorri" && category == "extraction"'` shows `read`, `classify`, `extract`, `resolve`, `context` and `analysis stored` lines (never text, titles or tag values). `scripts/fake-ollama.py --mode extract` (also `extract-bad-citation`, `extract-empty`, `classify-unsure`) stands in for the model. Settings → Analysis shows each picture's state, kind, context (with a picker), tags and findings, and has the Contexts block.
 
 ## 9. Branches, commits and pull requests
 

@@ -1,0 +1,250 @@
+{
+  "findings" : [
+    {
+      "allDay" : true,
+      "due" : "2026-10-14T22:00:00Z",
+      "kind" : "task",
+      "people" : [
+
+      ],
+      "title" : "Send the report"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        780,
+        12,
+        34,
+        21
+      ],
+      "text" : "Mail"
+    },
+    {
+      "box" : [
+        20,
+        54,
+        61,
+        19
+      ],
+      "text" : "Finance"
+    },
+    {
+      "box" : [
+        20,
+        78,
+        87,
+        18
+      ],
+      "text" : "Invoice 4471"
+    },
+    {
+      "box" : [
+        20,
+        102,
+        168,
+        17
+      ],
+      "text" : "Attached is the invoice for"
+    },
+    {
+      "box" : [
+        20,
+        146,
+        79,
+        19
+      ],
+      "text" : "Jon Reyes"
+    },
+    {
+      "box" : [
+        20,
+        170,
+        47,
+        18
+      ],
+      "text" : "Report"
+    },
+    {
+      "box" : [
+        20,
+        194,
+        18,
+        17
+      ],
+      "text" : "Hi,"
+    },
+    {
+      "box" : [
+        20,
+        238,
+        67,
+        19
+      ],
+      "text" : "HR team"
+    },
+    {
+      "box" : [
+        20,
+        262,
+        109,
+        18
+      ],
+      "text" : "Benefits update"
+    },
+    {
+      "box" : [
+        20,
+        286,
+        180,
+        17
+      ],
+      "text" : "Open enrolment starts soon"
+    },
+    {
+      "box" : [
+        20,
+        330,
+        81,
+        19
+      ],
+      "text" : "IT support"
+    },
+    {
+      "box" : [
+        20,
+        354,
+        112,
+        18
+      ],
+      "text" : "Password expiry"
+    },
+    {
+      "box" : [
+        20,
+        378,
+        163,
+        17
+      ],
+      "text" : "Your password will expire"
+    },
+    {
+      "box" : [
+        20,
+        422,
+        86,
+        19
+      ],
+      "text" : "Newsletter"
+    },
+    {
+      "box" : [
+        20,
+        446,
+        97,
+        18
+      ],
+      "text" : "Weekly digest"
+    },
+    {
+      "box" : [
+        20,
+        470,
+        136,
+        17
+      ],
+      "text" : "Top stories this week"
+    },
+    {
+      "box" : [
+        500,
+        72,
+        89,
+        33
+      ],
+      "text" : "Report"
+    },
+    {
+      "box" : [
+        500,
+        122,
+        120,
+        19
+      ],
+      "text" : "From: Jon Reyes"
+    },
+    {
+      "box" : [
+        500,
+        146,
+        49,
+        19
+      ],
+      "text" : "To: me"
+    },
+    {
+      "box" : [
+        500,
+        170,
+        322,
+        19
+      ],
+      "text" : "Date: Wednesday, 14 October 2026 at 09:12"
+    },
+    {
+      "box" : [
+        500,
+        234,
+        23,
+        23
+      ],
+      "text" : "Hi,"
+    },
+    {
+      "box" : [
+        500,
+        268,
+        337,
+        23
+      ],
+      "text" : "Please send me the report by tomorrow."
+    },
+    {
+      "box" : [
+        500,
+        302,
+        67,
+        23
+      ],
+      "text" : "Thanks,"
+    },
+    {
+      "box" : [
+        500,
+        336,
+        31,
+        23
+      ],
+      "text" : "Jon"
+    }
+  ],
+  "screenKind" : "email",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Apple Mail"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "macOS"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

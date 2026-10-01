@@ -1,0 +1,250 @@
+{
+  "findings" : [
+    {
+      "allDay" : true,
+      "due" : "2026-10-22T22:00:00Z",
+      "kind" : "task",
+      "people" : [
+        "Maria"
+      ],
+      "title" : "Budget figures"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        156,
+        13,
+        213,
+        18
+      ],
+      "text" : "https://mail.example.com/inbox"
+    },
+    {
+      "box" : [
+        20,
+        54,
+        61,
+        19
+      ],
+      "text" : "Finance"
+    },
+    {
+      "box" : [
+        20,
+        78,
+        87,
+        18
+      ],
+      "text" : "Invoice 4471"
+    },
+    {
+      "box" : [
+        20,
+        102,
+        168,
+        17
+      ],
+      "text" : "Attached is the invoice for"
+    },
+    {
+      "box" : [
+        20,
+        146,
+        90,
+        19
+      ],
+      "text" : "Ines Duarte"
+    },
+    {
+      "box" : [
+        20,
+        170,
+        50,
+        18
+      ],
+      "text" : "Budget"
+    },
+    {
+      "box" : [
+        20,
+        194,
+        37,
+        17
+      ],
+      "text" : "Hello,"
+    },
+    {
+      "box" : [
+        20,
+        238,
+        67,
+        19
+      ],
+      "text" : "HR team"
+    },
+    {
+      "box" : [
+        20,
+        262,
+        109,
+        18
+      ],
+      "text" : "Benefits update"
+    },
+    {
+      "box" : [
+        20,
+        286,
+        180,
+        17
+      ],
+      "text" : "Open enrolment starts soon"
+    },
+    {
+      "box" : [
+        20,
+        330,
+        81,
+        19
+      ],
+      "text" : "IT support"
+    },
+    {
+      "box" : [
+        20,
+        354,
+        112,
+        18
+      ],
+      "text" : "Password expiry"
+    },
+    {
+      "box" : [
+        20,
+        378,
+        163,
+        17
+      ],
+      "text" : "Your password will expire"
+    },
+    {
+      "box" : [
+        20,
+        422,
+        86,
+        19
+      ],
+      "text" : "Newsletter"
+    },
+    {
+      "box" : [
+        20,
+        446,
+        97,
+        18
+      ],
+      "text" : "Weekly digest"
+    },
+    {
+      "box" : [
+        20,
+        470,
+        136,
+        17
+      ],
+      "text" : "Top stories this week"
+    },
+    {
+      "box" : [
+        500,
+        72,
+        96,
+        33
+      ],
+      "text" : "Budget"
+    },
+    {
+      "box" : [
+        500,
+        122,
+        129,
+        19
+      ],
+      "text" : "From: Ines Duarte"
+    },
+    {
+      "box" : [
+        500,
+        146,
+        49,
+        19
+      ],
+      "text" : "To: me"
+    },
+    {
+      "box" : [
+        500,
+        170,
+        322,
+        19
+      ],
+      "text" : "Date: Wednesday, 14 October 2026 at 09:12"
+    },
+    {
+      "box" : [
+        500,
+        234,
+        48,
+        23
+      ],
+      "text" : "Hello,"
+    },
+    {
+      "box" : [
+        500,
+        268,
+        451,
+        23
+      ],
+      "text" : "Maria needs the budget figures by Friday 23 October."
+    },
+    {
+      "box" : [
+        500,
+        302,
+        93,
+        23
+      ],
+      "text" : "Thank you,"
+    },
+    {
+      "box" : [
+        500,
+        336,
+        35,
+        23
+      ],
+      "text" : "Ines"
+    }
+  ],
+  "screenKind" : "email",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Web mail"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "macOS"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

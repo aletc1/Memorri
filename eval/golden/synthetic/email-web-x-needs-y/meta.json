@@ -1,0 +1,23 @@
+{
+  "capturedAt" : "2026-10-14T07:12:00Z",
+  "displaySize" : [
+    1600,
+    1000
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "Safari",
+      "bundleID" : "com.apple.Safari",
+      "frame" : [
+        0,
+        0,
+        1600,
+        1000
+      ],
+      "title" : "Inbox - Mail"
+    }
+  ]
+}

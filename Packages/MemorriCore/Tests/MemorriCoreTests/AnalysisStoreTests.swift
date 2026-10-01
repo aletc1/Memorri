@@ -142,4 +142,23 @@ import Testing
         try h.store.record(run: saved)
         #expect(try h.store.runs() == [saved])
     }
+
+    @Test func theNewestSuccessfulRunOfAStepAndVersionIsFound() throws {
+        let fixture = try makePipelineFixture(); defer { fixture.cleanUp() }
+        let store = AnalysisStore(database: fixture.database)
+        try store.enqueue(job("j", at: 1, image: fixture.imageID))
+        func record(_ id: String, step: String, version: String, outcome: ModelRunRecord.Outcome, at: TimeInterval) -> ModelRunRecord {
+            ModelRunRecord(id: id, jobId: "j", imageId: fixture.imageID, attempt: 1, model: "m", think: "off", temperature: 0,
+                           imageLongEdge: 1024, promptVersion: version, schemaVersion: "s", startedAt: t0.addingTimeInterval(at),
+                           durationMs: 10, outcome: outcome, failureReason: nil, requestJson: "{}", rawAnswer: id, step: step)
+        }
+        try store.record(run: record("old", step: "classify", version: "classify-v1", outcome: .success, at: 1))
+        try store.record(run: record("new", step: "classify", version: "classify-v1", outcome: .success, at: 5))
+        try store.record(run: record("failed", step: "classify", version: "classify-v1", outcome: .failed, at: 9))
+        try store.record(run: record("other-version", step: "classify", version: "classify-v2", outcome: .success, at: 10))
+        try store.record(run: record("other-step", step: "extract", version: "classify-v1", outcome: .success, at: 11))
+        #expect(try store.latestSuccessfulRun(imageID: fixture.imageID, step: "classify", promptVersion: "classify-v1")?.rawAnswer == "new")
+        #expect(try store.latestSuccessfulRun(imageID: fixture.imageID, step: "classify", promptVersion: "classify-v3") == nil)
+        #expect(try store.latestSuccessfulRun(imageID: "nobody", step: "classify", promptVersion: "classify-v1") == nil)
+    }
 }

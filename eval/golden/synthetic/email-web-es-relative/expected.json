@@ -1,0 +1,250 @@
+{
+  "findings" : [
+    {
+      "allDay" : true,
+      "due" : "2026-10-15T22:00:00Z",
+      "kind" : "task",
+      "people" : [
+
+      ],
+      "title" : "Informe"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        156,
+        13,
+        237,
+        18
+      ],
+      "text" : "https://calendar.example.com/view"
+    },
+    {
+      "box" : [
+        20,
+        54,
+        69,
+        19
+      ],
+      "text" : "Finanzas"
+    },
+    {
+      "box" : [
+        20,
+        78,
+        90,
+        18
+      ],
+      "text" : "Factura 4471"
+    },
+    {
+      "box" : [
+        20,
+        102,
+        135,
+        17
+      ],
+      "text" : "Adjunto la factura de"
+    },
+    {
+      "box" : [
+        20,
+        146,
+        89,
+        19
+      ],
+      "text" : "Marta Vidal"
+    },
+    {
+      "box" : [
+        20,
+        170,
+        53,
+        18
+      ],
+      "text" : "Informe"
+    },
+    {
+      "box" : [
+        20,
+        194,
+        34,
+        17
+      ],
+      "text" : "Hola,"
+    },
+    {
+      "box" : [
+        20,
+        238,
+        150,
+        19
+      ],
+      "text" : "Recursos Humanos"
+    },
+    {
+      "box" : [
+        20,
+        262,
+        174,
+        18
+      ],
+      "text" : "Novedades de beneficios"
+    },
+    {
+      "box" : [
+        20,
+        286,
+        190,
+        17
+      ],
+      "text" : "Pronto empieza la inscripción"
+    },
+    {
+      "box" : [
+        20,
+        330,
+        81,
+        19
+      ],
+      "text" : "Soporte TI"
+    },
+    {
+      "box" : [
+        20,
+        354,
+        176,
+        18
+      ],
+      "text" : "Caducidad de contraseña"
+    },
+    {
+      "box" : [
+        20,
+        378,
+        179,
+        17
+      ],
+      "text" : "Su contraseña va a caducar"
+    },
+    {
+      "box" : [
+        20,
+        422,
+        55,
+        19
+      ],
+      "text" : "Boletín"
+    },
+    {
+      "box" : [
+        20,
+        446,
+        125,
+        18
+      ],
+      "text" : "Resumen semanal"
+    },
+    {
+      "box" : [
+        20,
+        470,
+        182,
+        17
+      ],
+      "text" : "Las noticias de esta semana"
+    },
+    {
+      "box" : [
+        500,
+        72,
+        102,
+        33
+      ],
+      "text" : "Informe"
+    },
+    {
+      "box" : [
+        500,
+        122,
+        128,
+        19
+      ],
+      "text" : "From: Marta Vidal"
+    },
+    {
+      "box" : [
+        500,
+        146,
+        59,
+        19
+      ],
+      "text" : "Para: yo"
+    },
+    {
+      "box" : [
+        500,
+        170,
+        346,
+        19
+      ],
+      "text" : "Fecha: miércoles, 14 de octubre de 2026, 09:12"
+    },
+    {
+      "box" : [
+        500,
+        234,
+        44,
+        23
+      ],
+      "text" : "Hola,"
+    },
+    {
+      "box" : [
+        500,
+        268,
+        297,
+        23
+      ],
+      "text" : "Necesito el informe para el viernes."
+    },
+    {
+      "box" : [
+        500,
+        302,
+        69,
+        23
+      ],
+      "text" : "Gracias,"
+    },
+    {
+      "box" : [
+        500,
+        336,
+        50,
+        23
+      ],
+      "text" : "Marta"
+    }
+  ],
+  "screenKind" : "email",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Web mail"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "macOS"
+    },
+    {
+      "key" : "language",
+      "value" : "es"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

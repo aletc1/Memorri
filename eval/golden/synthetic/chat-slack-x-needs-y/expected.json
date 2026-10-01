@@ -1,0 +1,191 @@
+{
+  "findings" : [
+    {
+      "allDay" : true,
+      "due" : "2026-10-18T22:00:00Z",
+      "kind" : "task",
+      "people" : [
+        "Carlos"
+      ],
+      "title" : "Send the contract"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        16,
+        9,
+        50,
+        23
+      ],
+      "text" : "Slack"
+    },
+    {
+      "box" : [
+        110,
+        12,
+        120,
+        18
+      ],
+      "text" : "Acme Workspace"
+    },
+    {
+      "box" : [
+        68,
+        70,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        68,
+        134,
+        91,
+        19
+      ],
+      "text" : "Design team"
+    },
+    {
+      "box" : [
+        68,
+        198,
+        82,
+        19
+      ],
+      "text" : "Carlos Ruiz"
+    },
+    {
+      "box" : [
+        68,
+        262,
+        118,
+        19
+      ],
+      "text" : "Release channel"
+    },
+    {
+      "box" : [
+        360,
+        60,
+        152,
+        26
+      ],
+      "text" : "# project-atlas"
+    },
+    {
+      "box" : [
+        910,
+        120,
+        39,
+        17
+      ],
+      "text" : "Today"
+    },
+    {
+      "box" : [
+        416,
+        170,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        536,
+        172,
+        53,
+        17
+      ],
+      "text" : "9:41 AM"
+    },
+    {
+      "box" : [
+        416,
+        198,
+        259,
+        22
+      ],
+      "text" : "Morning! Did you see the notes?"
+    },
+    {
+      "box" : [
+        416,
+        266,
+        86,
+        19
+      ],
+      "text" : "Elena Mora"
+    },
+    {
+      "box" : [
+        513,
+        268,
+        53,
+        17
+      ],
+      "text" : "9:41 AM"
+    },
+    {
+      "box" : [
+        416,
+        294,
+        369,
+        22
+      ],
+      "text" : "Carlos needs to send the contract by Monday."
+    },
+    {
+      "box" : [
+        416,
+        362,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        536,
+        364,
+        53,
+        17
+      ],
+      "text" : "9:41 AM"
+    },
+    {
+      "box" : [
+        416,
+        390,
+        175,
+        22
+      ],
+      "text" : "Sounds good, thanks."
+    }
+  ],
+  "screenKind" : "chat",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Slack"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "macOS"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    },
+    {
+      "key" : "clock_style",
+      "value" : "12h"
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import MemorriCore
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, permissions, ollama, storage, calendarSync
+    case general, permissions, ollama, analysis, storage, calendarSync
 
     var id: String { rawValue }
 
@@ -11,6 +11,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: "General"
         case .permissions: "Permissions"
         case .ollama: "Ollama"
+        case .analysis: "Analysis"
         case .storage: "Storage"
         case .calendarSync: "Calendar sync"
         }
@@ -21,6 +22,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: "gearshape"
         case .permissions: "lock.shield"
         case .ollama: "cpu"
+        case .analysis: "text.magnifyingglass"
         case .storage: "internaldrive"
         case .calendarSync: "calendar"
         }
@@ -30,7 +32,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var comingLater: String? {
         switch self {
         case .calendarSync: "the calendar and reminders list your items are copied to (spec 009)."
-        case .general, .permissions, .storage, .ollama: nil
+        case .general, .permissions, .storage, .ollama, .analysis: nil
         }
     }
 }
@@ -67,6 +69,8 @@ struct SettingsView: View {
             StorageSettingsView(environment: environment)
         case .ollama:
             OllamaSettingsView(environment: environment)
+        case .analysis:
+            AnalysisSettingsView(environment: environment)
         case .calendarSync:
             VStack(alignment: .leading, spacing: 8) {
                 Text(section.title).font(.headline)

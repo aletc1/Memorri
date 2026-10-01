@@ -1,0 +1,282 @@
+{
+  "context" : "Customer A",
+  "findings" : [
+    {
+      "allDay" : true,
+      "due" : "2026-10-30T04:00:00Z",
+      "inferred" : [
+        "remind"
+      ],
+      "kind" : "deadline",
+      "people" : [
+
+      ],
+      "remind" : "2026-10-29T13:00:00Z",
+      "title" : "Submit the expense report"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        16,
+        9,
+        72,
+        23
+      ],
+      "text" : "Outlook"
+    },
+    {
+      "box" : [
+        130,
+        12,
+        41,
+        18
+      ],
+      "text" : "Home"
+    },
+    {
+      "box" : [
+        210,
+        12,
+        34,
+        18
+      ],
+      "text" : "View"
+    },
+    {
+      "box" : [
+        290,
+        12,
+        32,
+        18
+      ],
+      "text" : "Help"
+    },
+    {
+      "box" : [
+        20,
+        50,
+        61,
+        19
+      ],
+      "text" : "Finance"
+    },
+    {
+      "box" : [
+        20,
+        74,
+        87,
+        18
+      ],
+      "text" : "Invoice 4471"
+    },
+    {
+      "box" : [
+        20,
+        98,
+        168,
+        17
+      ],
+      "text" : "Attached is the invoice for"
+    },
+    {
+      "box" : [
+        20,
+        142,
+        114,
+        19
+      ],
+      "text" : "Dana Whitfield"
+    },
+    {
+      "box" : [
+        20,
+        166,
+        105,
+        18
+      ],
+      "text" : "Expense report"
+    },
+    {
+      "box" : [
+        20,
+        190,
+        36,
+        17
+      ],
+      "text" : "Hi all,"
+    },
+    {
+      "box" : [
+        20,
+        234,
+        67,
+        19
+      ],
+      "text" : "HR team"
+    },
+    {
+      "box" : [
+        20,
+        258,
+        109,
+        18
+      ],
+      "text" : "Benefits update"
+    },
+    {
+      "box" : [
+        20,
+        282,
+        180,
+        17
+      ],
+      "text" : "Open enrolment starts soon"
+    },
+    {
+      "box" : [
+        20,
+        326,
+        81,
+        19
+      ],
+      "text" : "IT support"
+    },
+    {
+      "box" : [
+        20,
+        350,
+        112,
+        18
+      ],
+      "text" : "Password expiry"
+    },
+    {
+      "box" : [
+        20,
+        374,
+        163,
+        17
+      ],
+      "text" : "Your password will expire"
+    },
+    {
+      "box" : [
+        20,
+        418,
+        86,
+        19
+      ],
+      "text" : "Newsletter"
+    },
+    {
+      "box" : [
+        20,
+        442,
+        97,
+        18
+      ],
+      "text" : "Weekly digest"
+    },
+    {
+      "box" : [
+        20,
+        466,
+        136,
+        17
+      ],
+      "text" : "Top stories this week"
+    },
+    {
+      "box" : [
+        500,
+        68,
+        199,
+        33
+      ],
+      "text" : "Expense report"
+    },
+    {
+      "box" : [
+        500,
+        118,
+        152,
+        19
+      ],
+      "text" : "From: Dana Whitfield"
+    },
+    {
+      "box" : [
+        500,
+        142,
+        49,
+        19
+      ],
+      "text" : "To: me"
+    },
+    {
+      "box" : [
+        500,
+        166,
+        225,
+        19
+      ],
+      "text" : "Date: Wed 10/14/2026 3:12 AM"
+    },
+    {
+      "box" : [
+        500,
+        230,
+        47,
+        23
+      ],
+      "text" : "Hi all,"
+    },
+    {
+      "box" : [
+        500,
+        264,
+        566,
+        23
+      ],
+      "text" : "The expense report must be submitted by Friday 30 October 2026."
+    },
+    {
+      "box" : [
+        500,
+        298,
+        75,
+        23
+      ],
+      "text" : "Regards,"
+    },
+    {
+      "box" : [
+        500,
+        332,
+        44,
+        23
+      ],
+      "text" : "Dana"
+    }
+  ],
+  "screenKind" : "email",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Outlook"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "Windows"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

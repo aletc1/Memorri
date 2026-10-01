@@ -60,73 +60,42 @@ public struct ModelTestJobRunner: AnalysisJobRunning {
     }
 
     public func run(_ job: AnalysisJobRecord, attempt: Int) async -> JobOutcome {
-        guard let model = settings.model else { return .serverUnavailable }
-        let think = settings.think
-        let timeout = TimeInterval(settings.timeoutSeconds)
+        guard settings.model != nil else { return .serverUnavailable }
 
         guard let picture = loadPicture(for: job) else { return .permanent("picture no longer stored") }
         let jpeg: Data
         do { jpeg = try picture.jpeg() } catch { return .permanent("picture no longer stored") }
 
-        let client = await service.client()
-        let modelThinks: Bool
-        do {
-            guard let installed = try await client.models().first(where: { $0.name == model }), installed.readsImages else {
-                return .serverUnavailable
-            }
-            modelThinks = installed.thinks
-        } catch {
-            return Self.outcome(for: error) ?? .serverUnavailable
+        let stepSettings: ModelStepSettings
+        switch await ModelStep.settings(service: service, settings: settings) {
+        case .success(let value): stepSettings = value
+        case .failure(let error): return JobOutcome(error)
         }
 
-        let wire = ThinkWireValue.make(setting: think, modelThinks: modelThinks,
-                                       acceptsLevels: ThinkWireValue.acceptsLevels(modelName: model))
-        let request = ChatRequest(model: model, systemPrompt: nil, prompt: ModelTestJob.prompt, picture: jpeg,
-                                  picturePlaceholder: picture.placeholder, schema: ModelTestJob.schema,
-                                  useNativeFormat: true, think: wire, temperature: 0, timeout: timeout)
-        let startedAt = time.now()
-        let clock = ContinuousClock()
-        let begin = clock.now
-
-        func record(_ failureReason: String?, answer: String?) -> JobOutcome? {
-            let elapsed = begin.duration(to: clock.now)
-            let milliseconds = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
-            let run = ModelRunRecord(jobId: job.id, imageId: job.imageId, attempt: attempt, model: model,
-                                     think: Self.label(wire), temperature: 0, imageLongEdge: picture.longEdge,
-                                     promptVersion: ModelTestJob.promptVersion, schemaVersion: ModelTestJob.schemaVersion,
-                                     startedAt: startedAt, durationMs: milliseconds,
-                                     outcome: failureReason == nil ? .success : .failed, failureReason: failureReason,
-                                     requestJson: client.requestJSON(for: request), rawAnswer: answer)
-            Self.logger.info("request model=\(model, privacy: .public) think=\(run.think, privacy: .public) size=\(picture.longEdge) attempt=\(attempt) ms=\(milliseconds) outcome=\(run.outcome, privacy: .public) reason=\(failureReason ?? "-", privacy: .public)")
-            do { try store.record(run: run) } catch {
-                // The capture was deleted while the request ran: its runs go with it.
-                return job.imageId != nil ? .permanent("picture no longer stored") : .permanent("could not record the run")
-            }
-            return nil
+        let result = await ModelStep.call(using: await service.client(), settings: stepSettings, step: "test",
+                                          prompt: ModelTestJob.prompt, picture: jpeg, placeholder: picture.placeholder,
+                                          schema: ModelTestJob.schema, promptVersion: ModelTestJob.promptVersion,
+                                          schemaVersion: ModelTestJob.schemaVersion, startedAt: time.now())
+        let step: StepRecord, outcome: JobOutcome
+        switch result {
+        case .success(let value):
+            step = value.record; outcome = .success
+        case .failure(let failure):
+            if failure.error == .serverUnavailable { return .serverUnavailable }   // no attempt, no run
+            step = failure.record; outcome = JobOutcome(failure.error)
         }
 
-        let response: ChatResponse
-        do {
-            response = try await client.chat(request)
-        } catch {
-            guard let outcome = Self.outcome(for: error) else { return .serverUnavailable }
-            if case .serverUnavailable = outcome { return outcome }
-            let reason: String
-            switch outcome {
-            case .transient(let text), .permanent(let text): reason = text
-            default: reason = "failed"
-            }
-            return record(reason, answer: nil) ?? outcome
+        let run = ModelRunRecord(jobId: job.id, imageId: job.imageId, attempt: attempt, model: step.model, think: step.think,
+                                 temperature: 0, imageLongEdge: picture.longEdge, promptVersion: step.promptVersion,
+                                 schemaVersion: step.schemaVersion, startedAt: step.startedAt, durationMs: step.durationMs,
+                                 outcome: step.failure == nil ? .success : .failed, failureReason: step.failure,
+                                 requestJson: step.request, rawAnswer: step.rawAnswer, step: step.step)
+        Self.logger.info("request model=\(run.model, privacy: .public) think=\(run.think, privacy: .public) size=\(picture.longEdge) attempt=\(attempt) ms=\(run.durationMs) outcome=\(run.outcome, privacy: .public) reason=\(step.failure ?? "-", privacy: .public)")
+        do { try store.record(run: run) } catch {
+            // The capture was deleted while the request ran: its runs go with it.
+            return job.imageId != nil ? .permanent("picture no longer stored") : .permanent("could not record the run")
         }
-
-        var answer = response.content
-        if let thinking = response.thinking, !thinking.isEmpty { answer += ModelTestJob.thinkingMarker + thinking }
-        switch SchemaValidator.validate(response.content, against: ModelTestJob.schema) {
-        case .success:
-            return record(nil, answer: answer) ?? .success
-        case .failure:
-            return record("invalid answer", answer: answer) ?? .transient("invalid answer")
-        }
+        return outcome
     }
 
     // MARK: Helpers
@@ -154,23 +123,4 @@ public struct ModelTestJobRunner: AnalysisJobRunning {
                         placeholder: "[picture \(imageID) \(stored.width)x\(stored.height)]")
     }
 
-    /// nil: not an error this runner knows (treated as the server being unavailable by the caller).
-    private static func outcome(for error: Error) -> JobOutcome? {
-        guard let error = error as? OllamaClientError else { return nil }
-        switch error {
-        case .timedOut: return .transient("timed out")
-        case .serverError(let code): return .transient("server error \(code)")
-        case .badResponse: return .transient("bad response")
-        case .requestRejected: return .permanent("request rejected")
-        case .unreachable, .redirectRefused: return .serverUnavailable
-        }
-    }
-
-    private static func label(_ wire: ThinkWireValue) -> String {
-        switch wire {
-        case .bool(true): "on"
-        case .bool(false), .omitted: "off"
-        case .level(let level): level
-        }
-    }
 }

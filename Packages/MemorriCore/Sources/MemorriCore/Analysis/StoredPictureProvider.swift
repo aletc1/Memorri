@@ -1,16 +1,24 @@
+import CoreGraphics
 import Foundation
+import ImageIO
 
 /// An analysis copy read from disk, in the format it was stored in (HEIC).
 public struct StoredPicture: Sendable, Equatable {
     public let data: Data
     public let width: Int
     public let height: Int
+    /// When the capture was taken (nil when the provider cannot say).
+    public let capturedAt: Date?
+    /// The display's scale factor when the capture was taken (nil when the provider cannot say).
+    public let scale: Double?
     public var longEdge: Int { max(width, height) }
 
-    public init(data: Data, width: Int, height: Int) {
+    public init(data: Data, width: Int, height: Int, capturedAt: Date? = nil, scale: Double? = nil) {
         self.data = data
         self.width = width
         self.height = height
+        self.capturedAt = capturedAt
+        self.scale = scale
     }
 }
 
@@ -19,8 +27,13 @@ public protocol AnalysisPictureProviding: Sendable {
     func analysisPicture(imageID: String) throws -> StoredPicture?
 }
 
-/// Reads analysis copies from the capture folder (spec 002).
-public struct StoredPictureProvider: AnalysisPictureProviding {
+public protocol FullPictureProviding: Sendable {
+    /// The full-resolution picture decoded, or nil when it is no longer stored or cannot be decoded.
+    func fullPicture(imageID: String) throws -> CGImage?
+}
+
+/// Reads analysis copies and full-resolution pictures from the capture folder (spec 002).
+public struct StoredPictureProvider: AnalysisPictureProviding, FullPictureProviding {
     private let paths: AppPaths
     private let store: CaptureStore
 
@@ -33,6 +46,14 @@ public struct StoredPictureProvider: AnalysisPictureProviding {
         guard let record = try store.image(id: imageID), !record.missing else { return nil }
         let url = paths.root.appendingPathComponent(record.modelPath)
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return StoredPicture(data: data, width: record.modelWidth, height: record.modelHeight)
+        return StoredPicture(data: data, width: record.modelWidth, height: record.modelHeight,
+                             capturedAt: try? store.capturedAt(eventID: record.eventId), scale: record.scale)
+    }
+
+    public func fullPicture(imageID: String) throws -> CGImage? {
+        guard let record = try store.image(id: imageID), !record.missing else { return nil }
+        let url = paths.root.appendingPathComponent(record.fullPath)
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), CGImageSourceGetCount(source) > 0 else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 }

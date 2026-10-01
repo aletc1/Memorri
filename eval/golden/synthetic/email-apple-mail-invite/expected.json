@@ -1,0 +1,256 @@
+{
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-15T13:00:00Z",
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "place" : "Room 4",
+      "start" : "2026-10-15T12:00:00Z",
+      "title" : "Project review"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        780,
+        12,
+        34,
+        21
+      ],
+      "text" : "Mail"
+    },
+    {
+      "box" : [
+        20,
+        54,
+        61,
+        19
+      ],
+      "text" : "Finance"
+    },
+    {
+      "box" : [
+        20,
+        78,
+        87,
+        18
+      ],
+      "text" : "Invoice 4471"
+    },
+    {
+      "box" : [
+        20,
+        102,
+        168,
+        17
+      ],
+      "text" : "Attached is the invoice for"
+    },
+    {
+      "box" : [
+        20,
+        146,
+        102,
+        19
+      ],
+      "text" : "Laura Gómez"
+    },
+    {
+      "box" : [
+        20,
+        170,
+        98,
+        18
+      ],
+      "text" : "Project review"
+    },
+    {
+      "box" : [
+        20,
+        194,
+        54,
+        17
+      ],
+      "text" : "Hi team,"
+    },
+    {
+      "box" : [
+        20,
+        238,
+        67,
+        19
+      ],
+      "text" : "HR team"
+    },
+    {
+      "box" : [
+        20,
+        262,
+        109,
+        18
+      ],
+      "text" : "Benefits update"
+    },
+    {
+      "box" : [
+        20,
+        286,
+        180,
+        17
+      ],
+      "text" : "Open enrolment starts soon"
+    },
+    {
+      "box" : [
+        20,
+        330,
+        81,
+        19
+      ],
+      "text" : "IT support"
+    },
+    {
+      "box" : [
+        20,
+        354,
+        112,
+        18
+      ],
+      "text" : "Password expiry"
+    },
+    {
+      "box" : [
+        20,
+        378,
+        163,
+        17
+      ],
+      "text" : "Your password will expire"
+    },
+    {
+      "box" : [
+        20,
+        422,
+        86,
+        19
+      ],
+      "text" : "Newsletter"
+    },
+    {
+      "box" : [
+        20,
+        446,
+        97,
+        18
+      ],
+      "text" : "Weekly digest"
+    },
+    {
+      "box" : [
+        20,
+        470,
+        136,
+        17
+      ],
+      "text" : "Top stories this week"
+    },
+    {
+      "box" : [
+        500,
+        72,
+        186,
+        33
+      ],
+      "text" : "Project review"
+    },
+    {
+      "box" : [
+        500,
+        122,
+        143,
+        19
+      ],
+      "text" : "From: Laura Gómez"
+    },
+    {
+      "box" : [
+        500,
+        146,
+        49,
+        19
+      ],
+      "text" : "To: me"
+    },
+    {
+      "box" : [
+        500,
+        170,
+        322,
+        19
+      ],
+      "text" : "Date: Wednesday, 14 October 2026 at 09:12"
+    },
+    {
+      "box" : [
+        500,
+        234,
+        71,
+        23
+      ],
+      "text" : "Hi team,"
+    },
+    {
+      "box" : [
+        500,
+        268,
+        568,
+        23
+      ],
+      "text" : "Project review: Thursday, 15 October 2026, 14:00-15:00 in Room 4."
+    },
+    {
+      "box" : [
+        500,
+        302,
+        273,
+        23
+      ],
+      "text" : "Please confirm your attendance."
+    },
+    {
+      "box" : [
+        500,
+        336,
+        48,
+        23
+      ],
+      "text" : "Laura"
+    }
+  ],
+  "screenKind" : "email",
+  "tags" : [
+    {
+      "key" : "application",
+      "value" : "Apple Mail"
+    },
+    {
+      "key" : "platform_look",
+      "value" : "macOS"
+    },
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    },
+    {
+      "key" : "clock_style",
+      "value" : "24h"
+    }
+  ]
+}

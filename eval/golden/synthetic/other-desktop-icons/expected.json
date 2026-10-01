@@ -1,0 +1,54 @@
+{
+  "findings" : [
+
+  ],
+  "lines" : [
+    {
+      "box" : [
+        40,
+        106,
+        79,
+        18
+      ],
+      "text" : "Documents"
+    },
+    {
+      "box" : [
+        40,
+        236,
+        76,
+        18
+      ],
+      "text" : "Downloads"
+    },
+    {
+      "box" : [
+        40,
+        366,
+        38,
+        18
+      ],
+      "text" : "Trash"
+    },
+    {
+      "box" : [
+        40,
+        496,
+        56,
+        18
+      ],
+      "text" : "Projects"
+    }
+  ],
+  "screenKind" : "other",
+  "tags" : [
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

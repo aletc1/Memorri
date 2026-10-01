@@ -59,10 +59,13 @@ public struct ChatRequest: Sendable {
     public let think: ThinkWireValue
     public let temperature: Double
     public let timeout: TimeInterval
+    /// A limit on the answer's length (`num_predict`). A model that falls into a loop ends at it instead of at the timeout.
+    public let maxTokens: Int?
 
     public init(model: String, systemPrompt: String?, prompt: String, picture: Data, picturePlaceholder: String,
                 schema: JSONValue, useNativeFormat: Bool, think: ThinkWireValue, temperature: Double,
-                timeout: TimeInterval) {
+                timeout: TimeInterval, maxTokens: Int? = nil) {
+        self.maxTokens = maxTokens
         self.model = model
         self.systemPrompt = systemPrompt
         self.prompt = prompt
@@ -148,8 +151,10 @@ public struct OllamaClient: Sendable {
     }
 
     /// The request exactly as sent, with the picture replaced by its placeholder (run record).
-    public func requestJSON(for request: ChatRequest) -> String {
-        let data = (try? Self.encode(Self.body(for: request, picture: .string(request.picturePlaceholder)))) ?? Data()
+    public func requestJSON(for request: ChatRequest) -> String { Self.requestJSON(for: request) }
+
+    public static func requestJSON(for request: ChatRequest) -> String {
+        let data = (try? encode(body(for: request, picture: .string(request.picturePlaceholder)))) ?? Data()
         return String(decoding: data, as: UTF8.self)
     }
 
@@ -170,7 +175,8 @@ public struct OllamaClient: Sendable {
             "model": .string(request.model),
             "stream": .bool(false),
             "messages": .array(messages),
-            "options": .object(["temperature": .double(request.temperature)]),
+            "options": .object(request.maxTokens.map { ["temperature": .double(request.temperature), "num_predict": .int($0)] }
+                               ?? ["temperature": .double(request.temperature)]),
         ]
         if request.useNativeFormat { body["format"] = request.schema }
         switch request.think {
