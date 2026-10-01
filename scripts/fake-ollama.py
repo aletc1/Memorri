@@ -21,6 +21,13 @@ and these modes (all other modes still apply to every call):
   extract-empty            findings is an empty list
   classify-unsure          classification is "other" with confidence 0.2
 
+Spec 005 adds the two calls reconciliation makes (all modes except ok-only ones apply as for /api/chat):
+  POST /api/embed      one 8-dimension vector per input: counts of the lowercased text's character trigrams
+                       hashed into 8 buckets, then normalised (equal texts give equal vectors, a truncated
+                       title is close to the full one)
+  POST /api/generate   raw reranker call: answers "yes" when the Query and Document titles share their first
+                       8 normalised characters, else "no", with log probabilities in "logprobs"
+
 Options: --no-vision (only a text model is listed), --no-capabilities (models carry no
 "capabilities" key, so the app must ask /api/show), --thinking (the vision model also lists
 "thinking"). Standard library only. Listens on 127.0.0.1 only.
@@ -28,6 +35,8 @@ Options: --no-vision (only a text model is listed), --no-capabilities (models ca
 import argparse
 import json
 import sys
+import math
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -86,6 +95,27 @@ def valid_answer():
                        "contains_text": True, "text_sample": "Team sync 10:00"})
 
 
+def embedding(text):
+    text = re.sub(r"^query: ", "", text.lower())
+    vector = [0.0] * 8
+    for i in range(max(len(text) - 2, 1)):
+        vector[sum(ord(c) for c in text[i:i + 3]) % 8] += 1.0
+    norm = math.sqrt(sum(x * x for x in vector)) or 1.0
+    return [x / norm for x in vector]
+
+
+def normalised(title):
+    return re.sub(r"[^a-z0-9]", "", title.lower())
+
+
+def rerank_answer(prompt):
+    query = re.search(r"<Query>: (.*?)\n<Document>: (.*?)<\|im_end\|>", prompt, re.S)
+    if not query:
+        return "no", -0.1
+    a, b = normalised(query.group(1))[:8], normalised(query.group(2))[:8]
+    return ("yes", -0.2) if a and a == b else ("no", -0.3)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):
         pass
@@ -124,6 +154,27 @@ class Handler(BaseHTTPRequestHandler):
             entry = next((m for m in models() if m["name"] == name), None)
             caps = ["completion", "vision"] + (["thinking"] if args.thinking else []) if name == "fake-vision:1b" else ["completion"]
             self.reply(200 if entry else 404, {"capabilities": caps} if entry else {"error": "model not found"})
+            return
+        if self.path in ("/api/embed", "/api/generate"):
+            with lock:
+                chat_calls += 1
+                call = chat_calls
+            if args.mode == "slow":
+                time.sleep(args.delay)
+            if args.mode == "error" or (args.mode == "flaky" and call % 2 == 1):
+                self.reply(500, {"error": "fake server error"})
+                return
+            if self.path == "/api/embed":
+                inputs = body.get("input", [])
+                inputs = [inputs] if isinstance(inputs, str) else inputs
+                self.reply(200, {"model": body.get("model"), "embeddings": [embedding(t) for t in inputs]})
+            else:
+                token, logprob = rerank_answer(body.get("prompt", ""))
+                other = "no" if token == "yes" else "yes"
+                self.reply(200, {"model": body.get("model"), "response": token, "done": True,
+                                 "logprobs": [{"token": token, "logprob": logprob,
+                                               "top_logprobs": [{"token": token, "logprob": logprob},
+                                                                {"token": other, "logprob": -3.0}]}]})
             return
         if self.path != "/api/chat":
             self.reply(404, {"error": "not found"})
