@@ -11,7 +11,7 @@ import Testing
 
     @Test func defaultThresholdsAreTheResearchStartValues() {
         #expect(t.mergeText == 0.9 && t.minTime == 0.5 && t.newText == 0.5 && t.newCosine == 0.88)
-        #expect(t.rerankYes == 0.5 && t.undatedMergeText == 0.9 && t.undatedRerankText == 0.7)
+        #expect(t.rerankYes == 0.95 && t.undatedMergeText == 0.9 && t.undatedRerankText == 0.7)
     }
 
     @Test func aStrongTitleAndAgreeingTimesMerge() {
@@ -62,9 +62,9 @@ import Testing
         func after(_ p: Double?) -> MatchDecision {
             MatchScorer.decideAfterRerank(MatchScores(text: 0.3, time: 1, cosine: nil, rerank: p), thresholds: t)
         }
-        #expect(after(0.5) == .merge(rule: "rerank-yes"))
+        #expect(after(0.99) == .merge(rule: "rerank-yes"))
         #expect(after(0.95) == .merge(rule: "rerank-yes"))
-        #expect(after(0.49) == .new(rule: "rerank-no"))
+        #expect(after(0.9) == .new(rule: "rerank-no"))
         #expect(after(nil) == .new(rule: "judge-unavailable"))
     }
 

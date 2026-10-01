@@ -46,7 +46,7 @@ import Testing
     }
 
     @Test func pairsSentToTheJudgeAreCountedOverComparedPairs() async throws {
-        let judge = FakeMeaningJudge(defaultAnswer: 0.9)
+        let judge = FakeMeaningJudge(defaultAnswer: 0.99)
         let report = try await run([sequence(captures: [[finding("standup", "Daily standup", lang: "en")], [finding("standup", "Reunión diaria", lang: "es")]])],
                                    judge: judge, models: true)
         let score = try #require(report.cases.first)

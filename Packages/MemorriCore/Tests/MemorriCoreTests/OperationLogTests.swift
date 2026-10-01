@@ -96,3 +96,16 @@ import Testing
         #expect(try ops(fixture, kind: .autoMerge).count == 1)
     }
 }
+
+@Suite struct OperationLogRecentTests {
+    @Test func recentListsEveryItemsOperationsNewestFirst() throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let a = Item.sample(title: "A"), b = Item.sample(title: "B", start: ReconcileFixture.minutes(300))
+        try fixture.write { try ItemStore.insert($0, a, at: ReconcileFixture.nine); try ItemStore.insert($0, b, at: ReconcileFixture.nine) }
+        let first = try ItemOperations(database: fixture.database, now: { ReconcileFixture.nine }).dismiss(a.id)
+        let second = try ItemOperations(database: fixture.database, now: { ReconcileFixture.minutes(1) }).dismiss(b.id)
+        let recent = try OperationLog(database: fixture.database).recent()
+        #expect(recent.map(\.id) == [second, first])
+        #expect(try OperationLog(database: fixture.database).recent(limit: 1).map(\.id) == [second])
+    }
+}

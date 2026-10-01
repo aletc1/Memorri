@@ -28,7 +28,7 @@ public struct ReconcileThresholds: Sendable, Equatable, Codable {
     public var sameTime = 0.8
     public var newText = 0.5
     public var newCosine = 0.88
-    public var rerankYes = 0.5
+    public var rerankYes = 0.95
     public var undatedMergeText = 0.9
     public var undatedRerankText = 0.7
 

@@ -4,8 +4,8 @@ import GRDB
 /// The local embedding model and reranker behind `MeaningJudging` (research R3 and R4). Vectors are cached per normalised title
 /// and model in `title_embeddings`.
 public final class OllamaMeaningJudge: MeaningJudging, @unchecked Sendable {
-    public static let instructionVersion = "rerank-v1"
-    private static let instruction = "Do these two calendar titles name the same event?"
+    public static let instructionVersion = "rerank-v2"
+    private static let instruction = "Are these two entries the same event, only written differently (another language, shorter, or with extra words)? Two different topics at the same time are different events."
     private static let cacheLife: TimeInterval = 60
 
     private let client: OllamaClient
@@ -55,8 +55,16 @@ public final class OllamaMeaningJudge: MeaningJudging, @unchecked Sendable {
         return titles.map { found[$0] ?? [] }
     }
 
+    /// The probability that both entries are one event. The reranker is sensitive to which entry comes first, so both orders are
+    /// asked and the lower probability counts (measured on the synthetic set, research R4).
     public func sameEvent(_ a: JudgedSighting, _ b: JudgedSighting) async throws -> Double {
         guard let model = rerankerModel, await canJudge else { throw MeaningJudgeError.unavailable }
+        let forward = try await yesProbability(model: model, a, b)
+        let backward = try await yesProbability(model: model, b, a)
+        return min(forward, backward)
+    }
+
+    private func yesProbability(model: String, _ a: JudgedSighting, _ b: JudgedSighting) async throws -> Double {
         let top = try await client.generateNextTokenLogprobs(model: model, prompt: Self.prompt(a, b), timeout: timeout)
         var yes = 0.0, no = 0.0
         for entry in top {

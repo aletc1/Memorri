@@ -64,6 +64,17 @@ public struct OperationLog: Sendable {
         }
     }
 
+    /// The newest operations of all items, newest first (the window's `Undo last` picks from these).
+    public func recent(limit: Int = 100) throws -> [OperationSummary] {
+        try database.pool.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, kind, by_user, created_at, undone_by FROM reconcile_ops ORDER BY created_at DESC, rowid DESC LIMIT ?",
+                             arguments: [limit]).map { row in
+                OperationSummary(id: row["id"], kind: row["kind"], byUser: (row["by_user"] as Int) != 0, createdAt: row["created_at"],
+                                 undone: (row["undone_by"] as String?) != nil)
+            }
+        }
+    }
+
     // MARK: Inside a transaction
 
     @discardableResult

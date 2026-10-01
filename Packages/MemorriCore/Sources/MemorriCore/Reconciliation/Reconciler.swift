@@ -196,7 +196,10 @@ public struct Reconciler: ImageReconciling {
                 var outcome: ReconcilePlan.Step?
                 var asked = 0
                 var lastAnswer: MatchScores?
-                if canJudge {
+                // Without a date the judge has nothing but the titles, and the small reranker says yes to "invoice" and "report":
+                // an undated pair in the uncertain band is flagged for the user instead (research R7).
+                let undated = span.start == nil
+                if canJudge && !undated {
                     for entry in uncertain.prefix(Self.maxJudgedPerFinding) {
                         guard let p = try? await judge.sameEvent(Self.judged(finding, span, context: snapshot.contextName), Self.judged(entry.candidate, context: snapshot.contextName)) else { break }
                         asked += 1
@@ -214,7 +217,7 @@ public struct Reconciler: ImageReconciling {
                     // Judged "no" (a new item) or could not be judged (a new item flagged as a possible duplicate).
                     let answered = canJudge && asked > 0
                     let scores = answered ? (lastAnswer ?? best.scores) : best.scores
-                    let rule = answered ? "rerank-no" : "judge-unavailable"
+                    let rule = answered ? "rerank-no" : (undated ? "undated-uncertain" : "judge-unavailable")
                     let target: ReconcilePlan.Target = !answered && best.candidate.itemID != nil ? .newWithPossibleDuplicate(of: best.candidate.itemID!) : .newItem
                     step = .init(findingID: finding.id, target: target, scores: scores, rule: rule, candidate: best.candidate.itemID)
                 } else {

@@ -40,12 +40,24 @@ import Testing
         let fields = try body(sent)
         let prompt = try #require(fields["prompt"] as? String)
         #expect(prompt.hasPrefix("<|im_start|>system\nJudge whether the Document meets the requirements"))
-        #expect(prompt.contains("<Instruct>: Do these two calendar titles name the same event?"))
+        #expect(prompt.contains("<Instruct>: Are these two entries the same event"))
+        #expect(prompt.contains("Two different topics at the same time are different events."))
         #expect(prompt.contains("<Query>: Daily standup, Tue 14 Oct 09:00-09:15, Customer A\n"))
         #expect(prompt.contains("<Document>: Reunión diaria, Tue 14 Oct 09:00-09:15<|im_end|>"))
         #expect(prompt.hasSuffix("<|im_start|>assistant\n<think>\n\n</think>\n\n"))
         #expect(fields["model"] as? String == "rr:1")
-        #expect(OllamaMeaningJudge.instructionVersion == "rerank-v1")
+        #expect(OllamaMeaningJudge.instructionVersion == "rerank-v2")
+    }
+
+    @Test func bothOrdersAreAskedAndTheLowerProbabilityCounts() async throws {
+        let transport = FakeOllamaTransport()
+        transport.set("/api/generate", .json(#"{"logprobs":[{"token":"yes","logprob":-0.2,"top_logprobs":[{"token":"yes","logprob":-0.2},{"token":"no","logprob":-1.9}]}]}"#))
+        _ = try await judge(transport).sameEvent(a, b)
+        let sent = transport.requests(to: "/api/generate")
+        #expect(sent.count == 2)
+        let first = try #require(try body(sent[0])["prompt"] as? String), second = try #require(try body(sent[1])["prompt"] as? String)
+        #expect(first.contains("<Query>: Daily standup") && first.contains("<Document>: Reunión diaria"))
+        #expect(second.contains("<Query>: Reunión diaria") && second.contains("<Document>: Daily standup"))
     }
 
     @Test func probabilityOfYesSumsCaseVariantsAgainstNo() async throws {

@@ -165,7 +165,7 @@ import Testing
     @Test func aTranslatedTitleAtTheSameTimeGoesToTheJudgeAndMergesOnYes() async throws {
         let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
         let judge = FakeMeaningJudge()
-        judge.setAnswer(0.9, "daily standup", "reunion diaria")
+        judge.setAnswer(0.99, "daily standup", "reunion diaria")
         let r = reconciler(fixture, judge: judge)
         try await see(fixture, [fixture.finding("Daily standup")], with: r, picture: fixture.base.imageID)
         let second = try await see(fixture, [fixture.finding("Reunión diaria")], with: r)
@@ -224,6 +224,17 @@ import Testing
         // a dated finding never joins an undated item
         try await see(fixture, [fixture.finding("Quarterly review")], with: r)
         #expect(try items(fixture).count == 2)
+    }
+
+    @Test func undatedTitlesInTheUncertainBandAreFlaggedAndNeverSentToTheJudge() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let judge = FakeMeaningJudge(defaultAnswer: 1)
+        let r = reconciler(fixture, judge: judge)
+        try await see(fixture, [fixture.finding("Send the monthly invoice", start: nil, kind: .task)], with: r, picture: fixture.base.imageID)
+        let second = try await see(fixture, [fixture.finding("Send the monthly report", start: nil, kind: .task)], with: r)
+        #expect(judge.judgeCalls.isEmpty)
+        #expect(try items(fixture).count == 2)
+        #expect(try fixture.count("possible_duplicates") == 1 && second.summary.possibleDuplicates == 1)
     }
 
     // MARK: stored decision
