@@ -225,7 +225,7 @@ public struct ItemStore: Sendable {
             INSERT INTO items (id, kind, family, status, merged_into, context_id, title, all_day, start_at, end_at, due_at, remind_at, timezone,
                                day_key, people_json, place, notes, confidence, user_touched, first_seen, last_seen, needs_review,
                                review_reasons_json, approved_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, arguments: StatementArguments(values(for: item) + [date, date]))
     }
 
