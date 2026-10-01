@@ -50,7 +50,7 @@ import Testing
 
         let stored = try #require(try store.analysis(imageID: fixture.imageID))
         #expect(stored.kind == .calendarWeek && stored.kindConfidence == 0.9 && stored.model == "qwen3.8:27b-mlx")
-        #expect(stored.classifyVersion == "classify-v2" && stored.promptVersion == "extract-calendar_week-v5" && stored.schemaVersion == "schema-calendar_week-v1")
+        #expect(stored.classifyVersion == "classify-v2" && stored.promptVersion == "extract-calendar_week-v6" && stored.schemaVersion == "schema-calendar_week-v1")
         #expect(stored.pictureLongEdge == 2048 && stored.timezone == "Europe/Madrid" && stored.timezoneSource == "mac")
         #expect(stored.findingCount == 2 && stored.lineCapApplied && stored.analysedAt == at)
         #expect(stored.discarded == [CitationCheck.Discard(title: "Bad", reason: "cites no line", citedLines: [])])

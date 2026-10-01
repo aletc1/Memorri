@@ -22,6 +22,14 @@ import Testing
         #expect(draft.sentText == "Tue 13 Oct 09:12" && draft.messageTimeText == "11:48")
     }
 
+    @Test func asAppointmentKeepsEverythingButTheKind() {
+        let draft = FindingDraft(kind: .deadline, title: "Standup", citedLines: [4], startText: "10:00", dueText: "10:00", people: ["Ana"], place: "Room 2", columnLine: 3)
+        let appointment = draft.asAppointment()
+        #expect(appointment.kind == .appointment)
+        #expect(appointment == FindingDraft(kind: .appointment, title: "Standup", citedLines: [4], startText: "10:00", dueText: "10:00",
+                                            people: ["Ana"], place: "Room 2", columnLine: 3))
+    }
+
     @Test func aDraftWithOnlyTheRequiredFieldsParses() throws {
         let draft = try #require(FindingDraft.parse(json(#"{"kind":"task","title":"Send report","cited_lines":[7]}"#)))
         #expect(draft.startText == nil && draft.allDay == nil && draft.people.isEmpty && draft.place == nil && draft.columnLine == nil)

@@ -180,7 +180,10 @@ public struct AnalysisPipeline: Sendable {
 
         var drafts: [FindingDraft] = [], discards: [CitationCheck.Discard] = []
         for item in items {
-            if let draft = FindingDraft.parse(item) { drafts.append(draft) }
+            if let draft = FindingDraft.parse(item) {
+                let inCalendar = resolved.kind == .calendarMonth || calendarKind
+                drafts.append(inCalendar && draft.kind != .appointment ? draft.asAppointment() : draft)
+            }
             else { discards.append(CitationCheck.Discard(title: item["title"]?.stringValue ?? "", reason: "unreadable finding", citedLines: [])) }
         }
         let checked = CitationCheck.apply(drafts, lineCount: lines.count)

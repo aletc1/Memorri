@@ -17,7 +17,7 @@ public enum ExtractionPrompts {
             + "Use empty strings for what you cannot tell."
     }
 
-    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v5" }
+    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v6" }
 
     private static func description(of kind: ScreenKind) -> String {
         switch kind {
@@ -34,14 +34,16 @@ public enum ExtractionPrompts {
     private static func hint(for kind: ScreenKind) -> String {
         switch kind {
         case .calendarWeek, .calendarDay:
-            return " Everything in a calendar view is an appointment. Each block sits under a date header. "
+            return " Everything in a calendar view is an appointment: kind is always appointment. Each block sits under a date header. "
                 + "Give the number of that header line in column_line. "
                 + "Put the start time shown on the block in start_text, and its end time in end_text only if the block itself "
                 + "shows one (like 09:00 - 10:00): never take an end time from the hour scale at the side."
         case .calendarMonth:
-            return " Everything in a calendar view is an appointment. Each entry sits in the cell of a day. "
+            return " Everything in a calendar view is an appointment: kind is always appointment, even for a birthday or an all-day entry. "
+                + "Each entry sits in the cell of a day. "
                 + "Give the number of the line that shows that cell's day number in column_line, "
-                + "and put the time shown on the entry, if any, in start_text."
+                + "and put the time shown on the entry, if any, in start_text. "
+                + "An entry without a time has no start_text, and a day number is never a start_text, date_text or due_text."
         case .email:
             return " Take items from the open message, not from the list of other messages beside it. "
                 + "Put the date and time the message was sent (from its header) in sent_text, because words like "

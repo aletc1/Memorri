@@ -71,11 +71,29 @@ public enum DateResolver {
 
     // MARK: Resolving one field
 
+    /// A day number of one or two digits, alone or beside a month's name or abbreviation (`1`, `oct`, `1 oct`, `oct 1`).
+    static func isCellLabel(_ text: String, locales: [Locale]) -> Bool {
+        let digits = text.filter(\.isNumber), letters = text.filter { $0.isLetter }.lowercased()
+        let rest = text.filter { !$0.isNumber && !$0.isLetter && !$0.isWhitespace && $0 != "." }
+        guard rest.isEmpty, digits.count <= 2, !(digits.isEmpty && letters.isEmpty) else { return false }
+        if letters.isEmpty { return true }
+        guard letters.count >= 3 else { return false }
+        return locales.contains { locale in
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.locale = locale
+            return (calendar.monthSymbols + calendar.shortMonthSymbols).contains {
+                $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")).hasPrefix(letters)
+                    || letters.hasPrefix($0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")))
+            }
+        }
+    }
+
     /// `field` is `start`, `end`, `due` or `remind`. An empty `remind` text asks for the deadline reminder rule.
     public static func resolve(text: String, field: String, draft: FindingDraft, in context: ResolutionContext) -> ResolvedValue {
         var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // In a month view a bare number is the label of the entry's cell (the model often gives it as the date), not a date.
-        if !context.cells.isEmpty, trimmed.count <= 2, Int(trimmed) != nil { trimmed = "" }
+        // The first of a month is often labelled with the month name too ("1 oct"), and the model may give just that.
+        if !context.cells.isEmpty, isCellLabel(trimmed, locales: context.locales) { trimmed = "" }
         if trimmed.isEmpty {
             if field == "remind" { return deadlineReminder(draft, context) }
             // An all-day banner in a week view, or an entry without a time in a month cell, has no text of its own for its
@@ -284,11 +302,17 @@ public enum DateResolver {
     /// neighbouring months on their own. The month comes from a title line (`October 2026`), else from the capture.
     /// A cell has the line number of its label, or a negative number when no label was read. `[]` for fewer than seven labels.
     public static func monthCells(in lines: [RecognisedLine], locales: [Locale], reference: Date, timezone: TimeZone) -> [DateHeader] {
-        let labels = lines.filter { line in
+        let candidates = lines.filter { line in
             let text = line.text.trimmingCharacters(in: .whitespaces)
             return text.count <= 2 && text.allSatisfy(\.isNumber) && (Int(text).map { (1...31).contains($0) } ?? false)
         }
-        guard labels.count >= 7 else { return [] }
+        guard candidates.count >= 7 else { return [] }
+
+        // Other windows show numbers too (a clock, a page number): keep the labels that sit in columns shared with at least a third of
+        // the most populated column's labels, which is where a calendar's day labels are.
+        let kept = Self.labelsInCommonColumns(candidates)
+        guard kept.count >= 7 else { return [] }
+        let labels = kept
 
         func spacing(_ values: [Double]) -> Double? {
             let gaps = zip(values, values.dropFirst()).map { $1 - $0 }.filter { $0 > 1 }
@@ -379,6 +403,20 @@ public enum DateResolver {
             return DateHeader(line: byPlace[index]?.line.n ?? -(index + 1), midX: columnCentre(column), midY: byPlace[index]?.line.box.midY ?? rowCentre(row),
                               cellWidth: width, date: DateComponents(year: cell.year, month: cell.month, day: cell.day))
         }
+    }
+
+    /// The labels whose horizontal centre falls in a column (labels closer than a label's height apart share one) that holds at
+    /// least a third as many labels as the fullest column.
+    private static func labelsInCommonColumns(_ labels: [RecognisedLine]) -> [RecognisedLine] {
+        let heights = labels.map(\.box.height).sorted()
+        let tolerance = Double(max(8, heights[heights.count / 2]))
+        var columns: [(centre: Double, members: [RecognisedLine])] = []
+        for label in labels.sorted(by: { $0.box.midX < $1.box.midX }) {
+            if let last = columns.last, label.box.midX - last.centre <= tolerance { columns[columns.count - 1].members.append(label) }
+            else { columns.append((label.box.midX, [label])) }
+        }
+        let most = columns.map(\.members.count).max() ?? 0
+        return columns.filter { $0.members.count * 3 >= most && $0.members.count >= 2 }.flatMap(\.members)
     }
 
     // MARK: Calendar arithmetic

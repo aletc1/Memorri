@@ -122,7 +122,7 @@ import Testing
         #expect(request.schema == ExtractionSchemas.extractSchema(for: .calendarWeek))
         #expect(request.picture == Data("analysis-bytes".utf8))
         let step = try #require(result.steps.last)
-        #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v5" && step.schemaVersion == "schema-calendar_week-v1")
+        #expect(step.step == "extract" && step.promptVersion == "extract-calendar_week-v6" && step.schemaVersion == "schema-calendar_week-v1")
         #expect(result.findings.count == 1 && result.findings[0].title == "Team sync" && result.findings[0].citedLines == [1])
         #expect(result.findings[0].kind == .appointment && result.findings[0].confidence == 0.5)   // the end is guessed, so at most 0.5
         #expect(result.model == "m" && result.pictureLongEdge == 2048 && !result.lineCapApplied)
@@ -157,7 +157,7 @@ import Testing
     }
 
     @Test func aNeedsSentenceArrivesAsATaskForThatPerson() async throws {
-        let rig = makeRig()
+        let rig = makeRig(answer: ClassificationTests.goodAnswer.replacingOccurrences(of: "calendar_week", with: "chat"))
         rig.model.answer(whenSchemaHas: "findings", extractAnswer(#"""
         {"kind":"task","title":"Send the report","cited_lines":[1],"due_text":"Friday","people":["Anna"]}
         """#))
@@ -170,10 +170,10 @@ import Testing
     private let madrid = TimeZone(identifier: "Europe/Madrid")!
     private var captureTime: Date { SyntheticTime.date(2026, 10, 14, 9, 12, zone: "Europe/Madrid") }
 
-    private func dateInput(lines: [RecognisedLine]) -> (Rig, PipelineInput) {
+    private func dateInput(lines: [RecognisedLine], screen: String = "calendar_week") -> (Rig, PipelineInput) {
         let recogniser = FakeTextRecogniser(lines: lines)
         let model = FakeModelChatting()
-        model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer)
+        model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer.replacingOccurrences(of: "calendar_week", with: screen))
         let rig = Rig(recogniser: recogniser, model: model, pipeline: AnalysisPipeline(recogniser: recogniser, model: model, time: FakeTimeSource(1000)))
         let input = PipelineInput(image: makeTestImage(width: 1600, height: 1000), classificationJPEG: Data("c".utf8), classificationSize: (1024, 640),
                                   analysisJPEG: Data("a".utf8), analysisSize: (1600, 1000), macTimezone: madrid, captureTime: captureTime,
@@ -203,6 +203,13 @@ import Testing
         #expect(result.timezone == madrid && result.timezoneSource == "mac")
     }
 
+    @Test func everythingInACalendarViewIsAnAppointmentWhateverTheModelCalledIt() async throws {
+        let (rig, input) = dateInput(lines: weekLines())
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"deadline","title":"Design review","cited_lines":[7],"due_text":"13:00","start_text":"13:00","column_line":6}]}"#)
+        let finding = try #require(try await rig.pipeline.analyse(input, settings: settings).findings.first)
+        #expect(finding.kind == .appointment && finding.start == SyntheticTime.date(2026, 10, 16, 13, 0, zone: "Europe/Madrid"))
+    }
+
     @Test func theColumnLineOfTheModelPicksTheHeader() async throws {
         let (rig, input) = dateInput(lines: weekLines())
         rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Design review","cited_lines":[7],"start_text":"13:00","column_line":6}]}"#)
@@ -212,7 +219,7 @@ import Testing
 
     @Test func wordsAreResolvedAgainstTheCaptureAndUnreadableTextsStayAsWritten() async throws {
         let plain = [RecognisedLine(n: 1, text: "Send the report by tomorrow", box: PixelBox(x: 10, y: 10, width: 300, height: 18), confidence: 0.9)]
-        let (rig, input) = dateInput(lines: plain)
+        let (rig, input) = dateInput(lines: plain, screen: "document")
         rig.model.answer(whenSchemaHas: "findings", #"""
         {"findings":[{"kind":"task","title":"Send the report","cited_lines":[1],"due_text":"tomorrow"},
                      {"kind":"task","title":"Vague","cited_lines":[1],"due_text":"sometime soon","remind_text":"15 min before"}]}
@@ -227,7 +234,7 @@ import Testing
 
     @Test func aDeadlineWithAnActionGetsAnInferredReminderAndLowerConfidence() async throws {
         let plain = [RecognisedLine(n: 1, text: "Submit the grant proposal by 2026-11-06", box: PixelBox(x: 10, y: 10, width: 300, height: 18), confidence: 0.95)]
-        let (rig, input) = dateInput(lines: plain)
+        let (rig, input) = dateInput(lines: plain, screen: "document")
         rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"deadline","title":"Submit the grant proposal","cited_lines":[1],"due_text":"2026-11-06"}]}"#)
         let finding = try #require(try await rig.pipeline.analyse(input, settings: settings).findings.first)
         #expect(finding.due == SyntheticTime.date(2026, 11, 6, zone: "Europe/Madrid"))

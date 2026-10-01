@@ -72,6 +72,33 @@ import Testing
         #expect(headers.first { $0.line == 6 }?.date.year == 2027 && headers.first { $0.line == 6 }?.date.month == 1)
     }
 
+    @Test func numbersFromOtherWindowsDoNotSpoilTheGrid() {
+        // A clock and a page number far to the left of the calendar, in columns of their own.
+        let strays = [RecognisedLine(n: 200, text: "1", box: PixelBox(x: -650, y: 40, width: 11, height: 18), confidence: 0.9),
+                      RecognisedLine(n: 201, text: "88", box: PixelBox(x: -300, y: 480, width: 22, height: 18), confidence: 0.9),
+                      RecognisedLine(n: 202, text: "00", box: PixelBox(x: -300, y: 300, width: 22, height: 18), confidence: 0.9)]
+        let lines = grid() + strays
+        let headers = cells(lines)
+        #expect(dayOf(lines, headers, row: 0, column: 3) == "2026-10-1" && dayOf(lines, headers, row: 1, column: 0) == "2026-10-5")
+        #expect(!headers.contains { strays.map(\.n).contains($0.line) })
+    }
+
+    @Test func aMonthNameBesideTheFirstDayIsStillThatDay() {
+        var lines = grid()
+        let first = lines.firstIndex { $0.text == "1" }!
+        lines[first] = RecognisedLine(n: lines[first].n, text: "oct", box: PixelBox(x: 610, y: 60, width: 30, height: 18), confidence: 0.9)
+        // The name is not a number, so no label carries it, but the cell is still there for entries inside it.
+        let headers = cells(lines)
+        #expect(headers.count == 42)
+        #expect(headers.contains { $0.date.month == 10 && $0.date.day == 1 && $0.midX > 600 && $0.midX < 800 })
+        #expect(dayOf(lines, headers, row: 1, column: 3) == "2026-10-8")
+    }
+
+    @Test func aDayNumberWithOrWithoutAMonthNameIsACellLabel() {
+        for text in ["1", "31", "oct", "1 oct", "oct 1", "1 oct."] { #expect(DateResolver.isCellLabel(text, locales: es), "\(text)") }
+        for text in ["10:00", "2026", "123", "ten", "1 foo", "12 oct 2026", ""] { #expect(!DateResolver.isCellLabel(text, locales: es), "\(text)") }
+    }
+
     @Test func timesAndOtherNumbersAreNotCells() {
         let lines = grid() + [RecognisedLine(n: 99, text: "09:30 Budget", box: PixelBox(x: 10, y: 90, width: 100, height: 18), confidence: 0.9),
                               RecognisedLine(n: 100, text: "2026", box: PixelBox(x: 10, y: 20, width: 40, height: 18), confidence: 0.9),
