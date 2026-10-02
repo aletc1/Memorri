@@ -77,3 +77,14 @@ The picture-share rule of version 2 stays for findings without a window.
 ## Reconciliation and evidence
 
 `SightingRow` and `EvidenceRecord` gain `windowApp: String?`, `windowTitle: String?`. `ItemListModel.windowText(_:)` gives `"<app> — <title>"`, `"<app>"`, or nil.
+
+## As built
+
+- `LibraryReread.init(database:settings:paths:)` takes the app paths (not a picture provider): it checks that a picture is stored by its path. `AnalysisQueue.jobsAdded()` wakes the queue after the launch pass queues jobs.
+- `ReferenceClock.isGuess` is stored (init `ReferenceClock(instant:source:isGuess:)`, default `source == .captureFarClock`), because a capture with windows but no clock is also a guess. `AnalysisResult.reference` is optional (nil on the old path, where no window said anything about a clock); the stored `reference_source` is then `capture`.
+- Reuse is `PipelineInput.Reuse` with `windows` (the stored judgements) and `extractions` (stored `extract:<key>` findings by window key), filled by the job runner from `AnalysisJobStore.latestSuccessfulRun(imageID:step:)` when the same model, `windows-v1` and `-v13` and the same window keys and frames apply. `PipelineInput.reuseWindows` of the plan does not exist.
+- `ExtractionSchemas.windowsSchema(keys:)` (enum of the keys, `minItems` = `maxItems` = the number of windows) and `WindowsAnswer.parse` (exact key set). `SchemaValidator` learned `maxItems`.
+- `EvidenceGeometry.region(lines:window:pictureWidth:pictureHeight:)` is as planned; the writer falls back to the picture-share rule when the window's frame has nothing inside the picture. `ItemListModel.windowText(_:)` takes an `EvidenceEntry`; a window with a title but no application shows the title.
+- `SightingRow.windowApp/windowTitle` and `EvidenceRecord.windowApp/windowTitle` are `var ... = nil`, so the memberwise initialisers keep working.
+- Saving an analysis replaces the picture's `window_readings` with the result's (none on the old path).
+

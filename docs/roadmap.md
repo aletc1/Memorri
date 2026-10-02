@@ -14,7 +14,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 008 | reprocessing | Not started |
 | 009 | eventkit-sync | Not started |
 | 010 | hardening | Not started |
-| 011 | window-aware-analysis | Specified (next, by request on 2026-10-01; numbered 011 so 007 to 010 keep their places) |
+| 011 | window-aware-analysis | Implemented on its branch (tests and eval pass; the check on the real library is still to do) |
 
 ## Prompts
 

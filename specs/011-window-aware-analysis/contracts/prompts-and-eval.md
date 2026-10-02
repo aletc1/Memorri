@@ -34,3 +34,10 @@ Steps `windows` and `extract:<window key>`; the old path keeps `classify` and `e
 - `meta.json` windows gain `stack`; the golden `expected.json` can name the window of each finding (`window`), scored as a field.
 - The report adds `model calls` per case and in total (SC-004).
 - Gate: the existing 28 cases keep precision and recall within 0.02 per case (SC-005); new cases at 1.00 on dates.
+
+## As built
+
+- `memorri-eval compare` prints model calls before and after and the cases that make more calls; for a report written before calls were counted it counts the steps of each case (one per call). Older reports without the count still load.
+- The five window cases reach 1.00 precision and recall; `research.md` has the table (Results, 2026-10-02). The `place` of an event whose window does not show it is the only field that differs.
+- The month-view duration is measured on the window's own cut of the picture (`Geometry.cut`): the background sampled at the picture's edge was the desktop.
+
