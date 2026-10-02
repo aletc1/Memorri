@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,4 +31,4 @@
 
 ## Notes
 
-- Two markers remain (FR-012 when sync runs, FR-013 what a dismissed or merged item does to its entry); they go to the user before planning.
+- Clarified 2026-10-02: sync runs automatically after a first previewed sync (FR-012); a dismissed or merged item has its entry removed (FR-013).

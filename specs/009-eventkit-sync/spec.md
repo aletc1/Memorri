@@ -14,8 +14,8 @@
 
 ### Session 2026-10-02
 
-- Q: When does sync run? → A: [NEEDS CLARIFICATION: automatically after every change to an item, or only when the user presses "Sync now"?]
-- Q: What happens in Calendar and Reminders when an item is dismissed or merged away? → A: [NEEDS CLARIFICATION: the synced entry is removed, or it is left in place?]
+- Q: When does sync run? → A: Automatically, soon after an item becomes ready or changes and when the app starts; `Preview` and `Sync now` stay available.
+- Q: What happens in Calendar and Reminders when an item is dismissed or merged away? → A: The entry Memorri made is removed; restoring the item writes it again.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -35,7 +35,7 @@ In Settings > Calendar sync the user allows Memorri to use Calendar and Reminder
 ---
 
 ### User Story 2 - Items appear in Calendar and Reminders, and stay in step (Priority: P1)
-Items that are ready (active, and not waiting in the Inbox) are written to the chosen targets: an appointment as a calendar event with its start, end (or all-day), place and people; a task or deadline as a reminder with its due date; a reminder with an alarm at its remind time. Each entry has a title with the context (`[Customer] Standup`), notes that say Memorri made it, list the evidence (capture time, where it was read) and carry a link that opens the item in Memorri. When an item changes in Memorri (edited, approved, a better reading, merged), the same entry is updated, never duplicated. Items in the Inbox are not written until approved. An item the user has dismissed is handled as the clarification above says.
+Items that are ready (active, and not waiting in the Inbox) are written to the chosen targets: an appointment as a calendar event with its start, end (or all-day), place and people; a task or deadline as a reminder with its due date; a reminder with an alarm at its remind time. Each entry has a title with the context (`[Customer] Standup`), notes that say Memorri made it, list the evidence (capture time, where it was read) and carry a link that opens the item in Memorri. When an item changes in Memorri (edited, approved, a better reading, merged), the same entry is updated, never duplicated. Items in the Inbox are not written until approved. A dismissed or merged-away item has its entry removed, and restoring it writes it again.
 
 **Why this priority**: it is the purpose of the whole app: the user's other devices see the items through iCloud.
 
@@ -86,7 +86,7 @@ A `Preview` shows exactly what a sync would do (entries to create, update, remov
 - Time zones: an event keeps the item's own time zone; an all-day item is all-day.
 - An item changes between a preview and the sync: the sync uses the items as they are when it runs.
 - The target is an iCloud calendar still downloading, or an account that is offline: the run fails softly and retries later.
-- The user has two items that look alike and merges them later: the entry of the item merged away is removed, the other is updated (per the clarification).
+- The user has two items that look alike and merges them later: the entry of the item merged away is removed and the other is updated.
 - Large libraries: first sync of thousands of items is done in batches without blocking the app, and can be cancelled.
 - Items older than the user's choice of range (for example more than 90 days past) are not written, with the range stated in the tab.
 - A user who never grants access: the rest of the app works as before.
@@ -107,8 +107,8 @@ A `Preview` shows exactly what a sync would do (entries to create, update, remov
 - **FR-009**: A change made to a synced entry in Calendar or Reminders MUST be detected by comparing it with the last synced state and MUST be taken into the item as the user's own value (the field is locked, the change appears in the item's history).
 - **FR-010**: A reminder completed in Reminders MUST mark the task done in Memorri.
 - **FR-011**: An entry deleted by the user in Calendar or Reminders MUST NOT be recreated; the item MUST show as not synced with a way to sync it again.
-- **FR-012**: [NEEDS CLARIFICATION: when sync runs: automatically after every change, or only on `Sync now`]
-- **FR-013**: [NEEDS CLARIFICATION: what a dismissed or merged item does to its synced entry: removed or left]
+- **FR-012**: Sync MUST run automatically soon after an item becomes ready or changes (changes are grouped, not written one by one) and when the app starts, while sync is switched on and access is allowed; `Sync now` MUST run it at once and `Preview` MUST never write. The first sync after switching on MUST wait for the user to see a preview and press `Sync now`.
+- **FR-013**: When an item is dismissed or merged away, the entry Memorri made for it MUST be removed; restoring the item MUST write it again. Entries Memorri did not make MUST never be removed.
 - **FR-014**: A preview MUST list what a sync would create, update, remove or leave, with the fields that would change, and MUST write nothing.
 - **FR-015**: Every run MUST be summarised (created, updated, removed, skipped, failed with reasons) and kept in a short list; a failure on one item MUST NOT stop the others and the item MUST be retried next time.
 - **FR-016**: Each item MUST show whether it is synced, when, and any problem.
