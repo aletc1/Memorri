@@ -110,7 +110,7 @@ import Testing
         let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
         try db.pool.read { db in
             #expect(try db.columns(in: "analysis_jobs").map(\.name) ==
-                    ["id", "kind", "image_id", "state", "attempts", "not_before", "failure_reason", "created_at", "updated_at", "priority"])   // priority: v8
+                    ["id", "kind", "image_id", "state", "attempts", "not_before", "failure_reason", "created_at", "updated_at", "priority", "trial_id"])   // priority: v8, trial_id: v10
             #expect(try db.columns(in: "model_runs").map(\.name) ==
                     ["id", "job_id", "image_id", "attempt", "model", "think", "temperature", "image_long_edge",
                      "prompt_version", "schema_version", "started_at", "duration_ms", "outcome", "failure_reason",
@@ -797,6 +797,21 @@ import Testing
             let priority = try Int.fetchOne(db, sql: "SELECT priority FROM analysis_jobs WHERE id = 'job-1'")
             #expect(key == nil)
             #expect(priority == 0)
+        }
+    }
+
+    // MARK: migration "v10" (spec 008)
+
+    @Test func v10CreatesTheTrialTablesAndKeepsTheOperationLog() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.read { db in
+            for table in ["trials", "trial_images", "trial_findings"] { #expect(try db.tableExists(table), "\(table) should exist") }
+            #expect(try db.columns(in: "trials").map(\.name) == ["id", "model", "prompt_version", "think", "state", "created_at", "finished_at"])
+            #expect(try db.columns(in: "trial_images").map(\.name) == ["trial_id", "image_id", "state", "reason", "finding_count", "duration_ms"])
+            let findings = try db.columns(in: "findings").map(\.name).filter { $0 != "run_id" }
+            let proposals = try db.columns(in: "trial_findings").map(\.name)
+            #expect(Set(findings).isSubset(of: Set(proposals)))          // a proposal keeps every column of a finding
         }
     }
 
