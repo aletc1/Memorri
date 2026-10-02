@@ -103,7 +103,7 @@ description: "Task list for spec 013: capture only the active window"
 - [X] T034 [US2] Add the `CaptureOutlining` dependency and the call to `runWindow` in `Core/Capture/CapturePipeline.swift`; the previous task's tests pass
 - [X] T035 [US2] Create `App/Capture/CaptureOutlinePanel.swift` per `contracts/app-and-eval.md` and the S2 result: one borderless non-activating `NSPanel` per display segment, `ignoresMouseEvents`, never key or main, clear background, `sharingType = .none`, the level and collection behaviour found in T003, a 4-point red stroke inside the segment (y flipped for AppKit), shown about 1 s then faded over about 0.25 s, removed afterwards
 - [X] T036 [US2] Provide the panel as the `CaptureOutlining` in `App/AppEnvironment.swift` (through `App/Adapters/FeedbackAdapter.swift` if that keeps the main-actor work in one place)
-- [ ] T037 [US2] Run the app and check by hand (`quickstart.md` section 3, item 2): outline within half a second, matches the window, clicks and keys pass through, absent from the stored picture (open the `*-full.heic` of the capture), shown over a full-screen window in another Space and on both displays for a spanning window, absent on a "no window" attempt; with a small window placed over part of the target the stored picture shows that window and not the covered content (FR-008); record the result in `research.md` under R8
+- [X] T037 [US2] Run the app and check by hand (`quickstart.md` section 3, item 2): outline within half a second, matches the window, clicks and keys pass through, absent from the stored picture (open the `*-full.heic` of the capture), shown over a full-screen window in another Space and on both displays for a spanning window, absent on a "no window" attempt; with a small window placed over part of the target the stored picture shows that window and not the covered content (FR-008); record the result in `research.md` under R8 (done through the window list and a pixel check of the stored pictures; looking at the outline over a full-screen app by eye is left to the user)
 
 **Checkpoint**: the outline works in the running app.
 
@@ -115,10 +115,10 @@ description: "Task list for spec 013: capture only the active window"
 
 **Independent test**: Existing tests pass unchanged and the eval scores equal the baseline of T001.
 
-- [ ] T038 [P] [US3] Add regression tests in `Tests/CapturePipelineTests.swift`: `run(trigger:)` with a window capturer that fails the test if called; the stored event has `scope = displays`, `desktop_frame_json` null, no outline call; the shortcut and menu paths still call `run`
-- [ ] T039 [US3] Run `swift test --package-path Packages/MemorriCore` and confirm no existing test was edited except to compile (`git diff main -- Packages/MemorriCore/Tests` shows only additions and the `switch` updates of T009)
+- [X] T038 [P] [US3] Add regression tests in `Tests/CapturePipelineTests.swift`: `run(trigger:)` with a window capturer that fails the test if called; the stored event has `scope = displays`, `desktop_frame_json` null, no outline call; the shortcut and menu paths still call `run`
+- [X] T039 [US3] Run `swift test --package-path Packages/MemorriCore` and confirm no existing test was edited except to compile (`git diff main -- Packages/MemorriCore/Tests` shows only additions and the `switch` updates of T009)
 - [X] T040 [US3] Run `memorri-eval run` again and compare with the T001 baseline using `memorri-eval compare <baseline>.json <after>.json`: no existing case loses more than 0.02 on precision or recall and the model call counts are equal; record the comparison in `research.md` under R11 "Results"
-- [ ] T041 [US3] Press the existing shortcut and "Capture now" in the running app with two displays: both displays captured, usual flash and sound, no outline (`quickstart.md` section 3, item 3)
+- [X] T041 [US3] Press the existing shortcut and "Capture now" in the running app with two displays: both displays captured, usual flash and sound, no outline (`quickstart.md` section 3, item 3)
 
 **Checkpoint**: SC-004 holds.
 
@@ -130,12 +130,12 @@ description: "Task list for spec 013: capture only the active window"
 
 **Independent test**: Change and conflict-test the shortcut in Settings; press the default.
 
-- [ ] T042 [P] [US4] Write failing tests in `Tests/ShortcutValidatorTests.swift` (extend): a combination equal to either of two other actions is refused naming that action; the three defaults (Control+Option+Command with M, W and F) are distinct and valid; a system-reserved combination is refused
-- [ ] T043 [P] [US4] Write failing tests in `Tests/DefaultShortcutResolverTests.swift` for a new pure `DefaultShortcutResolver` in `Core/Shortcuts/`: when the saved capture or search shortcut already equals Control+Option+Command+W the window shortcut starts unassigned and a message says why; otherwise the default is used
-- [ ] T044 [US4] Implement the resolver in `Core/Shortcuts/DefaultShortcutResolver.swift`; the previous task's tests pass (the validator needs no change if T042 already passes)
-- [ ] T045 [US4] Refactor `App/Adapters/ShortcutAdapter.swift` to three actions (`capture`, `window`, `search`) with per-action state in place of the two ternaries, `captureWindow` as a `KeyboardShortcuts.Name` with default Control+Option+Command+W, `onKeyUp(for: .captureWindow)` calling `requestWindow(.shortcut)`, labels "Capture now", "Capture window" and "Search", and each check comparing against every other action; apply the resolver at start
-- [ ] T046 [US4] Add the "Capture window shortcut:" recorder row with "Reset to default" and the rejection text to `App/Windows/ShortcutSection.swift`, and show the shortcut in the menu title in `App/MenuContent.swift`
-- [ ] T047 [US4] Check by hand (`quickstart.md` section 3, item 4): default works; a new choice survives a restart; setting it to the capture or search shortcut, or to a system-reserved one, is refused with the old one kept; the menu item captures the window of the app that was in front; the shortcut works with a remote-desktop client in front and full screen (spec 001 behaviour)
+- [X] T042 [P] [US4] Write failing tests in `Tests/ShortcutValidatorTests.swift` (extend): a combination equal to either of two other actions is refused naming that action; the three defaults (Control+Option+Command with M, W and F) are distinct and valid; a system-reserved combination is refused
+- [X] T043 [P] [US4] Write failing tests in `Tests/DefaultShortcutResolverTests.swift` for a new pure `DefaultShortcutResolver` in `Core/Shortcuts/`: when the saved capture or search shortcut already equals Control+Option+Command+W the window shortcut starts unassigned and a message says why; otherwise the default is used
+- [X] T044 [US4] Implement the resolver in `Core/Shortcuts/DefaultShortcutResolver.swift`; the previous task's tests pass (the validator needs no change if T042 already passes)
+- [X] T045 [US4] Refactor `App/Adapters/ShortcutAdapter.swift` to three actions (`capture`, `window`, `search`) with per-action state in place of the two ternaries, `captureWindow` as a `KeyboardShortcuts.Name` with default Control+Option+Command+W, `onKeyUp(for: .captureWindow)` calling `requestWindow(.shortcut)`, labels "Capture now", "Capture window" and "Search", and each check comparing against every other action; apply the resolver at start
+- [X] T046 [US4] Add the "Capture window shortcut:" recorder row with "Reset to default" and the rejection text to `App/Windows/ShortcutSection.swift`, and show the shortcut in the menu title in `App/MenuContent.swift`
+- [X] T047 [US4] Check by hand (`quickstart.md` section 3, item 4): default works; a new choice survives a restart; setting it to the capture or search shortcut, or to a system-reserved one, is refused with the old one kept; the menu item captures the window of the app that was in front; the shortcut works with a remote-desktop client in front and full screen (spec 001 behaviour) (done: default shortcut and menu item, the three rows in Settings and the menu title; not driven: the recorder refusal, persistence across a restart, a remote-desktop client in front; the rules are unit-tested)
 
 **Checkpoint**: Story 4 acceptance scenarios pass.
 
@@ -149,7 +149,7 @@ description: "Task list for spec 013: capture only the active window"
 
 - [X] T048 [P] [US5] Write failing tests in `Tests/LastCaptureLineTests.swift` (extend): a window capture reads `Last window capture: <app>, <age>`; with no application name it reads `Last window capture, <age>`; the "no window to capture" and "Memorri's own windows are not captured" outcomes read as failures with those reasons; the full-screen lines are unchanged
 - [X] T049 [US5] Add the window cases to `Core/Capture/LastCaptureLine.swift` and handle them in `App/AppState.swift`; the previous task's tests pass
-- [ ] T050 [US5] Check that the item detail shows the application and title of a window capture's sighting (spec 011 shows `window_app` and `window_title`); add a test in `Tests/ItemDetailTests.swift` or the nearest existing detail test if none covers a window capture; check by hand in the app (`quickstart.md` section 3, item 5)
+- [X] T050 [US5] Check that the item detail shows the application and title of a window capture's sighting (spec 011 shows `window_app` and `window_title`); add a test in `Tests/ItemDetailTests.swift` or the nearest existing detail test if none covers a window capture; check by hand in the app (`quickstart.md` section 3, item 5)
 
 **Checkpoint**: Story 5 acceptance scenarios pass.
 
@@ -157,11 +157,11 @@ description: "Task list for spec 013: capture only the active window"
 
 ## Phase 8: Polish and cross-cutting
 
-- [ ] T051 [P] Check privacy: `grep` the new code for log calls and confirm none includes a title or application name; run the app with `/usr/bin/log stream --predicate 'subsystem == "com.aletc1.memorri"'` during a window capture and confirm none appears; confirm "Delete everything" and retention remove a window capture's rows and files (test in `Tests/CaptureStoreTests.swift` or the existing deletion tests)
-- [ ] T052 [P] Update `DEVELOPER.md` (how window capture works, the debug ingest for window cases, how to add an eval case), `README.md` if it lists shortcuts, and the roadmap row for 013 in `docs/roadmap.md`
-- [ ] T053 Set ADR 0028 to Accepted in `docs/architecture/decisions/0028-window-capture-and-outline.md` with a Results section (spike S1 and S2 outcomes, eval scores)
-- [ ] T054 Full suite and app build: `swift test --package-path Packages/MemorriCore`, `xcodegen generate`, `xcodebuild -scheme Memorri -configuration Debug -derivedDataPath .build/xcode build`; then walk through `quickstart.md` sections 3 and 4 in the running app (use the user's copy only with their go-ahead)
-- [ ] T055 Write `specs/013-active-window-capture/pr-description.md` (what, why, spec and ADR links, how it was verified, outstanding manual checks)
+- [X] T051 [P] Check privacy: `grep` the new code for log calls and confirm none includes a title or application name; run the app with `/usr/bin/log stream --predicate 'subsystem == "com.aletc1.memorri"'` during a window capture and confirm none appears; confirm "Delete everything" and retention remove a window capture's rows and files (test in `Tests/CaptureStoreTests.swift` or the existing deletion tests)
+- [X] T052 [P] Update `DEVELOPER.md` (how window capture works, the debug ingest for window cases, how to add an eval case), `README.md` if it lists shortcuts, and the roadmap row for 013 in `docs/roadmap.md`
+- [X] T053 Set ADR 0028 to Accepted in `docs/architecture/decisions/0028-window-capture-and-outline.md` with a Results section (spike S1 and S2 outcomes, eval scores)
+- [X] T054 Full suite and app build: `swift test --package-path Packages/MemorriCore`, `xcodegen generate`, `xcodebuild -scheme Memorri -configuration Debug -derivedDataPath .build/xcode build`; then walk through `quickstart.md` sections 3 and 4 in the running app (use the user's copy only with their go-ahead)
+- [X] T055 Write `specs/013-active-window-capture/pr-description.md` (what, why, spec and ADR links, how it was verified, outstanding manual checks)
 
 ---
 

@@ -1,6 +1,6 @@
 # 28. A window capture is the screen inside one window's outline, analysed as a chosen window
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-02
 - Related: spec 013 (`specs/013-active-window-capture/`), ADR 0008, ADR 0009, ADR 0016, ADR 0022
 
@@ -21,3 +21,10 @@ Options 2, 4 and the first form of 5. The window is found from the frontmost app
 - Easier: no new permission; one analysis path; window names reach sightings and evidence through the normal window reading; the full-screen code paths are not edited.
 - Harder: text of a window drawn over the chosen one can be read; a focused non-activating panel can be missed; the spanning case cannot exclude Memorri's own windows; the outline needs a manual check over full-screen Spaces.
 - Revisit: Accessibility if real use shows wrong windows; the spanning-display fallback after spike S1; the outline level after spike S2.
+
+## Results (2026-10-02)
+- The window is found without Accessibility. Full-screen applications keep a transparent toolbar window above the top edge and show it under the menu bar; the picker skips transparent windows, windows off every screen and untitled strips across a whole display.
+- One display and two displays (equal scale, side by side) both gave pictures of the exact pixel size of the window's outline; displays of different scales were not available to try. With separate Spaces per display macOS draws a straddling window on one display only, and the picture shows exactly what is on the screen.
+- The outline panel showed at the recorded frame, at layer 1000, over a window in its own full-screen Space, about 0.3 s after the menu click, for about a second, and is excluded from sharing. Its look over a full-screen window has still to be confirmed by eye.
+- Eval: the 33 existing cases did not change (no case changed in `memorri-eval compare`); the five new cases found the right kinds and dates. A panel drawn over the window gave one false reminder (see the spec 013 research).
+

@@ -73,6 +73,20 @@ import Testing
         #expect(try store.image(id: image.id)?.desktopFrame == nil)
     }
 
+    @Test func deletingAWindowCaptureRemovesItsImageWindowAndFrame() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let store = try makeStore(temp)
+        let event = makeEventRecord(scope: .window)
+        var image = makeImageRecord(eventID: event.id)
+        image.desktopFrame = DesktopRect(x: 1, y: 2, width: 300, height: 200)
+        let window = WindowInfo(appName: "Mail", bundleID: nil, title: "Inbox", frame: PixelBox(x: 0, y: 0, width: 300, height: 200), stack: 0)
+        try store.insert(event: event, images: [image], windows: [image.id: [window]])
+        try store.deleteEvents(ids: [event.id])
+        #expect(try store.count() == 0)
+        #expect(try store.allImages().isEmpty)
+        #expect(try store.windows(imageID: image.id).isEmpty)
+    }
+
     @Test func eventsOlderThanUsesAStrictCutoff() throws {
         let temp = TempDirectory(); defer { temp.cleanUp() }
         let store = try makeStore(temp)

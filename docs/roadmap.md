@@ -16,7 +16,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 012 | items-calendar-view | Done |
 | 010 | hardening | Built; the run on the real library is pending |
 | 011 | window-aware-analysis | Done |
-| 013 | active-window-capture | Specified |
+| 013 | active-window-capture | Built; the outline over a full-screen app is to be looked at by eye |
 
 ## Prompts
 
