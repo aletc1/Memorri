@@ -11,9 +11,9 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 005 | reconciliation | Done |
 | 006 | items-ui-evidence | Done |
 | 007 | search | Done |
-| 008 | reprocessing | Done (on its branch, stacked on 012; not merged) |
-| 009 | eventkit-sync | Specified and clarified |
-| 012 | items-calendar-view | Done (on its branch, stacked on 007; not merged) |
+| 008 | reprocessing | Done |
+| 009 | eventkit-sync | Built; the run against a real calendar is pending |
+| 012 | items-calendar-view | Done |
 | 010 | hardening | Not started |
 | 011 | window-aware-analysis | Done |
 

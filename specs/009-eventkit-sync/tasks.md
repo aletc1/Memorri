@@ -28,5 +28,5 @@
 - [x] T015 Item detail sync row and `Sync again`; item history words (App/Windows/ItemDetailView.swift)
 
 ## Phase 7: Polish
-- [ ] T016 Scale test (1,000 items), logging without content, full suite, docs (DEVELOPER.md, roadmap, CLAUDE.md, pr-description)
+- [x] T016 Scale test (1,000 items), logging without content, full suite, docs (DEVELOPER.md, roadmap, CLAUDE.md, pr-description)
 - [ ] T017 Run in the app against calendars named `Memorri` (quickstart); Personal and Work unchanged
