@@ -10,6 +10,10 @@ struct MenuContent: View {
         if let shortcut = environment.shortcuts.displayText { "Capture now   \(shortcut)" } else { "Capture now" }
     }
 
+    private var searchTitle: String {
+        if let shortcut = environment.shortcuts.searchDisplayText { "Search…   \(shortcut)" } else { "Search…" }
+    }
+
     var body: some View {
         let status = environment.state.permissionStatus
 
@@ -24,7 +28,7 @@ struct MenuContent: View {
         }
         Button("Items…") { environment.windows.show(.items) }
         Button(environment.state.reviewCount > 0 ? "Inbox (\(environment.state.reviewCount))" : "Inbox") { environment.showItems(scope: .inbox) }
-        Button("Search") { environment.windows.show(.search) }
+        Button(searchTitle) { environment.searchPanel.show() }
 
         Divider()
 

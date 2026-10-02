@@ -8,6 +8,8 @@ import os
 extension KeyboardShortcuts.Name {
     /// The capture shortcut. Default is Control+Option+Command+M (ADR 0008).
     static let capture = Self("capture", default: .init(.m, modifiers: [.control, .option, .command]))
+    /// The quick-search shortcut. Default is Control+Option+Command+F (spec 007).
+    static let search = Self("search", default: .init(.f, modifiers: [.control, .option, .command]))
 }
 
 private extension KeyCombo {
@@ -44,52 +46,76 @@ struct SystemShortcutAdapter: SystemShortcutChecking {
     }
 }
 
-/// Registers the global capture shortcut and enforces the shortcut rules (FR-006, FR-007).
+/// Registers the global shortcuts (capture and search) and enforces the shortcut rules (FR-006, FR-007; spec 007 FR-009).
 ///
 /// The recorder view saves a shortcut itself and then calls `recorderChanged`; a rejected
-/// shortcut is reverted to the previous one right away.
+/// shortcut is reverted to the previous one right away. Each shortcut is also checked against the other one.
 @MainActor @Observable
 final class ShortcutAdapter {
+    enum Action {
+        case capture, search
+
+        var name: KeyboardShortcuts.Name { self == .capture ? .capture : .search }
+        /// How the other action names it in a refusal message.
+        var label: String { self == .capture ? "Capture now" : "Search" }
+    }
+
     private(set) var rejectionMessage: String?
+    private(set) var searchRejectionMessage: String?
     private var accepted: KeyboardShortcuts.Shortcut?
-    private let validator = ShortcutValidator(system: SystemShortcutAdapter(), otherActions: [:])
+    private var searchAccepted: KeyboardShortcuts.Shortcut?
+    private let system = SystemShortcutAdapter()
+
+    /// What the search shortcut does; set once the panel exists.
+    var onSearch: @MainActor () -> Void = {}
 
     init(onCapture: @escaping @MainActor () -> Void) {
         accepted = KeyboardShortcuts.getShortcut(for: .capture)
+        searchAccepted = KeyboardShortcuts.getShortcut(for: .search)
         Logger(subsystem: MemorriCore.subsystem, category: "shortcut")
             .notice("shortcut at launch: \(self.accepted?.description ?? "none", privacy: .public)")
         KeyboardShortcuts.onKeyUp(for: .capture) {
             Task { @MainActor in onCapture() }
         }
+        KeyboardShortcuts.onKeyUp(for: .search) { [weak self] in
+            Task { @MainActor in self?.onSearch() }
+        }
     }
 
     /// The shortcut as text for menus, for example "⌃⌥⌘M". `nil` when none is set.
     var displayText: String? { accepted?.description }
+    var searchDisplayText: String? { searchAccepted?.description }
 
     /// Called by the recorder after the user recorded or cleared a shortcut.
-    func recorderChanged(_ shortcut: KeyboardShortcuts.Shortcut?) {
-        apply(shortcut)
+    func recorderChanged(_ shortcut: KeyboardShortcuts.Shortcut?, for action: Action = .capture) {
+        apply(shortcut, for: action)
     }
 
     /// Restores the default shortcut, subject to the same rules.
-    func resetToDefault() {
-        let target = KeyboardShortcuts.Name.capture.defaultShortcut
-        KeyboardShortcuts.setShortcut(target, for: .capture)
-        apply(target)
+    func resetToDefault(_ action: Action = .capture) {
+        let target = action.name.defaultShortcut
+        KeyboardShortcuts.setShortcut(target, for: action.name)
+        apply(target, for: action)
     }
 
-    private func apply(_ shortcut: KeyboardShortcuts.Shortcut?) {
+    private func current(_ action: Action) -> KeyboardShortcuts.Shortcut? { action == .capture ? accepted : searchAccepted }
+
+    private func set(_ shortcut: KeyboardShortcuts.Shortcut?, message: String?, for action: Action) {
+        if action == .capture { accepted = shortcut; rejectionMessage = message } else { searchAccepted = shortcut; searchRejectionMessage = message }
+    }
+
+    private func apply(_ shortcut: KeyboardShortcuts.Shortcut?, for action: Action) {
         guard let shortcut else {            // cleared: no shortcut is registered
-            accepted = nil
-            rejectionMessage = nil
+            set(nil, message: nil, for: action)
             return
         }
-        if let rejection = validator.validate(KeyCombo(shortcut)) {
-            KeyboardShortcuts.setShortcut(accepted, for: .capture)   // keep the previous one
-            rejectionMessage = Self.message(for: rejection)
+        let other: Action = action == .capture ? .search : .capture
+        let others = current(other).map { [other.label: KeyCombo($0)] } ?? [:]
+        if let rejection = ShortcutValidator(system: system, otherActions: others).validate(KeyCombo(shortcut)) {
+            KeyboardShortcuts.setShortcut(current(action), for: action.name)   // keep the previous one
+            set(current(action), message: Self.message(for: rejection), for: action)
         } else {
-            accepted = shortcut
-            rejectionMessage = nil
+            set(shortcut, message: nil, for: action)
         }
     }
 

@@ -19,6 +19,17 @@ struct ShortcutSection: View {
                     .font(.callout)
                     .foregroundStyle(.red)
             }
+            HStack {
+                KeyboardShortcuts.Recorder("Search shortcut:", name: .search) { shortcut in
+                    shortcuts.recorderChanged(shortcut, for: .search)
+                }
+                Button("Reset to default") { shortcuts.resetToDefault(.search) }
+            }
+            if let message = shortcuts.searchRejectionMessage {
+                Text(message)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+            }
         }
     }
 }

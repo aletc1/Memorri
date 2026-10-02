@@ -49,7 +49,24 @@ final class ItemsViewModel {
 
     // MARK: Reading
 
-    var visibleRows: [ItemRow] { ItemListModel.visible(rows, filter: filter) }
+    /// What is typed in the window's search field; the list shows the items that match, best first (spec 007).
+    var searchText = "" { didSet { if searchText != oldValue { runSearch() } } }
+    private var searchIDs: [String]?
+    private var searching: Task<Void, Never>?
+
+    var visibleRows: [ItemRow] { ItemListModel.restrict(ItemListModel.visible(rows, filter: filter), to: searchIDs) }
+
+    /// Asks the core which items match; every item, dismissed too, so that the list's own filters decide what shows.
+    private func runSearch() {
+        searching?.cancel()
+        let query = SearchQuery(text: searchText, includeDismissed: true)
+        guard query.isSearchable, let service = environment.search else { searchIDs = nil; return }
+        searching = Task { [weak self] in
+            let ids = try? await service.itemIDs(matching: query)
+            guard !Task.isCancelled, let self else { return }
+            self.searchIDs = ids ?? []
+        }
+    }
     /// All rows, not only the visible ones: a dismissed item stays selected (and can be restored) after the filter hides it.
     var selectedRows: [ItemRow] { rows.filter { selection.contains($0.item.id) } }
     var canMerge: Bool { ItemListModel.canMerge(selectedRows) }
@@ -72,8 +89,17 @@ final class ItemsViewModel {
         }
     }
 
+    /// Selects an item. When the list is not loaded yet (the window was just opened), the choice waits for it.
+    func select(_ id: String) {
+        if rows.contains(where: { $0.item.id == id }) { selection = [id]; pendingSelection = nil } else { pendingSelection = id }
+    }
+
+    private var pendingSelection: String?
+
     private func apply(_ rows: [ItemRow]) {
         self.rows = rows
+        if !searchText.isEmpty { runSearch() }
+        if let pending = pendingSelection, rows.contains(where: { $0.item.id == pending }) { selection = [pending]; pendingSelection = nil }
         selection.formIntersection(Set(rows.map(\.item.id)))
         Task { await refresh() }
     }

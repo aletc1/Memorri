@@ -4,19 +4,19 @@ import SwiftUI
 import os
 
 enum WindowID: String, CaseIterable {
-    case settings, onboarding, items, search
+    case settings, onboarding, items, capture
 
     var title: String {
         switch self {
         case .settings: "Memorri Settings"
         case .onboarding: "Screen Recording Access"
         case .items: "Memorri Items"
-        case .search: "Search"
+        case .capture: "Memorri Capture"
         }
     }
 
     /// Settings and Items hold long lists (pictures, contexts, items), so they can be resized.
-    var isResizable: Bool { self == .settings || self == .items }
+    var isResizable: Bool { self == .settings || self == .items || self == .capture }
 
     var minimumContentSize: NSSize { self == .items ? NSSize(width: 720, height: 420) : NSSize(width: 560, height: 420) }
 
@@ -25,7 +25,7 @@ enum WindowID: String, CaseIterable {
         case .settings: NSSize(width: 760, height: 680)
         case .onboarding: NSSize(width: 460, height: 340)
         case .items: NSSize(width: 900, height: 600)
-        case .search: NSSize(width: 420, height: 220)
+        case .capture: NSSize(width: 1000, height: 640)
         }
     }
 }

@@ -42,6 +42,11 @@ final class AppEnvironment {
     /// The saved cut-outs that prove items, and the writer that makes them; `nil` when the storage is unavailable.
     let evidenceStore: EvidenceStore?
     let evidenceWriter: EvidenceWriter?
+    /// Search over items and captures (spec 007); `nil` when the storage is unavailable.
+    let search: SearchService?
+    let searchIndex: SearchIndex?
+    /// The floating quick-search panel.
+    lazy var searchPanel = SearchPanelController(environment: self)
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -94,6 +99,8 @@ final class AppEnvironment {
             items = ItemStore(database: database)
             itemOperations = ItemOperations(database: database, reconciler: reconciler)
             operationLog = OperationLog(database: database)
+            search = SearchService(database: database)
+            searchIndex = SearchIndex(database: database)
         } else {
             analysis = nil
             analysisJobs = nil
@@ -104,6 +111,8 @@ final class AppEnvironment {
             operationLog = nil
             evidenceStore = nil
             evidenceWriter = nil
+            search = nil
+            searchIndex = nil
         }
         captureService = CaptureRequestService(
             runner: Self.makeCaptureRunner(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings),
@@ -117,6 +126,7 @@ final class AppEnvironment {
             Task { await captureService.request(.shortcut) }
         })
         self.windows.contentProvider = { [unowned self] id in self.content(for: id) }
+        shortcuts.onSearch = { [unowned self] in self.searchPanel.toggle() }
 
         Task { [state, permission] in
             for await status in await permission.statusUpdates() {
@@ -141,14 +151,28 @@ final class AppEnvironment {
             }
             #if DEBUG
             await DebugIngest.runIfRequested(storage: storage, analysis: analysis, settingsStore: settingsStore)
+            if let text = DebugIngest.searchTextIfRequested() { await MainActor.run { [weak self] in self?.searchPanel.show(prefill: text) } }
             #endif
         }
         followAnalysisProgress()
         followReviewCount()
+        prepareSearchIndex()
         // Sightings from before evidence existed get their cut-outs a few at a time, newest first.
         if let evidenceWriter { Task.detached(priority: .utility) { _ = await evidenceWriter.backfill(limit: 200) } }
         if let storage { StartupAlerts.showIfNeeded(for: storage) }
         startRetention()
+    }
+
+    /// Builds the search index in the background when it is missing or outdated (spec 007); the panel says it is being prepared meanwhile.
+    private func prepareSearchIndex() {
+        guard let searchIndex else { return }
+        let state = self.state
+        if let current = try? searchIndex.state() { state.searchState = current }
+        Task.detached(priority: .utility) {
+            try? await searchIndex.prepare { progress in Task { @MainActor in state.searchState = progress } }
+            let final = (try? searchIndex.state()) ?? .ready          // the last word, whatever order the progress updates arrived in
+            await MainActor.run { state.searchState = final }
+        }
     }
 
     /// Keeps the menu's `Inbox (N)` current.
@@ -164,6 +188,20 @@ final class AppEnvironment {
     func showItems(scope: ItemScope) {
         state.itemsScopeRequest = AppState.ScopeRequest(scope: scope)
         windows.show(.items)
+    }
+
+    /// Opens the Items window with `id` selected, on the filter that lists it (a search result was chosen).
+    func showItem(id: String, status: ItemStatus) {
+        state.itemsScopeRequest = AppState.ScopeRequest(scope: .all, itemID: id, status: status)
+        windows.show(.items)
+    }
+
+    /// Opens the capture window on a capture a search result named, with the matching lines outlined.
+    func showCapture(_ hit: CaptureHit, query: SearchQuery) {
+        let when = SearchPanelModel.dateText(hit.capturedAt)
+        let header = [when, hit.displayName, SearchPanelModel.windowText(app: hit.windowApp, title: hit.windowTitle)].compactMap { $0 }.joined(separator: " · ")
+        state.captureRequest = CaptureRequest(imageID: hit.id, query: query, header: header)
+        windows.show(.capture)
     }
 
     /// Keeps the menu line and the settings block current.
@@ -308,7 +346,7 @@ final class AppEnvironment {
     private func content(for id: WindowID) -> AnyView {
         switch id {
         case .items: AnyView(ItemsView(environment: self))
-        case .search: AnyView(PlaceholderView.search)
+        case .capture: AnyView(CaptureViewerView(environment: self))
         case .settings: AnyView(SettingsView(environment: self))
         case .onboarding: AnyView(OnboardingView(environment: self))
         }

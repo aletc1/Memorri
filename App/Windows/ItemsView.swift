@@ -45,7 +45,12 @@ struct ItemsView: View {
     /// The menu's `Inbox` opens this window on the Inbox scope.
     private func open(_ request: AppState.ScopeRequest?) {
         guard let request else { return }
-        model.filter.scope = request.scope
+        if let id = request.itemID {
+            model.filter = ItemListModel.filter(showing: request.status ?? .active)
+            model.select(id)
+        } else {
+            model.filter.scope = request.scope
+        }
     }
 
     // MARK: Filters and buttons
@@ -77,6 +82,9 @@ struct ItemsView: View {
                     .accessibilityLabel("Show dismissed items")
 
                 Spacer(minLength: 0)
+                TextField("Search items", text: $model.searchText)
+                    .textFieldStyle(.roundedBorder).frame(width: 200)
+                    .accessibilityLabel("Search items")
             }
             HStack(spacing: 8) {
                 Picker("Show", selection: $model.filter.scope) {

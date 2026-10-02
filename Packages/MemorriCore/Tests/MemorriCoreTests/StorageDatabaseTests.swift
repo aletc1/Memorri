@@ -799,4 +799,83 @@ import Testing
             #expect(priority == 0)
         }
     }
+
+    // MARK: migration "v9" (spec 007)
+
+    private func insertItem(_ db: Database, id: String, title: String, notes: String? = nil, place: String? = nil, people: String = "[]", status: String = "active") throws {
+        try db.execute(sql: """
+            INSERT INTO items (id, kind, family, status, title, timezone, people_json, place, notes, confidence, first_seen, last_seen, created_at, updated_at)
+            VALUES (?, 'appointment', 'event', ?, ?, 'Europe/Madrid', ?, ?, ?, 0.9, datetime('now'), datetime('now'), datetime('now'), datetime('now'))
+            """, arguments: [id, status, title, people, place, notes])
+    }
+
+    @Test func v9CreatesTheSearchTables() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.read { db in
+            let v1 = try db.columns(in: "search_items").map(\.name)
+            #expect(v1 == ["item_id", "title", "aliases", "notes", "place", "people"])
+            let v2 = try db.columns(in: "search_captures").map(\.name)
+            #expect(v2 == ["image_id", "body"])
+            let v3 = try db.columns(in: "search_meta").map(\.name)
+            #expect(v3 == ["key", "value"])
+            for table in ["search_items", "search_captures"] {
+                let sql = try String.fetchOne(db, sql: "SELECT sql FROM sqlite_master WHERE name = ?", arguments: [table]) ?? ""
+                #expect(sql.contains("fts5") && sql.contains("remove_diacritics 2") && sql.contains("prefix"), "\(table)")
+            }
+            let triggers = Set(try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'search_%'"))
+            #expect(triggers == ["search_items_after_insert", "search_items_after_update", "search_items_after_delete",
+                                 "search_aliases_after_insert", "search_aliases_after_update", "search_aliases_after_delete",
+                                 "search_captures_after_read_delete"])
+            let v4 = try db.primaryKey("search_meta").columns
+            #expect(v4 == ["key"])
+        }
+    }
+
+    @Test func theItemTriggersKeepOneRowPerItemThatIsNotMerged() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.write { db in
+            try self.insertItem(db, id: "i1", title: "Café - Pruebas", notes: "sala grande", people: "[\"Ana\",\"Luis\"]")
+            try db.execute(sql: "INSERT INTO item_aliases (item_id, normalised, title) VALUES ('i1', 'pruebas', 'Pruebas Café')")
+            let row = try Row.fetchOne(db, sql: "SELECT * FROM search_items WHERE item_id = 'i1'")
+            #expect(row?["title"] as String? == "Café - Pruebas" && row?["notes"] as String? == "sala grande")
+            #expect(row?["people"] as String? == "Ana Luis" && row?["aliases"] as String? == "Pruebas Café")
+            try db.execute(sql: "UPDATE items SET title = 'Pruebas finales' WHERE id = 'i1'")
+            let v5 = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM search_items WHERE item_id = 'i1'")
+            #expect(v5 == 1)
+            try db.execute(sql: "UPDATE items SET status = 'merged' WHERE id = 'i1'")
+            let v6 = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM search_items WHERE item_id = 'i1'")
+            #expect(v6 == 0)
+            try db.execute(sql: "UPDATE items SET status = 'active' WHERE id = 'i1'")
+            try db.execute(sql: "INSERT OR REPLACE INTO items (id, kind, family, status, title, timezone, confidence, first_seen, last_seen, created_at, updated_at) VALUES ('i1', 'task', 'todo', 'active', 'Otra cosa', 'UTC', 0.5, datetime('now'), datetime('now'), datetime('now'), datetime('now'))")
+            let v7 = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM search_items WHERE item_id = 'i1'")
+            #expect(v7 == 1)
+            try db.execute(sql: "DELETE FROM items WHERE id = 'i1'")
+            let v8 = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM search_items")
+            #expect(v8 == 0)
+        }
+    }
+
+    @Test func aV8DatabaseMigratesToV9WithItsItemsAndNoIndexVersion() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v8")
+            try pool.write { db in
+                try self.insertItem(db, id: "i1", title: "Daily standup")
+                try db.execute(sql: "INSERT INTO item_aliases (item_id, normalised, title) VALUES ('i1', 'standup', 'Standup')")
+            }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.read { db in
+            let v9 = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM items")
+            #expect(v9 == 1)
+            let v10 = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM search_meta WHERE key = 'index_version'")
+            #expect(v10 == 0)
+        }
+    }
 }
