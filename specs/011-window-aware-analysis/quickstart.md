@@ -9,3 +9,9 @@ Prerequisites: Debug build, Ollama with `qwen3-vl:8b-instruct`, an isolated home
 5. **No stack**: ingest a case with one window; findings equal the old path's (FR-010).
 6. **Library re-read**: in an isolated home with a few analysed captures (one with its picture deleted), launch the new build: `reread` jobs are queued with priority 1 behind a new capture; the deleted one is skipped; locked and approved values are unchanged afterwards (SC-009).
 7. **Real library (counts only, with the user's go-ahead)**: after the re-read, the month views that show a month other than the capture's are dated in that month or flagged (SC-008).
+
+## As run (2026-10-02, isolated home, synthetic cases)
+
+- `--ingest-case` stores the picture at the `capturedAt` of the case's `meta.json` (it used the current time at first, which made every drawn clock a far clock). Steps 3 and 4: windows and sightings carry their window names, the other-month case records `reference_source = screen-clock` and the remote case `window-clock`; evidence geometry is 3 and the card shows `<app> — <title>`.
+- Step 6: a launch with an older `library-reread-version` queued the `reread` jobs at priority 1; a capture ingested at the same launch ran before the second of them (the one running is not interrupted). Step 7 (the real library) is not run.
+- `CFFIXED_USER_HOME` does not isolate preferences. The run wrote the real `com.aletc1.memorri` defaults (`library-reread-version`, retention last run); delete `library-reread-version` afterwards (`defaults delete com.aletc1.memorri library-reread-version`).
