@@ -14,7 +14,7 @@ struct DiagnosticsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Diagnostics").font(.title2).bold()
             Text("What Memorri is doing: versions, permissions, the queue, sync, storage and its own recent log lines. It never holds item titles, places, people, notes, text read from the screen, model answers, window titles or pictures, so you can share it with whoever helps. Nothing is sent anywhere.")
-                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(.secondary)
             HStack {
                 Button("Refresh") { Task { await load() } }.disabled(loading)
                 Button("Save report…") { save(json: false) }.disabled(report == nil)
