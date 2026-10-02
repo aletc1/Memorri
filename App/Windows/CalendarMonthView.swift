@@ -30,12 +30,12 @@ struct CalendarMonthView: View {
     private func header(_ grid: MonthGrid) -> some View {
         HStack(spacing: 8) {
             Button { model.shiftMonth(-1) } label: { Image(systemName: "chevron.left") }
-                .keyboardShortcut(.leftArrow, modifiers: .command).help("Previous month").accessibilityLabel("Previous month")
+                .keyboardShortcut(.leftArrow, modifiers: .command).tip("Previous month").accessibilityLabel("Previous month")
             Text(grid.title).font(.headline).frame(minWidth: 130)
             Button { model.shiftMonth(1) } label: { Image(systemName: "chevron.right") }
-                .keyboardShortcut(.rightArrow, modifiers: .command).help("Next month").accessibilityLabel("Next month")
+                .keyboardShortcut(.rightArrow, modifiers: .command).tip("Next month").accessibilityLabel("Next month")
             Spacer(minLength: 0)
-            Button("Today") { model.goToToday() }.help("Go back to the month of today").accessibilityLabel("Go to today")
+            Button("Today") { model.goToToday() }.tip("Go back to the month of today", trailing: true).accessibilityLabel("Go to today")
         }
         .padding(8)
     }
