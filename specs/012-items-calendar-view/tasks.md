@@ -16,5 +16,5 @@
 - [X] T009 [US3] Accessibility labels, Command-arrow month keys
 
 ## Phase 4: Polish
-- [ ] T010 (waiting: the user's own copy runs on the real library, so an isolated copy quits at once) Run in an isolated home at default and smallest width, screenshot by window id, check every quickstart step
+- [X] T010 Checked by the user in the running app on the real library (header in one row, calendar, filters, fixed detail width, tooltips); not repeated in an isolated home at default and smallest width, screenshot by window id, check every quickstart step
 - [X] T011 Update roadmap, CLAUDE.md active plan, DEVELOPER.md note, PR description

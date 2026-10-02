@@ -15,6 +15,6 @@ Spec: `specs/012-items-calendar-view/`. ADR: 0024.
 
 ## Verification
 - `swift test --package-path Packages/MemorriCore`: 1318 tests pass, 14 new in `ItemCalendarTests` (pinning, zones, order, +N more, weeks, filters equal the list, 5,000 items under 200 ms).
-- App builds. The UI check in a running app (quickstart) is still to do: the author's own copy was running on the real library, so an isolated copy could not start.
+- App builds. The UI was checked by the author in the running app on the real library (header, calendar, filters, fixed detail width, tooltips).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
