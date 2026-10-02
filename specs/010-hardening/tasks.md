@@ -48,15 +48,15 @@ Paths are relative to `Packages/MemorriCore/Sources/MemorriCore/` (Sources), `Pa
 ## Phase 6: US5 Diagnostics (FR-023 to FR-026)
 **Goal**: figures and recent log lines the user can share without exposing the library.
 **Independent test**: a library with planted titles, places, people, notes and OCR words gives a report that contains none of them.
-- [ ] T026 [P] [US5] Tests first for `LogSanitiser` and `DiagnosticsReport`: category allow list; lines containing a sensitive string of at least 4 characters (lowercase substring) or longer than 12 words are dropped, also failure reasons; the report holds versions, permissions, queue counts and failure reasons, sync runs and problems, storage use; planted strings (titles, places, people, notes, window titles, model output, OCR words) never appear in text or JSON (Tests/DiagnosticsReportTests.swift)
-- [ ] T027 [US5] `DiagnosticsReport`, `DiagnosticsInputs`, `LogSanitiser` (Sources/Diagnostics/DiagnosticsReport.swift, Sources/Diagnostics/LogSanitiser.swift)
-- [ ] T028 [US5] App: gather the figures, read this process's log with `OSLogStore` (subsystem `com.aletc1.memorri`, last 200 lines of the last hour), `Settings > Diagnostics` view and `Save report…` (App/Diagnostics/DiagnosticsSource.swift, App/Windows/DiagnosticsView.swift, App/Windows/SettingsView.swift)
+- [x] T026 [P] [US5] Tests first for `LogSanitiser` and `DiagnosticsReport`: category allow list; lines containing a sensitive string of at least 4 characters (lowercase substring) or longer than 12 words are dropped, also failure reasons; the report holds versions, permissions, queue counts and failure reasons, sync runs and problems, storage use; planted strings (titles, places, people, notes, window titles, model output, OCR words) never appear in text or JSON (Tests/DiagnosticsReportTests.swift)
+- [x] T027 [US5] `DiagnosticsReport`, `DiagnosticsInputs`, `LogSanitiser` (Sources/Diagnostics/DiagnosticsReport.swift, Sources/Diagnostics/LogSanitiser.swift)
+- [x] T028 [US5] App: gather the figures, read this process's log with `OSLogStore` (subsystem `com.aletc1.memorri`, last 200 lines of the last hour), `Settings > Diagnostics` view and `Save report…` (App/Diagnostics/DiagnosticsSource.swift, App/Windows/DiagnosticsView.swift, App/Windows/SettingsView.swift)
 
 ## Phase 7: US6 App icon (FR-027, FR-028)
 **Goal**: the app has an icon of its own.
 **Independent test**: the built app shows the brain on a rounded square in Finder, privacy lists and notifications; the script regenerates it.
-- [ ] T029 [P] [US6] `scripts/make-app-icon.swift`: draws the `brain` symbol in white on a rounded square with a single blue gradient (824 px square inside 1024, corner radius 185), writes the ten PNG sizes and `Contents.json` into `App/Resources/Assets.xcassets/AppIcon.appiconset` (scripts/make-app-icon.swift)
-- [ ] T030 [US6] Run the script, commit the asset, set `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` in `project.yml`, regenerate and build, look at the app in Finder (project.yml, App/Resources/Assets.xcassets/AppIcon.appiconset)
+- [x] T029 [P] [US6] `scripts/make-app-icon.swift`: draws the `brain` symbol in white on a rounded square with a single blue gradient (824 px square inside 1024, corner radius 185), writes the ten PNG sizes and `Contents.json` into `App/Resources/Assets.xcassets/AppIcon.appiconset` (scripts/make-app-icon.swift)
+- [x] T030 [US6] Run the script, commit the asset, set `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` in `project.yml`, regenerate and build, look at the app in Finder (project.yml, App/Resources/Assets.xcassets/AppIcon.appiconset)
 
 ## Phase 8: Polish
 - [ ] T031 Scale: coverage and absence work under 100 ms per first analysis on 10,000 items; backup of a 1 GB library under 2 minutes (a generated tree), off the main actor (Tests/HardeningScaleTests.swift)
