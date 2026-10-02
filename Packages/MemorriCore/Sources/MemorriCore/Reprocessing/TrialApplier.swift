@@ -93,7 +93,15 @@ public struct TrialApplier: Sendable {
                     for index in needed.sorted() { if case .sameAsStep(let n) = item.plan.steps[index].target, needed.insert(n).inserted { grew = true } }
                 }
                 var resolved: [Int: String] = [:]
-                var cleared: Set<String> = []
+                var firstJoin: Set<String> = []
+                var replaced: Set<String> = []
+                // What this capture's proposals say about each existing item, to tell which of the capture's old sightings a proposal replaces.
+                var titlesByItem: [String: [(finding: String, title: String)]] = [:]
+                for step in item.plan.steps {
+                    if case .existing(let id) = step.target, let live = try Reconciler.live(db, id), let f = byID[step.findingID] {
+                        titlesByItem[live, default: []].append((f.id, TitleNormaliser.normalise(f.title)))
+                    }
+                }
                 for (index, step) in item.plan.steps.enumerated() where needed.contains(index) {
                     guard let finding = byID[step.findingID] else { continue }
                     var itemID: String?
@@ -121,15 +129,23 @@ public struct TrialApplier: Sendable {
                         }
                     }
                     guard let target = itemID else { continue }
-                    if joined, cleared.insert(target).inserted {
-                        if before[target] == nil, let state = try OperationLog.state(db, itemID: target) { before[target] = state }
-                        // The capture's earlier sightings of this item give way to the proposal; they are stored for Undo.
-                        for sighting in try Row.fetchAll(db, sql: "SELECT * FROM sightings WHERE image_id = ? AND item_id = ?", arguments: [item.imageID, target]) {
-                            let sightingID: String = sighting["id"]
+                    if joined {
+                        if firstJoin.insert(target).inserted, before[target] == nil, let state = try OperationLog.state(db, itemID: target) { before[target] = state }
+                        // Only the old sighting this proposal replaces gives way (stored for Undo): the one with the same title, else one that no other
+                        // proposal of this capture accounts for. Sightings the user did not choose to apply stay as they are.
+                        let key = TitleNormaliser.normalise(finding.title)
+                        let others = Set((titlesByItem[target] ?? []).filter { $0.finding != finding.id }.map(\.title))
+                        let olds = try Row.fetchAll(db, sql: "SELECT * FROM sightings WHERE image_id = ? AND item_id = ? ORDER BY created_at, id", arguments: [item.imageID, target])
+                            .filter { !replaced.contains($0["id"] as String) && !newSightings.contains($0["id"] as String) }
+                        let exact = finding.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let old = olds.first(where: { ($0["title"] as String).trimmingCharacters(in: .whitespacesAndNewlines) == exact })
+                            ?? olds.first(where: { TitleNormaliser.normalise($0["title"] as String) == key }) ?? olds.first(where: { !others.contains(TitleNormaliser.normalise($0["title"] as String)) }) {
+                            let sightingID: String = old["id"]
                             let observations = try Row.fetchAll(db, sql: "SELECT * FROM observations WHERE sighting_id = ?", arguments: [sightingID])
-                            removed.append(.object(["item": .string(target), "sighting": Self.json(sighting), "observations": .array(observations.map(Self.json))]))
+                            removed.append(.object(["item": .string(target), "sighting": Self.json(old), "observations": .array(observations.map(Self.json))]))
+                            try db.execute(sql: "DELETE FROM sightings WHERE id = ?", arguments: [sightingID])
+                            replaced.insert(sightingID)
                         }
-                        try db.execute(sql: "DELETE FROM sightings WHERE image_id = ? AND item_id = ?", arguments: [item.imageID, target])
                     }
                     resolved[index] = target
                     let window = try store.window(db, findingID: finding.id)
@@ -140,13 +156,20 @@ public struct TrialApplier: Sendable {
                 }
             }
             guard !newSightings.isEmpty else { return (nil, [], lost, []) }
+            // The capture's sightings of these items that stayed: what an undo must not mistake for a later re-read.
+            var kept: [String] = []
+            for item in jobs {
+                for id in touched {
+                    kept += try String.fetchAll(db, sql: "SELECT id FROM sightings WHERE image_id = ? AND item_id = ?", arguments: [item.imageID, id]).filter { !newSightings.contains($0) }
+                }
+            }
             for id in touched { try ItemStore.recompute(db, itemID: id, at: date) }
             let detail: [String: JSONValue] = [
                 "trial": .string(trialID), "model": .string(trial.model), "promptVersion": .string(trial.promptVersion),
                 // What the audit trail keeps of the trial itself, so it outlives deleting the trial.
                 "trialStarted": .string(ISO8601DateFormatter().string(from: trial.createdAt)), "captures": .int(trial.counts.read),
                 "differences": .array(applied.map(JSONValue.string)), "created": .array(created.map(JSONValue.string)),
-                "sightings": .array(newSightings.map(JSONValue.string)), "removed": .array(removed),
+                "sightings": .array(newSightings.map(JSONValue.string)), "removed": .array(removed), "kept": .array(kept.map(JSONValue.string)),
                 "images": .array(jobs.map { .string($0.imageID) }),
             ]
             let id = try OperationLog.record(db, kind: .applyTrial, byUser: true, items: touched, before: before, detail: detail, at: date)

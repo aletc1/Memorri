@@ -199,6 +199,11 @@ extension ItemOperations {
             }
             if case .array(let images)? = op.detail["images"] { evidenceImages = images.compactMap(\.asString) }
             if case .array(let entries)? = op.detail["removed"] {
+                // The sightings this very undo puts back are not "read again since", so they are told apart by id.
+                var removedIDs: [String] = []
+                for entry in entries { if case .object(let row)? = entry["sighting"], case .string(let id)? = row["id"] { removedIDs.append(id) } }
+                // What the capture still showed when the apply was made counts as known too; anything else is a sighting made since.
+                if case .array(let kept)? = op.detail["kept"] { removedIDs += kept.compactMap(\.asString) }
                 for entry in entries {
                     guard case .string(let item)? = entry["item"], case .object(let sighting)? = entry["sighting"],
                           try ItemStore.item(db, id: item) != nil else { continue }
@@ -206,7 +211,8 @@ extension ItemOperations {
                     // A capture read again since (a context change, a reanalysis, the library re-read) shows this item with sightings of its own:
                     // putting the old one back next to them would count the same reading twice.
                     if case .string(let image)? = sighting["image_id"],
-                       try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM sightings WHERE image_id = ? AND item_id = ?)", arguments: [image, item]) == true {
+                       try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM sightings WHERE image_id = ? AND item_id = ? AND id NOT IN (\(removedIDs.map { _ in "?" }.joined(separator: ", "))))",
+                                         arguments: StatementArguments([image, item] + removedIDs)) == true {
                         skipped.append("the capture was read again since")
                         continue
                     }

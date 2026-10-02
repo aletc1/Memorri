@@ -148,6 +148,42 @@ import Testing
         #expect(try item(rig, "Renamed").end == ReconcileFixture.minutes(60))                // left as the user last had it
     }
 
+    @Test func applyingOneReadingKeepsTheCapturesOtherReadingOfTheSameItemAndUndoRestoresBoth() async throws {
+        let rig = try makeRig(); defer { rig.f.cleanUp() }
+        // The capture shows the event twice (two windows): two sightings of one item.
+        try await live(rig, [rig.f.finding("Daily standup", end: ReconcileFixture.minutes(30)), rig.f.finding("Daily standup.", end: ReconcileFixture.minutes(30))])
+        let before = try rig.f.snapshot()
+        let sightingsBefore = try rig.f.count("sightings"), items = try rig.f.count("items")
+        #expect(sightingsBefore == 2 && items == 1)
+        let proposals = [rig.f.finding("Daily standup", end: ReconcileFixture.minutes(60)), rig.f.finding("Daily standup.", end: ReconcileFixture.minutes(30))]
+        let t = try trial(rig, proposals)
+        let all = try await report(rig, t).differences
+        let changed = try #require(all.first { $0.kind == .changed && $0.title == "Daily standup" })
+        let result = try await rig.applier.apply(trialID: t.id, differenceIDs: [changed.id])
+        #expect(result.applied == [changed.id])
+        let during = try rig.f.read { try String.fetchAll($0, sql: "SELECT title FROM sightings ORDER BY title") }
+        #expect(during.count == 2 && during.contains("Daily standup."))                 // the other reading stayed, nothing was lost
+        let undone = try await rig.operations.undo(try #require(result.operationID))
+        guard case .undone = undone else { Issue.record("expected undone, got \(undone)"); return }
+        let after = try rig.f.snapshot()
+        #expect(after == before, "\(ReconcileFixture.difference(before, after))")
+    }
+
+    @Test func undoRestoresEveryReadingEvenWhenTheApplyReplacedTwoOfOneCapture() async throws {
+        let rig = try makeRig(); defer { rig.f.cleanUp() }
+        try await live(rig, [rig.f.finding("Daily standup", end: ReconcileFixture.minutes(30)), rig.f.finding("Daily standup", end: ReconcileFixture.minutes(30))])
+        let before = try rig.f.snapshot()
+        let t = try trial(rig, [rig.f.finding("Daily standup", end: ReconcileFixture.minutes(60)), rig.f.finding("Daily standup", end: ReconcileFixture.minutes(60))])
+        let ids = try await report(rig, t).differences.filter(\.applicable).map(\.id)
+        #expect(ids.count == 2)
+        let op = try #require(try await rig.applier.apply(trialID: t.id, differenceIDs: ids).operationID)
+        #expect(try rig.f.count("sightings") == 2)
+        let undone = try await rig.operations.undo(op)
+        guard case .undone = undone else { Issue.record("expected undone, got \(undone)"); return }
+        let after = try rig.f.snapshot()
+        #expect(after == before, "\(ReconcileFixture.difference(before, after))")
+    }
+
     @Test func undoDoesNotCountTheSameReadingTwiceWhenTheCaptureWasReadAgainMeanwhile() async throws {
         let rig = try makeRig(); defer { rig.f.cleanUp() }
         try await live(rig, [rig.f.finding("Daily standup", end: ReconcileFixture.minutes(30))])
