@@ -14,7 +14,7 @@ struct ItemsView: View {
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 0) {
-            toolbar(model: model).zIndex(1)
+            toolbar(model: model)
             Divider()
             if !model.isAvailable {
                 Text("The capture storage is not available, so there are no items to show.")
@@ -64,7 +64,7 @@ struct ItemsView: View {
                 Image(systemName: "calendar").tag(ItemsViewModel.ViewMode.calendar)
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
-            .tip("Switch between the list and the month calendar")
+            .help("Switch between the list and the month calendar")
             .accessibilityLabel("List or calendar view")
 
             Picker("Show", selection: $model.filter.scope) {
@@ -73,7 +73,7 @@ struct ItemsView: View {
                 Text("Approved").tag(ItemScope.approved)
             }
             .labelsHidden().fixedSize()
-            .tip("Show all items, only the Inbox (items that need review) or only approved items")
+            .help("Show all items, only the Inbox (items that need review) or only approved items")
             .accessibilityLabel("Show items, the Inbox or approved items")
 
             Picker("Kind", selection: $model.filter.kind) {
@@ -83,7 +83,7 @@ struct ItemsView: View {
                 Text("Reminders").tag(ItemKindFilter.reminders)
             }
             .labelsHidden().fixedSize()
-            .tip("Filter by kind. Tasks include deadlines")
+            .help("Filter by kind. Tasks include deadlines")
             .accessibilityLabel("Kind filter")
 
             Picker("Context", selection: $model.filter.context) {
@@ -92,17 +92,17 @@ struct ItemsView: View {
                 Text("No context").tag(ItemContextFilter.none)
             }
             .labelsHidden().fixedSize()
-            .tip("Filter by context (customer or session)")
+            .help("Filter by context (customer or session)")
             .accessibilityLabel("Context filter")
 
             Toggle(isOn: $model.filter.showDismissed) { Label("Dismissed", systemImage: model.filter.showDismissed ? "eye" : "eye.slash") }
                 .toggleStyle(.button)
-                .tip(model.filter.showDismissed ? "Dismissed items are shown (dimmed). Click to hide them" : "Dismissed items are hidden. Click to show them, dimmed")
+                .help(model.filter.showDismissed ? "Dismissed items are shown (dimmed). Click to hide them" : "Dismissed items are hidden. Click to show them, dimmed")
                 .accessibilityLabel("Show dismissed items")
 
             TextField("Search items", text: $model.searchText)
                 .textFieldStyle(.roundedBorder).frame(minWidth: 100, idealWidth: 180, maxWidth: 220)
-                .tip("Search the titles, places, people and notes of items")
+                .help("Search the titles, places, people and notes of items")
                 .accessibilityLabel("Search items")
 
             Spacer(minLength: 0)
@@ -120,7 +120,7 @@ struct ItemsView: View {
             }
             Button { Task { await model.undoLast() } } label: { Image(systemName: "arrow.uturn.backward") }
                 .disabled(model.undoTarget == nil)
-                .tip(model.undoTarget.map { "Undo: \(ItemListModel.operationText($0.kind))" } ?? "Nothing to undo", trailing: true)
+                .help(model.undoTarget.map { "Undo: \(ItemListModel.operationText($0.kind))" } ?? "Nothing to undo")
                 .accessibilityLabel("Undo your last operation")
         }
         .padding(10)
@@ -128,7 +128,7 @@ struct ItemsView: View {
 
     private func iconButton(_ symbol: String, _ help: String, _ label: String, _ action: @escaping () async -> Void) -> some View {
         Button { Task { await action() } } label: { Image(systemName: symbol) }
-            .tip(help, trailing: true).accessibilityLabel(label)
+            .help(help).accessibilityLabel(label)
     }
 
     // MARK: List
