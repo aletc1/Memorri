@@ -35,7 +35,7 @@ struct CalendarMonthView: View {
             Button { model.shiftMonth(1) } label: { Image(systemName: "chevron.right") }
                 .keyboardShortcut(.rightArrow, modifiers: .command).help("Next month").accessibilityLabel("Next month")
             Spacer(minLength: 0)
-            Button("Today") { model.goToToday() }.help("Show the month of today").accessibilityLabel("Go to today")
+            Button("Today") { model.goToToday() }.help("Go back to the month of today").accessibilityLabel("Go to today")
         }
         .padding(8)
     }

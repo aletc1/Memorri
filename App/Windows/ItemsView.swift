@@ -64,6 +64,7 @@ struct ItemsView: View {
                 Image(systemName: "calendar").tag(ItemsViewModel.ViewMode.calendar).help("Calendar")
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
+            .help("Switch between the list and the month calendar")
             .accessibilityLabel("List or calendar view")
 
             Picker("Show", selection: $model.filter.scope) {
@@ -72,6 +73,7 @@ struct ItemsView: View {
                 Text("Approved").tag(ItemScope.approved)
             }
             .labelsHidden().fixedSize()
+            .help("Show all items, only the Inbox (items that need review) or only approved items")
             .accessibilityLabel("Show items, the Inbox or approved items")
 
             Picker("Kind", selection: $model.filter.kind) {
@@ -81,7 +83,7 @@ struct ItemsView: View {
                 Text("Reminders").tag(ItemKindFilter.reminders)
             }
             .labelsHidden().fixedSize()
-            .help("Tasks include deadlines")
+            .help("Filter by kind. Tasks include deadlines")
             .accessibilityLabel("Kind filter")
 
             Picker("Context", selection: $model.filter.context) {
@@ -90,28 +92,30 @@ struct ItemsView: View {
                 Text("No context").tag(ItemContextFilter.none)
             }
             .labelsHidden().fixedSize()
+            .help("Filter by context (customer or session)")
             .accessibilityLabel("Context filter")
 
-            Toggle(isOn: $model.filter.showDismissed) { Image(systemName: "eye.slash") }
+            Toggle(isOn: $model.filter.showDismissed) { Label("Dismissed", systemImage: model.filter.showDismissed ? "eye" : "eye.slash") }
                 .toggleStyle(.button)
-                .help(model.filter.showDismissed ? "Hide dismissed items" : "Show dismissed items")
+                .help(model.filter.showDismissed ? "Dismissed items are shown (dimmed). Click to hide them" : "Dismissed items are hidden. Click to show them, dimmed")
                 .accessibilityLabel("Show dismissed items")
 
             TextField("Search items", text: $model.searchText)
                 .textFieldStyle(.roundedBorder).frame(minWidth: 100, idealWidth: 180, maxWidth: 220)
+                .help("Search the titles, places, people and notes of items")
                 .accessibilityLabel("Search items")
 
             Spacer(minLength: 0)
 
             if model.canApprove {
-                iconButton("checkmark", "Approve", "Approve the selected items") { await model.approve() }
+                iconButton("checkmark", "Approve the selected items: they leave the Inbox", "Approve the selected items") { await model.approve() }
             }
             if model.canMerge {
-                iconButton("arrow.triangle.merge", "Merge", "Merge the two selected items") { await model.merge() }
+                iconButton("arrow.triangle.merge", "Merge the two selected items into one", "Merge the two selected items") { await model.merge() }
             }
             if let action = model.statusAction {
                 iconButton(action == .dismiss ? "xmark" : "arrow.uturn.backward.circle",
-                           action == .dismiss ? "Dismiss" : "Restore",
+                           action == .dismiss ? "Dismiss the selected items: they are hidden and not recreated" : "Restore the selected items",
                            action == .dismiss ? "Dismiss the selected items" : "Restore the selected items") { await model.dismissOrRestore() }
             }
             Button { Task { await model.undoLast() } } label: { Image(systemName: "arrow.uturn.backward") }
