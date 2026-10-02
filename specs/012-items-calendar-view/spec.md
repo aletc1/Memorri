@@ -116,7 +116,7 @@ Everything that narrows the list narrows the calendar: kind, context, the Show d
 ## Assumptions
 
 - This spec is built on top of spec 007's branch (it moves the Items window's search field) and on the Items window of spec 006.
-- The kind filter (All, Appointments, Tasks, Reminders) stays a segmented control; context stays a dropdown; if the row does not fit at the smallest width, the kind filter collapses into a dropdown.
+- The kind filter becomes a dropdown like the context filter and the Show filter, and the window's smallest width grows to fit the calendar next to the detail (860 points).
 - The calendar shows one month at a time (week and day views are out of scope), Monday or Sunday first as the system says.
 - Dragging an item to another day to change its date is out of scope (dates change through the detail pane's editing).
 - Items with a reminder time but no due date are pinned by their start, else listed as `No date`; the remind time is not a pinning date.

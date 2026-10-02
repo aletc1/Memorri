@@ -13,7 +13,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 007 | search | Done |
 | 008 | reprocessing | Not started |
 | 009 | eventkit-sync | Not started |
-| 012 | items-calendar-view | Specified (by request on 2026-10-02, before 008) |
+| 012 | items-calendar-view | Implemented on its branch (UI check pending) |
 | 010 | hardening | Not started |
 | 011 | window-aware-analysis | Done |
 

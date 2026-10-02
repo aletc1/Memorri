@@ -21,7 +21,10 @@ struct ItemsView: View {
                     .foregroundStyle(.secondary).padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HSplitView {
-                    list(model: model).frame(minWidth: 340, idealWidth: 400)
+                    Group {
+                        if model.viewMode == .calendar { CalendarMonthView(model: model) } else { list(model: model) }
+                    }
+                    .frame(minWidth: model.viewMode == .calendar ? 480 : 340, idealWidth: model.viewMode == .calendar ? 560 : 400)
                     detailPane.frame(minWidth: 340)
                 }
             }
@@ -53,67 +56,77 @@ struct ItemsView: View {
         }
     }
 
-    // MARK: Filters and buttons
+    // MARK: Header (one row, spec 012)
 
     private func toolbar(model: ItemsViewModel) -> some View {
         @Bindable var model = model
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Picker("Kind", selection: $model.filter.kind) {
-                    Text("All").tag(ItemKindFilter.all)
-                    Text("Appointments").tag(ItemKindFilter.appointments)
-                    Text("Tasks").tag(ItemKindFilter.tasks)
-                    Text("Reminders").tag(ItemKindFilter.reminders)
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("Tasks include deadlines")
-                .accessibilityLabel("Kind filter")
-
-                Picker("Context", selection: $model.filter.context) {
-                    Text("All contexts").tag(ItemContextFilter.all)
-                    ForEach(model.contexts, id: \.id) { Text($0.name).tag(ItemContextFilter.context($0.id)) }
-                    Text("No context").tag(ItemContextFilter.none)
-                }
-                .labelsHidden().fixedSize()
-                .accessibilityLabel("Context filter")
-
-                Toggle("Show dismissed", isOn: $model.filter.showDismissed)
-                    .fixedSize()
-                    .accessibilityLabel("Show dismissed items")
-
-                Spacer(minLength: 0)
-                TextField("Search items", text: $model.searchText)
-                    .textFieldStyle(.roundedBorder).frame(width: 200)
-                    .accessibilityLabel("Search items")
+        return HStack(spacing: 10) {
+            Picker("View", selection: $model.viewMode) {
+                Image(systemName: "list.bullet").tag(ItemsViewModel.ViewMode.list).help("List")
+                Image(systemName: "calendar").tag(ItemsViewModel.ViewMode.calendar).help("Calendar")
             }
-            HStack(spacing: 8) {
-                Picker("Show", selection: $model.filter.scope) {
-                    Text("Items").tag(ItemScope.all)
-                    Text("Inbox (\(model.inboxCount))").tag(ItemScope.inbox)
-                    Text("Approved").tag(ItemScope.approved)
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .accessibilityLabel("Show items, the Inbox or approved items")
-                if model.canApprove {
-                    Button("Approve") { Task { await model.approve() } }
-                        .accessibilityLabel("Approve the selected items")
-                }
-                if model.canMerge {
-                    Button("Merge") { Task { await model.merge() } }
-                        .accessibilityLabel("Merge the two selected items")
-                }
-                if let action = model.statusAction {
-                    Button(action == .dismiss ? "Dismiss" : "Restore") { Task { await model.dismissOrRestore() } }
-                        .accessibilityLabel(action == .dismiss ? "Dismiss the selected items" : "Restore the selected items")
-                }
-                Spacer(minLength: 0)
-                Button("Undo last") { Task { await model.undoLast() } }
-                    .disabled(model.undoTarget == nil)
-                    .help(model.undoTarget.map { "Undo: \(ItemListModel.operationText($0.kind))" } ?? "Nothing to undo")
-                    .accessibilityLabel("Undo your last operation")
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            .accessibilityLabel("List or calendar view")
+
+            Picker("Show", selection: $model.filter.scope) {
+                Text("Items").tag(ItemScope.all)
+                Text("Inbox (\(model.inboxCount))").tag(ItemScope.inbox)
+                Text("Approved").tag(ItemScope.approved)
             }
+            .labelsHidden().fixedSize()
+            .accessibilityLabel("Show items, the Inbox or approved items")
+
+            Picker("Kind", selection: $model.filter.kind) {
+                Text("All kinds").tag(ItemKindFilter.all)
+                Text("Appointments").tag(ItemKindFilter.appointments)
+                Text("Tasks").tag(ItemKindFilter.tasks)
+                Text("Reminders").tag(ItemKindFilter.reminders)
+            }
+            .labelsHidden().fixedSize()
+            .help("Tasks include deadlines")
+            .accessibilityLabel("Kind filter")
+
+            Picker("Context", selection: $model.filter.context) {
+                Text("All contexts").tag(ItemContextFilter.all)
+                ForEach(model.contexts, id: \.id) { Text($0.name).tag(ItemContextFilter.context($0.id)) }
+                Text("No context").tag(ItemContextFilter.none)
+            }
+            .labelsHidden().fixedSize()
+            .accessibilityLabel("Context filter")
+
+            Toggle(isOn: $model.filter.showDismissed) { Image(systemName: "eye.slash") }
+                .toggleStyle(.button)
+                .help(model.filter.showDismissed ? "Hide dismissed items" : "Show dismissed items")
+                .accessibilityLabel("Show dismissed items")
+
+            TextField("Search items", text: $model.searchText)
+                .textFieldStyle(.roundedBorder).frame(minWidth: 100, idealWidth: 180, maxWidth: 220)
+                .accessibilityLabel("Search items")
+
+            Spacer(minLength: 0)
+
+            if model.canApprove {
+                iconButton("checkmark", "Approve", "Approve the selected items") { await model.approve() }
+            }
+            if model.canMerge {
+                iconButton("arrow.triangle.merge", "Merge", "Merge the two selected items") { await model.merge() }
+            }
+            if let action = model.statusAction {
+                iconButton(action == .dismiss ? "xmark" : "arrow.uturn.backward.circle",
+                           action == .dismiss ? "Dismiss" : "Restore",
+                           action == .dismiss ? "Dismiss the selected items" : "Restore the selected items") { await model.dismissOrRestore() }
+            }
+            Button { Task { await model.undoLast() } } label: { Image(systemName: "arrow.uturn.backward") }
+                .disabled(model.undoTarget == nil)
+                .help(model.undoTarget.map { "Undo: \(ItemListModel.operationText($0.kind))" } ?? "Nothing to undo")
+                .accessibilityLabel("Undo your last operation")
         }
         .padding(10)
+    }
+
+    private func iconButton(_ symbol: String, _ help: String, _ label: String, _ action: @escaping () async -> Void) -> some View {
+        Button { Task { await action() } } label: { Image(systemName: symbol) }
+            .help(help).accessibilityLabel(label)
     }
 
     // MARK: List

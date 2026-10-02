@@ -10,7 +10,7 @@ Decision: the day of `ItemListModel.moment(item)` (start for events, due else st
 Decision: the calendar takes `visibleRows` (filters, scope, search) and only changes the arrangement, so the sets are equal by construction (SC-002). The Inbox's last-seen ordering does not apply: chips are ordered inside the day by all-day first, time, title.
 
 ## R4. Header in one row
-Decision: one `HStack`: view switch, kind, context, Show menu, dismissed toggle, search, spacer, action icons, Undo. Kind is a segmented control when it fits and a menu when it does not (`ViewThatFits`). Actions stay SF Symbols with `.help` and accessibility labels.
+Decision: one `HStack`: view switch, kind, context, Show menu, dismissed toggle, search, spacer, action icons, Undo. Kind becomes a menu too: a segmented control of four labels does not fit one row at 860 points. The window's smallest width grows from 720 to 860 so the calendar (480) fits beside the detail (340). Actions stay SF Symbols with `.help` and accessibility labels.
 
 ## R5. Remembering view and month
 Decision: `@AppStorage` keys `items.viewMode` (`list` or `calendar`) and `items.month` (`yyyy-MM`) in the window view; a bad or missing value falls back to list and the current month.

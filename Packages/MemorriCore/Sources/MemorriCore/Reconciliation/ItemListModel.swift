@@ -171,7 +171,8 @@ public enum ItemListModel {
         }
     }
 
-    private static func moment(_ item: Item) -> Date? { item.family == .event ? item.start : (item.due ?? item.start) }
+    /// The date an item is listed and pinned by: an event's start, a to-do's due date, else its start.
+    public static func moment(_ item: Item) -> Date? { item.family == .event ? item.start : (item.due ?? item.start) }
 
     public static func rowText(_ row: ItemRow, contextName: String?) -> ItemRowText {
         ItemRowText(title: row.item.title, when: dateText(row.item), context: contextName ?? "No context",
