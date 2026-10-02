@@ -100,7 +100,7 @@ Precision and recall are 1.00 on the new cases. The three fields that differ are
 | SC-005 | Met: no older case changed (limit 0.02); no stack gives the old path (tests). |
 | SC-006 | Met: the remote case resolves its relative dates against its own taskbar clock (6 of 6 fields). |
 | SC-007 | Met by test (`ReconcilerWindowsTests`, `EvidenceLifecycleTests`): sightings and evidence carry the window's application and title, also after the capture is deleted. |
-| SC-008, SC-009 | Real library: see below (needs the user's go-ahead and their app closed). The re-read, its priority and its protection of edited, locked, approved and dismissed values are covered by `LibraryRereadTests` and `ImageAnalysisJobTests`. |
+| SC-008, SC-009 | Real library, counts only (user's go-ahead, 2026-10-02): the re-read ran on the user's copy of the new build, 15 `reread` jobs finished and none failed; 9 captures analysed, all 9 read window by window, 3 with a clock reading, 3 month views; the dates of the month view examined (scrolled, first row in the month before the title's) were checked against the picture and are right; no finding carries a month guess. The library has no edited, locked, approved or dismissed values, so there was nothing to protect; the protection is covered by `LibraryRereadTests` and `ImageAnalysisJobTests`. |
 
 ### R11 repeated on the new cases
 
@@ -109,4 +109,5 @@ Precision and recall are 1.00 on the new cases. The three fields that differ are
 ### Known gaps
 
 - The `place` field of an event is only read where the window shows it, as before.
-- Real screens will be harder than drawn ones; SC-008 is checked on the real library, by counts only.
+- Real screens will be harder than drawn ones; the real library has only 9 captures and 3 month views, so SC-008 rests on few cases.
+- The month view of Apple Calendar scrolls by week, so its title can name the month after the first row's (the grid then starts in the month before): the cells are dated from their labels, which handles it.
