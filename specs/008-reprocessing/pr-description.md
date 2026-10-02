@@ -15,7 +15,7 @@ Trial tables (`trials`, `trial_images`, `trial_findings`, migration v10) and a `
 Spec: `specs/008-reprocessing/`. ADR: 0025.
 
 ## Verification
-- `swift test --package-path Packages/MemorriCore`: 1360 tests pass; new suites for the store, runner (the library is identical before and after), comparison (protections, totals, two trials), apply (idempotent, exact undo, locks untouched, later edit stops undo) and scale (1,000 captures compared in 1.3 s in a debug build).
-- The app builds. The UI was not run: the author's own copy was running on the real library.
+- `swift test --package-path Packages/MemorriCore`: 1363 tests pass; new suites for the store, runner (the library is identical before and after), comparison (protections, totals, two trials), apply (idempotent, exact undo, locks untouched, later edit stops undo) and scale (1,000 captures compared in 1.3 s in a debug build).
+- Run end to end in the app on the author's real library: a trial of 9 captures, the comparison, apply of three differences, undo (338 sightings before, during and after; the item's title and sightings restored). That run found two bugs, fixed with tests (postmortem in `docs/postmortems/`).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

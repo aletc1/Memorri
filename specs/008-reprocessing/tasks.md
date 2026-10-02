@@ -25,4 +25,4 @@
 
 ## Phase 6: Polish
 - [X] T014 Scale test (1,000 captures comparison under 5 s), logging without content, full test suite
-- [ ] T015 (UI run waits for the user's own copy to quit; docs done) Run in the app (quickstart, also keyboard and VoiceOver of the Reprocess section), docs: DEVELOPER.md section, roadmap, CLAUDE.md, pr-description
+- [X] T015 Run in the app on the real library (2026-10-02: a trial of 9 captures, compare, apply, undo; two bugs found and fixed, see docs/postmortems/2026-10-02-trial-apply-undo-found-on-real-data.md) Run in the app (quickstart, also keyboard and VoiceOver of the Reprocess section), docs: DEVELOPER.md section, roadmap, CLAUDE.md, pr-description
