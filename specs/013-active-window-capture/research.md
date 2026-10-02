@@ -73,3 +73,7 @@ Facts about the code come from reading the repository on 2026-10-02. Items marke
 ## R11. What is measured
 
 Existing eval cases must score the same (precision, recall and field accuracy unchanged, model calls unchanged). New cases (R5, R6): a mail alone, a month calendar on a month other than the capture's with no menu bar, a remote window with its own clock, a calendar with a panel drawn over part of it, a terminal window (read, no items). Per-case scores are reported.
+
+## Baseline (before the change)
+
+`memorri-eval run` on `main` (commit `2c2cd93`, before any 013 code), default model, 2026-10-02: 33 cases (synthetic 33, local 0), mean 11.8 s per case, 65 model calls; findings precision 0.88, recall 0.91, field accuracy 0.93. The full report is kept outside the repository. Task T040 compares the run after the change with these figures.

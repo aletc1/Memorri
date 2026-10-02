@@ -120,4 +120,51 @@ import Testing
         let result = find(whole)
         #expect(result.source == .screenClock && result.instant == at(2026, 10, 14, 9, 12) && !result.isGuess)
     }
+
+    // MARK: A window capture has no menu bar (spec 013)
+
+    private func windowOnly(_ w: VisibleWindow, remote: Bool = false, capture time: Date? = nil) -> ReferenceClock {
+        ReferenceClock.find(window: w, remote: remote, screen: VisibleScreen(windows: [w], desktopLines: []), captureTime: time ?? capture, timezone: madrid,
+                            pictureHeight: 1000, locales: en, windowOnly: true)
+    }
+
+    @Test func aRemoteWindowsOwnClockIsTheReferenceInAWindowCapture() {
+        let frame = PixelBox(x: 0, y: 0, width: 1200, height: 1000)
+        let w = window(lines: [line(1, "Thu 15 Oct 20:31", x: 1000, y: 970)], frame: frame)
+        let result = windowOnly(w, remote: true, capture: at(2026, 10, 15, 8, 0))
+        #expect(result.source == .windowClock && result.instant == at(2026, 10, 15, 20, 31) && !result.isGuess)
+    }
+
+    @Test func noClockInAWindowCaptureUsesTheCaptureTimeWithoutAGuessFlag() {
+        let w = window(lines: [line(1, "Meeting at 10", y: 300)], frame: PixelBox(x: 0, y: 0, width: 1200, height: 1000))
+        for remote in [false, true] {
+            let result = windowOnly(w, remote: remote)
+            #expect(result.source == .capture && result.instant == capture && !result.isGuess)
+        }
+    }
+
+    @Test func aFarClockInAWindowCaptureIsStillNotBelievedAndFlagged() {
+        let frame = PixelBox(x: 0, y: 0, width: 1200, height: 1000)
+        let w = window(lines: [line(1, "Mon 2 Nov 20:31", x: 1000, y: 970)], frame: frame)
+        let result = windowOnly(w, remote: true)
+        #expect(result.source == .captureFarClock && result.instant == capture && result.isGuess)
+    }
+
+    @Test func theTopOfAWindowIsNeverReadAsAScreenClockInAWindowCapture() {
+        // A line in the top strip of the picture that looks like a clock, in a window that is not remote.
+        let w = window(lines: [line(1, "Wed 14 Oct 11:11", x: 900, y: 5)], frame: PixelBox(x: 0, y: 0, width: 1200, height: 1000))
+        let result = windowOnly(w, remote: false)
+        #expect(result.source == .capture && result.instant == capture)
+        // The same line on a capture of screens (windowOnly false) is read as the menu bar clock.
+        let screens = ReferenceClock.find(window: w, remote: false, screen: VisibleScreen(windows: [w, window("w1")], desktopLines: []),
+                                          captureTime: capture, timezone: madrid, pictureHeight: 1000, locales: en)
+        #expect(screens.source == .capture && screens.isGuess)
+    }
+
+    @Test func withoutWindowOnlyNothingChanged() {
+        let result = find(screen(desktop: [line(1, "Wed 14 Oct 09:12", x: 1800, y: 5)]))
+        #expect(result.source == .screenClock && !result.isGuess)
+        let none = find(VisibleScreen(windows: [window("w0"), window("w1")], desktopLines: []))
+        #expect(none.source == .capture && none.isGuess)
+    }
 }

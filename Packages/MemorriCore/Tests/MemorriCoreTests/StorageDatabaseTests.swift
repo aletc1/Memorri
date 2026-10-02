@@ -20,11 +20,11 @@ import Testing
         let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
         try db.pool.read { db in
             let events = try db.columns(in: "capture_events").map(\.name)
-            #expect(events == ["id", "captured_at", "trigger", "status", "failure_reason", "display_count"])
+            #expect(events == ["id", "captured_at", "trigger", "status", "failure_reason", "display_count", "scope"])   // scope: migration v13
             let images = try db.columns(in: "capture_images").map(\.name)
             #expect(images == ["id", "event_id", "display_id", "display_name", "pixel_width", "pixel_height",
                                "scale", "full_path", "model_path", "model_width", "model_height",
-                               "full_bytes", "model_bytes", "missing"])
+                               "full_bytes", "model_bytes", "missing", "desktop_frame_json"])   // desktop_frame_json: migration v13
             let notNull = Dictionary(uniqueKeysWithValues: try db.columns(in: "capture_events").map { ($0.name, $0.isNotNull) })
             #expect(notNull["failure_reason"] == false)
             #expect(notNull["status"] == true)
@@ -195,7 +195,7 @@ import Testing
             let pool = try DatabasePool(path: paths.database.path)
             try Migrations.make().migrate(pool, upTo: "v1")
             try pool.write { db in
-                try db.execute(sql: "INSERT INTO capture_events VALUES (?, datetime('now'), 'menu', 'complete', NULL, 1)", arguments: [event.id])
+                try db.execute(sql: "INSERT INTO capture_events (id, captured_at, trigger, status, failure_reason, display_count) VALUES (?, datetime('now'), 'menu', 'complete', NULL, 1)", arguments: [event.id])
             }
             let hasJobsTable = try pool.read { db in try db.tableExists("analysis_jobs") }
             #expect(!hasJobsTable)
@@ -244,7 +244,7 @@ import Testing
     }
 
     private func seedPicture(_ db: Database, image: String = "img-1") throws {
-        try db.execute(sql: "INSERT INTO capture_events VALUES ('ev-1', datetime('now'), 'menu', 'complete', NULL, 1)")
+        try db.execute(sql: "INSERT INTO capture_events (id, captured_at, trigger, status, failure_reason, display_count) VALUES ('ev-1', datetime('now'), 'menu', 'complete', NULL, 1)")
         try db.execute(sql: """
             INSERT INTO capture_images (id, event_id, display_id, display_name, pixel_width, pixel_height, scale, full_path, model_path,
                                         model_width, model_height, full_bytes, model_bytes, missing)
@@ -302,7 +302,7 @@ import Testing
         try db.pool.write { db in
             try self.seedPicture(db)
             try self.fillPictureTables(db)
-            try db.execute(sql: "INSERT INTO capture_events VALUES ('ev-2', datetime('now'), 'menu', 'complete', NULL, 1)")
+            try db.execute(sql: "INSERT INTO capture_events (id, captured_at, trigger, status, failure_reason, display_count) VALUES ('ev-2', datetime('now'), 'menu', 'complete', NULL, 1)")
             try db.execute(sql: """
                 INSERT INTO capture_images (id, event_id, display_id, pixel_width, pixel_height, scale, full_path, model_path,
                                             model_width, model_height, full_bytes, model_bytes, missing)
@@ -914,6 +914,43 @@ import Testing
             let foreign = try db.foreignKeys(on: "cancel_absences").map(\.destinationTable)
             let coverageForeign = try db.foreignKeys(on: "calendar_coverage").map(\.destinationTable)
             #expect(Set(foreign) == ["items", "capture_images"] && Set(coverageForeign) == ["capture_images"])
+        }
+    }
+
+    // MARK: migration "v13" (spec 013)
+
+    @Test func aV12DatabaseMigratesToV13KeepingItsCapturesAsFullScreenCaptures() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v12")
+            try pool.write { db in
+                try db.execute(sql: "INSERT INTO capture_events (id, captured_at, trigger, status, display_count) VALUES ('e1', '2026-10-01 10:00:00.000', 'shortcut', 'complete', 1)")
+                try db.execute(sql: """
+                    INSERT INTO capture_images (id, event_id, display_id, display_name, pixel_width, pixel_height, scale, full_path, model_path, model_width, model_height, full_bytes, model_bytes, missing)
+                    VALUES ('m1', 'e1', 1, 'Display', 100, 50, 2, 'f.heic', 'm.heic', 100, 50, 1, 1, 0)
+                    """)
+            }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.write { db in
+            #expect(try String.fetchOne(db, sql: "SELECT scope FROM capture_events WHERE id = 'e1'") == "displays")
+            #expect(try String.fetchOne(db, sql: "SELECT desktop_frame_json FROM capture_images WHERE id = 'm1'") == nil)
+            let scope = try #require(try db.columns(in: "capture_events").first { $0.name == "scope" })
+            #expect(scope.isNotNull)
+            let frame = try #require(try db.columns(in: "capture_images").first { $0.name == "desktop_frame_json" })
+            #expect(!frame.isNotNull)
+            // `window` is accepted, anything else is refused, and the trigger keeps its two values.
+            try db.execute(sql: "INSERT INTO capture_events (id, captured_at, trigger, status, display_count, scope) VALUES ('e2', '2026-10-01 11:00:00.000', 'menu', 'complete', 1, 'window')")
+            #expect(throws: (any Error).self) {
+                try db.execute(sql: "INSERT INTO capture_events (id, captured_at, trigger, status, display_count, scope) VALUES ('e3', '2026-10-01 12:00:00.000', 'menu', 'complete', 1, 'other')")
+            }
+            #expect(throws: (any Error).self) {
+                try db.execute(sql: "INSERT INTO capture_events (id, captured_at, trigger, status, display_count) VALUES ('e4', '2026-10-01 13:00:00.000', 'window', 'complete', 1)")
+            }
         }
     }
 

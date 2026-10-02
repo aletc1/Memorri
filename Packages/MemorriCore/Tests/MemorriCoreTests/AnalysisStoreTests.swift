@@ -195,7 +195,7 @@ import Testing
     @Test func aWaitingRereadJobCountsAsPendingForItsPictureAndAFinishedOneDoesNot() throws {
         let h = try Harness(); defer { h.temp.cleanUp() }
         let capture = try h.context.database!.pool.write { db -> String in
-            try db.execute(sql: "INSERT INTO capture_events VALUES ('ev-1', datetime('now'), 'menu', 'complete', NULL, 1)")
+            try db.execute(sql: "INSERT INTO capture_events (id, captured_at, trigger, status, failure_reason, display_count) VALUES ('ev-1', datetime('now'), 'menu', 'complete', NULL, 1)")
             try db.execute(sql: """
                 INSERT INTO capture_images (id, event_id, display_id, display_name, pixel_width, pixel_height, scale, full_path, model_path,
                                             model_width, model_height, full_bytes, model_bytes, missing)

@@ -40,6 +40,8 @@ public struct PipelineInput: @unchecked Sendable {
     public let userChoice: ContextDecision?
     /// The display's scale factor (2 on a Retina display), when known.
     public let displayScale: Double?
+    /// True when the picture is one window the user chose (a window capture, spec 013): the window is always read and no menu bar is expected in it.
+    public let chosenWindow: Bool
 
     /// The Mac's languages, then English and Spanish.
     public static func defaultLocales() -> [Locale] {
@@ -49,7 +51,8 @@ public struct PipelineInput: @unchecked Sendable {
     public init(image: CGImage, classificationJPEG: Data, classificationSize: (width: Int, height: Int), analysisJPEG: Data? = nil,
                 analysisSize: (width: Int, height: Int)? = nil, macTimezone: TimeZone = .current, captureTime: Date = Date(),
                 locales: [Locale] = PipelineInput.defaultLocales(), reuse: Reuse = Reuse(), contexts: [ContextRecord] = [],
-                windows: [WindowInfo] = [], userChoice: ContextDecision? = nil, displayScale: Double? = nil) {
+                windows: [WindowInfo] = [], userChoice: ContextDecision? = nil, displayScale: Double? = nil, chosenWindow: Bool = false) {
+        self.chosenWindow = chosenWindow
         self.image = image; self.classificationJPEG = classificationJPEG; self.classificationSize = classificationSize
         self.analysisJPEG = analysisJPEG ?? classificationJPEG; self.analysisSize = analysisSize ?? classificationSize
         self.macTimezone = macTimezone; self.captureTime = captureTime; self.locales = locales; self.reuse = reuse
@@ -138,11 +141,13 @@ public struct AnalysisPipeline: Sendable {
 
         // A desktop with several windows is read window by window (spec 011); anything else, and a windows call that fails or answers badly,
         // is read as one picture, as before.
-        let screen = VisibleScreen.split(lines: lines, windows: input.windows, pictureWidth: input.image.width, pictureHeight: input.image.height)
+        let screen = VisibleScreen.split(lines: lines, windows: input.windows, pictureWidth: input.image.width, pictureHeight: input.image.height,
+                                         chosenWindow: input.chosenWindow)
         if screen.perWindow {
             if let (answer, reused) = try await judgeWindows(screen, input: input, settings: settings, steps: &steps) {
-                return try await analyseWindows(screen, answer: answer, reusable: reused ? input.reuse.extractions : [:], lines: lines, input: input,
-                                                settings: settings, steps: steps)
+                // A window the user chose is read whatever the windows call said about it; the call only tells what kind of view it is (spec 013 FR-015).
+                return try await analyseWindows(screen, answer: input.chosenWindow ? answer.allRelevant : answer, reusable: reused ? input.reuse.extractions : [:],
+                                                lines: lines, input: input, settings: settings, steps: steps)
             }
         }
         return try await analyseWhole(input, lines: lines, settings: settings, steps: steps)
@@ -313,7 +318,7 @@ public struct AnalysisPipeline: Sendable {
                                                 theme: first.theme, calendarName: answer.calendarNames[window.key] ?? "").resolved()
             // What "today" is for this window: the clock of its own surroundings (a remote desktop), else the screen's, else the capture's time.
             let clock = ReferenceClock.find(window: window, remote: judgement.remote, screen: screen, captureTime: input.captureTime, timezone: zone,
-                                            pictureHeight: input.image.height, locales: locales)
+                                            pictureHeight: input.image.height, locales: locales, windowOnly: input.chosenWindow)
             reference = reference ?? clock
             let resolved = Self.corrected(ownClass, lines: window.lines, locales: locales, reference: clock.instant, zone: zone, dayWithManyHeadersIsAWeek: true)
             frontKind = frontKind ?? resolved.kind
@@ -387,7 +392,7 @@ public struct AnalysisPipeline: Sendable {
                               timezoneSource: zoneSource, lineCapApplied: capped, model: settings.model, pictureLongEdge: analysisLongEdge, steps: steps,
                               readBy: modelReads == 0 && geometryReads > 0 ? MonthEntries.version : nil, windows: records,
                               reference: reference ?? ReferenceClock.find(window: nil, remote: false, screen: screen, captureTime: input.captureTime, timezone: zone,
-                                                                          pictureHeight: input.image.height, locales: locales),
+                                                                          pictureHeight: input.image.height, locales: locales, windowOnly: input.chosenWindow),
                               windowsRead: windowsRead, coverage: coverage)
     }
 

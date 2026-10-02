@@ -68,6 +68,34 @@ import Testing
         #expect(rig.model.requests(whereSchemaHas: "screen_kind").first?.model == "other:vl")
     }
 
+    @Test func aTrialOfAWindowCaptureReadsItAsTheChosenWindowAndOtherCapturesAsBefore() async throws {
+        let window = #"{"windows":[{"key":"w0","relevant":false,"kind":"other","confidence":0.8,"remote":false,"calendar_name":""}],"application":"Mail","platform_look":"macos","theme":"light","remote_session":{"is_remote":false,"client":""}}"#
+        // A full-screen capture with one recorded window is read whole: no windows call.
+        let plain = try makeRig(); defer { plain.fixture.cleanUp() }
+        let (_, plainJob) = try start(plain)
+        let plainImage = plain.fixture.base.imageID
+        try await plain.fixture.base.captures.database.pool.write { db in
+            try db.execute(sql: "INSERT INTO capture_windows (id, image_id, z, app_name, bundle_id, title, x, y, width, height, stack) VALUES ('w', ?, 0, 'Mail', 'com.example.mail', 'Inbox', 0, 0, 1200, 600, 0)",
+                           arguments: [plainImage])
+        }
+        _ = await plain.runner.run(plainJob, attempt: 1)
+        #expect(plain.model.requests(whereSchemaHas: "windows").isEmpty && plain.model.requests(whereSchemaHas: "screen_kind").count == 1)
+
+        // The same capture marked as a window capture takes the chosen-window path.
+        let chosen = try makeRig(); defer { chosen.fixture.cleanUp() }
+        let (trial, chosenJob) = try start(chosen)
+        let chosenImage = chosen.fixture.base.imageID
+        try await chosen.fixture.base.captures.database.pool.write { db in
+            try db.execute(sql: "INSERT INTO capture_windows (id, image_id, z, app_name, bundle_id, title, x, y, width, height, stack) VALUES ('w', ?, 0, 'Mail', 'com.example.mail', 'Inbox', 0, 0, 1200, 600, 0)",
+                           arguments: [chosenImage])
+            try db.execute(sql: "UPDATE capture_events SET scope = 'window'")
+        }
+        chosen.model.answer(whenSchemaHas: "windows", window)
+        _ = await chosen.runner.run(chosenJob, attempt: 1)
+        #expect(chosen.model.requests(whereSchemaHas: "windows").count == 1 && chosen.model.requests(whereSchemaHas: "screen_kind").isEmpty)
+        #expect(try chosen.store.findings(trialID: trial.id, imageID: chosen.fixture.base.imageID).map(\.title) == ["Team sync"])
+    }
+
     @Test func aCancelledTrialOrACaptureAlreadyReadIsNotReadAgain() async throws {
         let rig = try makeRig(); defer { rig.fixture.cleanUp() }
         let (trial, job) = try start(rig)

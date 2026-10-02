@@ -14,6 +14,18 @@ import Testing
                 == "Last capture failed: Not enough free disk space, 3 h ago")
     }
 
+    @Test func aWindowCaptureNamesTheApplication() {
+        #expect(LastCaptureLine.text(for: .window(app: "Mail"), age: 5) == "Last window capture: Mail, just now")
+        #expect(LastCaptureLine.text(for: .window(app: nil), age: 120) == "Last window capture, 2 min ago")
+        #expect(LastCaptureLine.text(for: .window(app: "  "), age: 5) == "Last window capture, just now")
+    }
+
+    @Test func aWindowCaptureWithNothingToCaptureReadsAsAFailure() {
+        #expect(LastCaptureLine.text(for: .failed(reason: ActiveWindowReason.none.message), age: 5) == "Last capture failed: no window to capture, just now")
+        #expect(LastCaptureLine.text(for: .failed(reason: ActiveWindowReason.ownWindow.message), age: 5)
+                == "Last capture failed: Memorri's own windows are not captured, just now")
+    }
+
     @Test func ageBoundaries() {
         #expect(LastCaptureLine.age(59) == "just now")
         #expect(LastCaptureLine.age(60) == "1 min ago")

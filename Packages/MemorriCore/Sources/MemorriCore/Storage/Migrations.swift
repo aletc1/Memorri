@@ -569,6 +569,14 @@ enum Migrations {
             try db.rename(table: "reconcile_ops_v12", to: "reconcile_ops")
             try db.create(index: "reconcile_ops_created_at", on: "reconcile_ops", columns: ["created_at"])
         }
+        // Spec 013: a window capture is one picture of one window. `scope` says which kind a capture is (the trigger keeps its two values) and
+        // `desktop_frame_json` keeps the window's frame on the desktop, in points, for the window pictures.
+        migrator.registerMigration("v13") { db in
+            try db.alter(table: "capture_events") { t in
+                t.add(column: "scope", .text).notNull().defaults(to: "displays").check(sql: "scope IN ('displays', 'window')")
+            }
+            try db.alter(table: "capture_images") { t in t.add(column: "desktop_frame_json", .text) }
+        }
         return migrator
     }
 }

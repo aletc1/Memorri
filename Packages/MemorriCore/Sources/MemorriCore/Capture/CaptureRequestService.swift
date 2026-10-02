@@ -12,7 +12,14 @@ public protocol CaptureRunning: Sendable {
     func run(trigger: CaptureTrigger) async -> CaptureOutcome?
 }
 
+/// What the service hands a window-capture request to (spec 013): the capture pipeline (a fake in tests).
+public protocol WindowCaptureRunning: Sendable {
+    /// `nil` when another capture, of either scope, is already running.
+    func runWindow(trigger: CaptureTrigger) async -> CaptureOutcome?
+}
+
 extension CapturePipeline: CaptureRunning {}
+extension CapturePipeline: WindowCaptureRunning {}
 
 /// A recorded intent to capture, kept in memory for diagnostics.
 public struct CaptureRequest: Sendable, Identifiable {
@@ -59,6 +66,7 @@ public actor CaptureRequestService {
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "capture")
 
     private let runner: any CaptureRunning
+    private let windowRunner: (any WindowCaptureRunning)?
     private let permission: PermissionMonitor
     private let feedback: any FeedbackPlaying
     private let settings: CaptureFeedbackSettings
@@ -75,8 +83,10 @@ public actor CaptureRequestService {
                 settings: CaptureFeedbackSettings,
                 time: any TimeSource = SystemTimeSource(),
                 onOutcome: @escaping @Sendable (CaptureOutcome) -> Void = { _ in },
-                onNeedsOnboarding: @escaping @Sendable () -> Void) {
+                onNeedsOnboarding: @escaping @Sendable () -> Void,
+                windowRunner: (any WindowCaptureRunning)? = nil) {
         self.runner = runner
+        self.windowRunner = windowRunner
         self.onOutcome = onOutcome
         self.permission = permission
         self.feedback = feedback
@@ -88,10 +98,23 @@ public actor CaptureRequestService {
     /// Newest last, at most `historyLimit` items.
     public var recent: [CaptureRequest] { history }
 
-    /// Runs one capture and plays the feedback for its outcome. Returns `nil` when the request was
+    /// Runs one full-screen capture and plays the feedback for its outcome. Returns `nil` when the request was
     /// dropped as a double press or ignored because a capture was already running.
     @discardableResult
     public func request(_ trigger: CaptureTrigger) async -> CaptureOutcome? {
+        let runner = self.runner
+        return await handle(trigger, scope: .displays) { await runner.run(trigger: trigger) }
+    }
+
+    /// Runs one window capture (spec 013) under the same double-press, busy and feedback rules as `request`. Does nothing when the service
+    /// was built without a window runner.
+    @discardableResult
+    public func requestWindow(_ trigger: CaptureTrigger) async -> CaptureOutcome? {
+        guard let windowRunner else { return nil }
+        return await handle(trigger, scope: .window) { await windowRunner.runWindow(trigger: trigger) }
+    }
+
+    private func handle(_ trigger: CaptureTrigger, scope: CaptureScope, run: () async -> CaptureOutcome?) async -> CaptureOutcome? {
         let now = time.now()
         if let last = lastAccepted {
             // Rounded to whole milliseconds so 0.3 s apart is exactly on the limit.
@@ -104,14 +127,14 @@ public actor CaptureRequestService {
         history.append(CaptureRequest(timestamp: now, trigger: trigger, permissionAtRequest: status))
         if history.count > Self.historyLimit { history.removeFirst(history.count - Self.historyLimit) }
 
-        Self.logger.notice("capture requested trigger=\(trigger.rawValue, privacy: .public) permission=\(status.rawValue, privacy: .public)")
+        Self.logger.notice("capture requested scope=\(scope.rawValue, privacy: .public) trigger=\(trigger.rawValue, privacy: .public) permission=\(status.rawValue, privacy: .public)")
 
         // The real capture is the source of truth for the permission, not the tracked status.
-        guard let outcome = await runner.run(trigger: trigger) else { return nil }
+        guard let outcome = await run() else { return nil }
         onOutcome(outcome)
 
         switch outcome {
-        case .complete:
+        case .complete, .windowComplete:
             await permission.captureSucceeded()
             if settings.flashIcon { await feedback.flashIcon() }
             if settings.playSound { await feedback.playSound() }
@@ -119,7 +142,7 @@ public actor CaptureRequestService {
             await permission.captureSucceeded()
             if settings.flashIcon { await feedback.flashWarning() }
             if settings.playSound { await feedback.playWarningSound() }
-        case .failed:
+        case .failed, .noWindow:
             if settings.flashIcon { await feedback.flashWarning() }
             if settings.playSound { await feedback.playWarningSound() }
         case .permissionDenied:

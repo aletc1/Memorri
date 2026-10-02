@@ -60,7 +60,8 @@ public struct TrialJobRunner: AnalysisJobRunning {
         let input = PipelineInput(image: full, classificationJPEG: copies.classificationJPEG, classificationSize: copies.classificationSize,
                                   analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: .current,
                                   captureTime: analysisCopy.capturedAt ?? time.now(), reuse: PipelineInput.Reuse(lines: lines), contexts: knownContexts,
-                                  windows: (try? windows?.windows(imageID: imageID)) ?? [], userChoice: choice, displayScale: analysisCopy.scale)
+                                  windows: (try? windows?.windows(imageID: imageID)) ?? [], userChoice: choice, displayScale: analysisCopy.scale,
+                                  chosenWindow: ((try? windows?.scope(imageID: imageID)) ?? .displays) == .window)
         let started = ContinuousClock.now
         do {
             let result = try await pipeline.analyse(input, settings: stepSettings)

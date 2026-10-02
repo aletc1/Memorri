@@ -135,4 +135,57 @@ import Testing
         #expect(edge.frame == PixelBox(x: 1500, y: 700, width: 500, height: 300))
         #expect(screen.perWindow)
     }
+
+    // MARK: A window the user chose (spec 013)
+
+    @Test func aChosenWindowIsTheOnlyWindowWithEveryLine() throws {
+        let only = window("Mail", stack: 0, 0, 0, width, height)
+        let screen = VisibleScreen.split(lines: lines(from: 1, x: 0, y: 0), windows: [only], pictureWidth: width, pictureHeight: height, chosenWindow: true)
+        #expect(screen.perWindow)
+        let mail = try #require(screen.windows.first)
+        #expect(screen.windows.count == 1 && mail.key == "w0" && mail.appName == "Mail" && mail.title == "Mail")
+        #expect(mail.lines.count == 4 && mail.visibleShare == 1 && screen.desktopLines.isEmpty)
+        #expect(mail.visible == [PixelBox(x: 0, y: 0, width: width, height: height)])
+    }
+
+    @Test func aChosenWindowIsKeptEvenWithFewLinesLittleShareOrASystemBundle() throws {
+        let sparse = VisibleScreen.split(lines: [line(1, x: 10, y: 10)], windows: [window("Terminal", stack: 0, 0, 0, width, height)],
+                                         pictureWidth: width, pictureHeight: height, chosenWindow: true)
+        #expect(sparse.perWindow && sparse.windows.first?.key == "w0" && sparse.windows.first?.lines.count == 1)
+        let empty = VisibleScreen.split(lines: [], windows: [window("Terminal", stack: 0, 0, 0, width, height)],
+                                        pictureWidth: width, pictureHeight: height, chosenWindow: true)
+        #expect(empty.perWindow && empty.windows.count == 1 && empty.windows[0].lines.isEmpty)
+        let small = VisibleScreen.split(lines: lines(from: 1, x: 0, y: 0), windows: [window("Notes", stack: 0, 0, 0, 100, 50)],
+                                        pictureWidth: width, pictureHeight: height, chosenWindow: true)
+        #expect(small.windows.first?.visibleShare ?? 1 < VisibleScreen.minimumVisibleShare)
+        let system = VisibleScreen.split(lines: lines(from: 1, x: 0, y: 0),
+                                         windows: [window("Dock", stack: 0, 0, 0, width, height, bundle: "com.apple.dock")],
+                                         pictureWidth: width, pictureHeight: height, chosenWindow: true)
+        #expect(system.perWindow && system.windows.first?.bundleID == "com.apple.dock")
+    }
+
+    @Test func aChosenWindowWithoutAStackNumberStillGetsKeyW0() {
+        let screen = VisibleScreen.split(lines: lines(from: 1, x: 0, y: 0), windows: [window("Mail", stack: nil, 0, 0, width, height)],
+                                         pictureWidth: width, pictureHeight: height, chosenWindow: true)
+        #expect(screen.windows.map(\.key) == ["w0"])
+    }
+
+    @Test func aChosenWindowFrameIsClippedToThePictureAndLinesOutsideItAreDesktopLines() throws {
+        let screen = VisibleScreen.split(lines: lines(from: 1, x: 0, y: 0) + [line(9, "outside", x: 1500, y: 800)],
+                                         windows: [window("Mail", stack: 0, -100, -50, 1100, 650)], pictureWidth: width, pictureHeight: height, chosenWindow: true)
+        let mail = try #require(screen.windows.first)
+        #expect(mail.frame == PixelBox(x: 0, y: 0, width: 1000, height: 600))
+        #expect(mail.lines.count == 4 && screen.desktopLines.map(\.n) == [9])
+    }
+
+    @Test func aChosenCaptureWithNoRecordedWindowIsReadAsOneWholePicture() {
+        let screen = VisibleScreen.split(lines: lines(from: 1, x: 0, y: 0), windows: [], pictureWidth: width, pictureHeight: height, chosenWindow: true)
+        #expect(!screen.perWindow && screen.windows.map(\.key) == [VisibleScreen.wholePicture])
+    }
+
+    @Test func withoutChosenWindowOneWindowStillReadsAsTheWholePicture() {
+        let screen = VisibleScreen.split(lines: lines(from: 1, x: 0, y: 0), windows: [window("Mail", stack: 0, 0, 0, 800, 600)],
+                                         pictureWidth: width, pictureHeight: height)
+        #expect(!screen.perWindow && screen.windows.map(\.key) == [VisibleScreen.wholePicture])
+    }
 }

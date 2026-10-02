@@ -46,10 +46,11 @@ import Testing
     }
 
     private func makeRig(lines: [RecognisedLine]? = nil, failWith error: Error? = nil, model modelName: String? = "qwen3.8:27b-mlx",
-                         windows: [WindowInfo] = [], reconcileSummary: ReconcileSummary = ReconcileSummary(), realReconciler: Bool = false) throws -> Rig {
+                         windows: [WindowInfo] = [], reconcileSummary: ReconcileSummary = ReconcileSummary(), realReconciler: Bool = false,
+                         scope: CaptureScope = .displays) throws -> Rig {
         let cancellation = FakeCancellationRecorder()
         let notifier = FakeNotifier()
-        let fixture = try makePipelineFixture(windows: windows)
+        let fixture = try makePipelineFixture(windows: windows, scope: scope)
         let recogniser = FakeTextRecogniser(lines: lines ?? sampleLines(), failWith: error)
         let model = FakeModelChatting()
         model.answer(whenSchemaHas: "screen_kind", ClassificationTests.goodAnswer)
@@ -401,6 +402,52 @@ import Testing
         rig.model.answer(whenSchemaHas: "windows", windowsAnswer())
         rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Planning meeting","cited_lines":[3],"start_text":"10:00","date_text":"tomorrow"}]}"#)
         return rig
+    }
+
+    // MARK: a window capture (spec 013)
+
+    private var fillingWindow: WindowInfo {
+        WindowInfo(appName: "Mail", bundleID: "com.example.mail", title: "Inbox", frame: PixelBox(x: 0, y: 0, width: 1200, height: 600), stack: 0)
+    }
+
+    private func windowCaptureRig(scope: CaptureScope) throws -> Rig {
+        let rig = try makeRig(lines: windowedLines(), windows: [fillingWindow], scope: scope)
+        rig.model.answer(whenSchemaHas: "windows", oneWindowAnswer(relevant: false))
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Planning meeting","cited_lines":[3],"start_text":"10:00","date_text":"tomorrow"}]}"#)
+        return rig
+    }
+
+    private func oneWindowAnswer(relevant: Bool) -> String {
+        #"""
+        {"windows":[{"key":"w0","relevant":\#(relevant),"kind":"other","confidence":0.8,"remote":false,"calendar_name":""}],
+         "application":"Mail","platform_look":"macos","theme":"light","remote_session":{"is_remote":false,"client":""}}
+        """#
+    }
+
+    @Test func aWindowCaptureIsAnalysedAsOneChosenWindowAndItsItemsNameTheWindow() async throws {
+        let rig = try windowCaptureRig(scope: .window); defer { rig.fixture.cleanUp() }
+        #expect(await rig.runner.run(try job(rig), attempt: 1) == .success)
+        let stored = try readings(rig)
+        #expect(stored.map(\.windowKey) == ["w0"] && stored.map(\.relevant) == [true] && stored.map(\.appName) == ["Mail"] && stored.map(\.title) == ["Inbox"])
+        #expect(try runs(rig).map(\.step) == ["windows", "extract:w0"])
+        let findings = try rig.results.findings(imageID: rig.fixture.imageID)
+        #expect(findings.map(\.title) == ["Planning meeting"] && findings.map(\.windowKey) == ["w0"])
+        #expect(rig.reconciler.imageIDs == [rig.fixture.imageID])
+        let analysis = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
+        #expect(analysis.windowsRead == 1)
+    }
+
+    @Test func theSameOneWindowPictureOfAFullScreenCaptureIsStillReadWhole() async throws {
+        let rig = try windowCaptureRig(scope: .displays); defer { rig.fixture.cleanUp() }
+        #expect(await rig.runner.run(try job(rig), attempt: 1) == .success)
+        #expect(try runs(rig).map(\.step) == ["classify", "extract"] && (try readings(rig)).isEmpty)
+    }
+
+    @Test func aReadAgainOfAWindowCaptureKeepsItsScope() async throws {
+        let rig = try windowCaptureRig(scope: .window); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(await rig.runner.run(try job(rig, kind: "reread"), attempt: 1) == .success)
+        #expect(try readings(rig).map(\.relevant) == [true])
     }
 
     private func readings(_ rig: Rig) throws -> [WindowReadingRecord] { try WindowReadingStore(database: rig.fixture.database).readings(imageID: rig.fixture.imageID) }

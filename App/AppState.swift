@@ -40,6 +40,8 @@ final class AppState {
         case .complete: lastCapture = (.complete, date)
         case .partial(let captured, let total): lastCapture = (.partial(captured: captured, of: total), date)
         case .failed(let reason): lastCapture = (.failed(reason: reason), date)
+        case .windowComplete(let app): lastCapture = (.window(app: app), date)
+        case .noWindow(let reason): lastCapture = (.failed(reason: reason.message), date)
         case .permissionDenied: break
         }
         now = date

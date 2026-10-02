@@ -103,4 +103,24 @@ import Testing
         #expect(rows[0]["title"] as String == "Dentist" && rows[0]["window_app"] as String? == nil && rows[0]["window_title"] as String? == nil)
         #expect(rows[1]["window_app"] as String? == "Calendar" && rows[1]["window_title"] as String? == "Work week")
     }
+
+    // MARK: a window capture beside a full-screen capture (spec 013, FR-017)
+
+    @Test func theSameEventSeenInAWindowCaptureAndInAFullScreenCaptureIsOneItemWithTwoSightings() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let window = try fixture.addPicture(at: ReconcileFixture.minutes(30))
+        try fixture.write { db in
+            try db.execute(sql: "UPDATE capture_events SET scope = 'window' WHERE id = (SELECT event_id FROM capture_images WHERE id = ?)", arguments: [window])
+        }
+        #expect(try CaptureStore(database: fixture.base.database).scope(imageID: window) == .window)
+        try fixture.save([finding(fixture, "Sprint review", window: nil)])                                  // the full-screen capture
+        try fixture.save([finding(fixture, "Sprint review", window: "w0")], imageID: window)              // the window capture
+        let judge = FakeMeaningJudge(defaultAnswer: 1)
+        let reconciler = reconciler(fixture, judge: judge)
+        _ = await reconciler.reconcile(imageID: fixture.base.imageID)
+        _ = await reconciler.reconcile(imageID: window)
+        let all = try items(fixture)
+        #expect(all.count == 1)
+        #expect(try sightings(fixture, item: all[0].id) == 2)
+    }
 }
