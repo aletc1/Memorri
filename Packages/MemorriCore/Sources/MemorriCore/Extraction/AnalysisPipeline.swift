@@ -7,8 +7,13 @@ public struct PipelineInput: @unchecked Sendable {
     public struct Reuse: Sendable {
         public var lines: [RecognisedLine]?
         public var classification: ClassificationResult?
-        public init(lines: [RecognisedLine]? = nil, classification: ClassificationResult? = nil) {
-            self.lines = lines; self.classification = classification
+        /// The stored answer of the windows call; used when it names the windows the picture has now.
+        public var windows: WindowsAnswer?
+        /// The `findings` list a window's earlier extraction answered, by window key; used only together with a reused windows answer.
+        public var extractions: [String: [JSONValue]] = [:]
+        public init(lines: [RecognisedLine]? = nil, classification: ClassificationResult? = nil, windows: WindowsAnswer? = nil,
+                    extractions: [String: [JSONValue]] = [:]) {
+            self.lines = lines; self.classification = classification; self.windows = windows; self.extractions = extractions
         }
     }
 
@@ -73,11 +78,19 @@ public struct AnalysisResult: Sendable {
     public let steps: [StepRecord]
     /// The version of the code that read the findings when the model did not (a month grid); nil when the model did.
     public let readBy: String?
+    /// The windows the picture was split into and what each was judged to be; empty when it was read as one picture (no stack, or the old path).
+    public let windows: [WindowReadingRecord]
+    /// The clock relative dates were resolved against; nil when the capture time was used without looking for a clock (the old path).
+    public let reference: ReferenceClock?
+    /// How many windows were read; 1 for a picture read as one.
+    public let windowsRead: Int
 
     public init(lines: [RecognisedLine], classification: ClassificationResult, tags: [CaptureTag] = [], findings: [Finding] = [],
                 discards: [CitationCheck.Discard] = [], decision: ContextDecision = .unassigned, timezone: TimeZone = .current,
                 timezoneSource: String = "mac", lineCapApplied: Bool = false, model: String = "", pictureLongEdge: Int = 0,
-                steps: [StepRecord] = [], readBy: String? = nil) {
+                steps: [StepRecord] = [], readBy: String? = nil, windows: [WindowReadingRecord] = [], reference: ReferenceClock? = nil,
+                windowsRead: Int? = nil) {
+        self.windows = windows; self.reference = reference; self.windowsRead = windowsRead ?? 1
         self.readBy = readBy
         self.lines = lines; self.classification = classification; self.tags = tags; self.findings = findings; self.discards = discards
         self.decision = decision; self.timezone = timezone; self.timezoneSource = timezoneSource; self.lineCapApplied = lineCapApplied
@@ -119,6 +132,22 @@ public struct AnalysisPipeline: Sendable {
             do { lines = try await recogniser.recognise(input.image) }
             catch { throw AnalysisFailure(error: .transient("text recognition failed"), steps: steps) }
         }
+
+        // A desktop with several windows is read window by window (spec 011); anything else, and a windows call that fails or answers badly,
+        // is read as one picture, as before.
+        let screen = VisibleScreen.split(lines: lines, windows: input.windows, pictureWidth: input.image.width, pictureHeight: input.image.height)
+        if screen.perWindow {
+            if let (answer, reused) = try await judgeWindows(screen, input: input, settings: settings, steps: &steps) {
+                return try await analyseWindows(screen, answer: answer, reusable: reused ? input.reuse.extractions : [:], lines: lines, input: input,
+                                                settings: settings, steps: steps)
+            }
+        }
+        return try await analyseWhole(input, lines: lines, settings: settings, steps: steps)
+    }
+
+    /// The picture as one: classify, then extract (the analysis before spec 011).
+    private func analyseWhole(_ input: PipelineInput, lines: [RecognisedLine], settings: ModelStepSettings, steps firstSteps: [StepRecord]) async throws -> AnalysisResult {
+        var steps = firstSteps
 
         let classification: ClassificationResult
         if let reused = input.reuse.classification {
@@ -222,6 +251,169 @@ public struct AnalysisPipeline: Sendable {
                               readBy: byGeometry ? MonthEntries.version : nil)
     }
 
+    // MARK: Windows (spec 011)
+
+    /// The windows call: which windows can hold events and what kind of view each is. Nil (and the failure recorded in `steps`) when the call
+    /// fails or does not name the windows given; the caller then reads the picture as one. A server that is gone stops the analysis.
+    private func judgeWindows(_ screen: VisibleScreen, input: PipelineInput, settings: ModelStepSettings, steps: inout [StepRecord]) async throws -> (WindowsAnswer, reused: Bool)? {
+        let keys = screen.windows.map(\.key)
+        if let reused = input.reuse.windows, Set(reused.judgements.map(\.key)) == Set(keys), reused.judgements.count == keys.count { return (reused, true) }
+        let placeholder = "[picture \(input.classificationSize.width)x\(input.classificationSize.height)]"
+        let result = await ModelStep.call(using: model, settings: settings, step: "windows", prompt: ExtractionPrompts.windowsPrompt(windows: screen.windows),
+                                          picture: input.classificationJPEG, placeholder: placeholder, schema: ExtractionSchemas.windowsSchema(keys: keys),
+                                          promptVersion: ExtractionPrompts.windowsVersion, schemaVersion: ExtractionSchemas.windowsSchemaVersion,
+                                          startedAt: time.now())
+        switch result {
+        case .failure(let failure):
+            steps.append(failure.record)
+            if failure.error == .serverUnavailable { throw AnalysisFailure(error: .serverUnavailable, steps: steps) }
+            return nil
+        case .success(let value):
+            guard let answer = WindowsAnswer.parse(value.value, expecting: keys) else {
+                steps.append(value.record.failing("answer does not name the windows"))
+                return nil
+            }
+            steps.append(value.record)
+            return (answer, false)
+        }
+    }
+
+    /// Each window the model called relevant is read on its own: its lines, its dates, its picture. Month grids are read from their geometry.
+    private func analyseWindows(_ screen: VisibleScreen, answer: WindowsAnswer, reusable: [String: [JSONValue]], lines: [RecognisedLine], input: PipelineInput,
+                                settings: ModelStepSettings, steps firstSteps: [StepRecord]) async throws -> AnalysisResult {
+        var steps = firstSteps
+        let first = answer.classification(frontToBack: screen.windows.map(\.key)).resolved()
+        let tags = TagExtractor.tags(width: input.image.width, height: input.image.height, scale: input.displayScale, windows: input.windows,
+                                     lines: lines, classification: first)
+        let decision = input.userChoice.flatMap { $0.source == .user ? $0 : nil }
+            ?? ContextMatcher.decide(contexts: input.contexts, windows: input.windows, tags: tags, lines: lines)
+        let (zone, zoneSource) = Self.zone(for: input.contexts.first { $0.id == decision.contextID }, mac: input.macTimezone)
+        let locales = Self.locales(input.locales, preferring: tags.first { $0.key == "language" }?.value)
+        let order = tags.first { $0.key == "date_order" }.flatMap { DateOrder(rawValue: $0.value) }
+        let fullLongEdge = max(1, max(input.image.width, input.image.height))
+        let analysisLongEdge = max(input.analysisSize.width, input.analysisSize.height)
+
+        var findings: [Finding] = [], discards: [CitationCheck.Discard] = []
+        var capped = false, modelReads = 0, geometryReads = 0, windowsRead = 0
+        var reference: ReferenceClock?
+        var frontKind: ScreenKind?            // what the frontmost relevant window turned out to be, after the geometry check
+        var usedKinds: [String: ScreenKind] = [:]      // the kind each window was read as, after that check (the stored reading keeps it)
+        for window in screen.windows {
+            guard let judgement = answer.judgement(for: window.key), judgement.relevant else { continue }
+            windowsRead += 1
+            let ownClass = ClassificationResult(kind: judgement.kind ?? .other, confidence: judgement.confidence, application: first.application,
+                                                platformLook: first.platformLook, isRemote: first.isRemote, remoteClient: first.remoteClient,
+                                                theme: first.theme, calendarName: answer.calendarNames[window.key] ?? "").resolved()
+            // What "today" is for this window: the clock of its own surroundings (a remote desktop), else the screen's, else the capture's time.
+            let clock = ReferenceClock.find(window: window, remote: judgement.remote, screen: screen, captureTime: input.captureTime, timezone: zone,
+                                            pictureHeight: input.image.height, locales: locales)
+            reference = reference ?? clock
+            let resolved = Self.corrected(ownClass, lines: window.lines, locales: locales, reference: clock.instant, zone: zone, dayWithManyHeadersIsAWeek: true)
+            frontKind = frontKind ?? resolved.kind
+            usedKinds[window.key] = resolved.kind
+            let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
+            // The dates are read from this window's own text only.
+            let headers = calendarKind ? DateResolver.headers(in: window.lines, locales: locales, reference: clock.instant, timezone: zone) : []
+            let cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: window.lines, locales: locales, reference: clock.instant, timezone: zone) : []
+            let base = ResolutionContext(captureTime: input.captureTime, timezone: zone, headers: headers, lines: window.lines, dateOrder: order,
+                                         locales: locales, cells: cells, clock: clock)
+            let shown = SubjectRegion.lines(window.lines, kind: resolved.kind, headers: headers, cells: cells)
+            var drafts: [FindingDraft] = []
+            var ownDiscards: [CitationCheck.Discard] = []
+            if resolved.kind == .calendarMonth, cells.count >= MonthEntries.minimumCells {
+                drafts = MonthEntries.drafts(lines: shown, cells: cells, locales: locales)
+                geometryReads += 1
+            } else {
+                let (prompt, wasCapped) = ExtractionPrompts.extractPrompt(kind: resolved.kind, lines: shown, pictureSize: (input.image.width, input.image.height), windowed: true)
+                capped = capped || wasCapped
+                var items: [JSONValue]
+                if let stored = reusable[window.key] {
+                    items = stored                       // what an earlier attempt of this window answered: no call
+                } else {
+                    let extractSettings = ModelStepSettings(model: settings.model, think: settings.think,
+                                                            timeout: max(settings.timeout, min(900, 90 + 1.5 * Double(shown.count))), modelThinks: settings.modelThinks)
+                    let cut = Self.windowPicture(input.image, frame: window.frame, longEdge: analysisLongEdge, fullLongEdge: fullLongEdge)
+                    let extraction = await ModelStep.call(using: model, settings: extractSettings, step: "extract:\(window.key)", prompt: prompt,
+                                                          picture: cut?.jpeg ?? input.analysisJPEG,
+                                                          placeholder: "[picture \(cut?.size.width ?? input.analysisSize.width)x\(cut?.size.height ?? input.analysisSize.height)]",
+                                                          schema: ExtractionSchemas.extractSchema(for: resolved.kind),
+                                                          promptVersion: ExtractionPrompts.version(for: resolved.kind, windowed: true),
+                                                          schemaVersion: ExtractionSchemas.schemaVersion(for: resolved.kind), startedAt: time.now(),
+                                                          maxTokens: Self.answerLimit(lines: shown.count, modelThinks: settings.modelThinks))
+                    switch extraction {
+                    case .failure(let failure):
+                        steps.append(failure.record)
+                        throw AnalysisFailure(error: failure.error, steps: steps)
+                    case .success(let value):
+                        steps.append(value.record)
+                        items = value.value["findings"]?.arrayValue ?? []
+                    }
+                }
+                modelReads += 1
+                for item in items {
+                    if let draft = FindingDraft.parse(item) {
+                        let inCalendar = resolved.kind == .calendarMonth || calendarKind
+                        let appointment = (inCalendar && draft.kind != .appointment ? draft.asAppointment() : draft).splittingTimeRange()
+                        drafts.append(resolved.kind == .calendarMonth ? Self.withRowTime(appointment, lines: window.lines, cells: cells, locales: locales) : appointment)
+                    } else { ownDiscards.append(CitationCheck.Discard(title: item["title"]?.stringValue ?? "", reason: "unreadable finding", citedLines: [])) }
+                }
+            }
+            let checked = CitationCheck.apply(Self.mergingRepeats(drafts), lineCount: lines.count, allowed: Set(window.lines.map(\.n)))
+            discards += ownDiscards + checked.discarded
+            let geometry = calendarKind ? Geometry.cut(of: input.image, frame: window.frame,
+                                                       columnWidth: Self.columnWidth(headers: headers, imageWidth: window.frame.width, kind: resolved.kind)) : nil
+            findings += checked.kept.map { Self.assemble($0, lines: window.lines, context: base, geometry: geometry, tags: tags, windowKey: window.key) }
+        }
+        let now = time.now()
+        let records = screen.windows.map { window -> WindowReadingRecord in
+            let judgement = answer.judgement(for: window.key)
+            return WindowReadingRecord(imageID: "", windowKey: window.key, appName: window.appName, title: window.title, frame: window.frame, visible: window.visible,
+                                       visibleShare: window.visibleShare, relevant: judgement?.relevant ?? false, kind: usedKinds[window.key] ?? judgement?.kind,
+                                       confidence: judgement?.confidence ?? 0, remote: judgement?.remote ?? false, runID: nil,
+                                       promptVersion: ExtractionPrompts.windowsVersion, createdAt: now)
+        }
+        return AnalysisResult(lines: lines, classification: frontKind.map { first.withKind($0) } ?? first, tags: tags, findings: findings, discards: discards,
+                              decision: decision, timezone: zone,
+                              timezoneSource: zoneSource, lineCapApplied: capped, model: settings.model, pictureLongEdge: analysisLongEdge, steps: steps,
+                              readBy: modelReads == 0 && geometryReads > 0 ? MonthEntries.version : nil, windows: records,
+                              reference: reference ?? ReferenceClock.find(window: nil, remote: false, screen: screen, captureTime: input.captureTime, timezone: zone,
+                                                                          pictureHeight: input.image.height, locales: locales),
+                              windowsRead: windowsRead)
+    }
+
+    /// A model sometimes lists one block twice, the second time for its place (a calendar block has a title, a time and a room): findings of
+    /// one window with the same title that cite a line in common are one, with what each gave.
+    static func mergingRepeats(_ drafts: [FindingDraft]) -> [FindingDraft] {
+        var result: [FindingDraft] = []
+        for draft in drafts {
+            let title = TitleNormaliser.normalise(draft.title)
+            if let index = result.firstIndex(where: { TitleNormaliser.normalise($0.title) == title && !Set($0.citedLines).isDisjoint(with: draft.citedLines) }) {
+                result[index] = result[index].filling(from: draft)
+            } else { result.append(draft) }
+        }
+        return result
+    }
+
+    /// The part of the full picture a window covers, as JPEG, at the pixel density of the analysis copy (never enlarged): what a window's
+    /// extraction is sent instead of the whole screen. Nil when the picture cannot be cut.
+    static func windowPicture(_ image: CGImage, frame: PixelBox, longEdge: Int, fullLongEdge: Int) -> (jpeg: Data, size: (width: Int, height: Int))? {
+        let x0 = max(0, frame.x), y0 = max(0, frame.y), x1 = min(image.width, frame.x + frame.width), y1 = min(image.height, frame.y + frame.height)
+        guard x1 > x0, y1 > y0, let cropped = image.cropping(to: CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)) else { return nil }
+        let scale = min(1, Double(longEdge) / Double(fullLongEdge))
+        var picture = cropped
+        if scale < 1 {
+            let width = max(1, Int((Double(cropped.width) * scale).rounded())), height = max(1, Int((Double(cropped.height) * scale).rounded()))
+            guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            context.interpolationQuality = .high
+            context.draw(cropped, in: CGRect(x: 0, y: 0, width: width, height: height))
+            guard let scaled = context.makeImage() else { return nil }
+            picture = scaled
+        }
+        guard let jpeg = try? PictureConverter.jpegData(from: picture) else { return nil }
+        return (jpeg, (picture.width, picture.height))
+    }
+
     /// True when the end text is written in a cited line that is not just a clock label of the hour scale at the side.
     static func endIsShown(_ text: String?, in cited: [Int], lines: [RecognisedLine]) -> Bool {
         guard let wanted = text?.filter({ !$0.isWhitespace }).lowercased(), !wanted.isEmpty else { return false }
@@ -277,7 +469,11 @@ public struct AnalysisPipeline: Sendable {
 
     /// A week view with a month picker beside it reads as a month view to the model. When date headers (a weekday name with its day
     /// number) run across the picture, much wider than any grid of day labels, the picture is a week view (or a day view).
-    static func corrected(_ result: ClassificationResult, lines: [RecognisedLine], locales: [Locale], reference: Date, zone: TimeZone) -> ClassificationResult {
+    static func corrected(_ result: ClassificationResult, lines: [RecognisedLine], locales: [Locale], reference: Date, zone: TimeZone,
+                          dayWithManyHeadersIsAWeek: Bool = false) -> ClassificationResult {
+        // A window of a week view is often called a day view (spec 011): a day view has one header, so several headers across it are a week.
+        if dayWithManyHeadersIsAWeek, result.kind == .calendarDay,
+           DateResolver.headers(in: lines, locales: locales, reference: reference, timezone: zone).count >= 3 { return result.withKind(.calendarWeek) }
         guard result.kind == .calendarMonth else { return result }
         let headers = DateResolver.headers(in: lines, locales: locales, reference: reference, timezone: zone)
         guard headers.count >= 3, let left = headers.map(\.midX).min(), let right = headers.map(\.midX).max() else { return result }
@@ -309,6 +505,17 @@ public struct AnalysisPipeline: Sendable {
     struct Geometry {
         let image: CGImage
         let columnWidth: Int
+        /// Where `image` starts in the full picture: a window's cut is measured on its own, so the page colour is the window's and not the desktop's.
+        var origin: (x: Int, y: Int) = (0, 0)
+
+        /// The part of the full picture a window covers, for measuring its blocks.
+        static func cut(of image: CGImage, frame: PixelBox, columnWidth: Int) -> Geometry {
+            let x0 = max(0, frame.x), y0 = max(0, frame.y), x1 = min(image.width, frame.x + frame.width), y1 = min(image.height, frame.y + frame.height)
+            guard x1 > x0, y1 > y0, let cropped = image.cropping(to: CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)) else {
+                return Geometry(image: image, columnWidth: columnWidth)
+            }
+            return Geometry(image: cropped, columnWidth: columnWidth, origin: (x0, y0))
+        }
     }
 
     /// The median spacing of the date headers for a week, else a seventh of the picture; a day view has one column, the whole width.
@@ -321,11 +528,11 @@ public struct AnalysisPipeline: Sendable {
 
     /// Turns a checked draft into a finding. Each date text is resolved by `DateResolver`; what it cannot settle stays as written.
     static func assemble(_ draft: FindingDraft, lines: [RecognisedLine], context base: ResolutionContext, geometry: Geometry? = nil,
-                         tags: [CaptureTag] = []) -> Finding {
+                         tags: [CaptureTag] = [], windowKey: String? = nil) -> Finding {
         // An email's own date is the reference for the words in it.
         let context = ResolutionContext(captureTime: base.captureTime, timezone: base.timezone, headers: base.headers, lines: base.lines,
                                         dateOrder: base.dateOrder, locales: base.locales,
-                                        sentReference: DateResolver.sentReference(for: draft, in: base), cells: base.cells)
+                                        sentReference: DateResolver.sentReference(for: draft, in: base), cells: base.cells, clock: base.clock)
         func resolve(_ field: String, _ texts: String?...) -> ResolvedValue {
             let text = texts.lazy.compactMap { $0 }.first ?? ""
             return DateResolver.resolve(text: text, field: field, draft: draft, in: context)
@@ -357,7 +564,9 @@ public struct AnalysisPipeline: Sendable {
         if draft.kind == .appointment, draft.endText == nil || endDropped, let start = results["start"], let begins = start.date, !start.allDay, draft.allDay != true {
             var minutes = 60, reason = "default-60"
             if let geometry, let title = Self.blockTitleLine(draft, lines: lines, headers: base.headers),
-               let measured = BlockGeometry.duration(titleBox: title.box, lines: lines, image: geometry.image, columnWidth: geometry.columnWidth) {
+               let measured = BlockGeometry.duration(titleBox: PixelBox(x: title.box.x - geometry.origin.x, y: title.box.y - geometry.origin.y, width: title.box.width,
+                                                                          height: title.box.height),
+                                                  lines: lines, image: geometry.image, columnWidth: geometry.columnWidth) {
                 minutes = measured; reason = "block-height"
             }
             var end = begins.addingTimeInterval(Double(minutes) * 60)
@@ -379,6 +588,6 @@ public struct AnalysisPipeline: Sendable {
                        due: results["due"]?.date, remind: results["remind"]?.date, timezone: context.timezone.identifier,
                        people: draft.people, place: draft.place, notes: draft.notes, citedLines: draft.citedLines,
                        confidence: Finding.confidence(citing: draft.citedLines, in: lines, anyInferred: anyInferred),
-                       provenance: provenance, unresolved: unresolved, tags: tags)
+                       provenance: provenance, unresolved: unresolved, tags: tags, windowKey: windowKey)
     }
 }

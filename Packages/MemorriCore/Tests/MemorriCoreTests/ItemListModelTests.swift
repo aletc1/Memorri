@@ -403,4 +403,21 @@ import Testing
         #expect(ItemListModel.sourceSightingID(nil) == nil)
         #expect(ItemListModel.sourceSightingID(history([], chosen: nil)) == nil)
     }
+
+    // MARK: window text (spec 011)
+
+    @Test func windowTextNamesTheApplicationAndTheTitle() {
+        var s = sighting("a", at: 1); s.windowApp = "Calendar"; s.windowTitle = "Work week"
+        #expect(ItemListModel.windowText(EvidenceEntry(sighting: s, evidence: nil)) == "Calendar — Work week")
+        s.windowTitle = nil
+        #expect(ItemListModel.windowText(EvidenceEntry(sighting: s, evidence: nil)) == "Calendar")
+        s.windowTitle = "  "
+        #expect(ItemListModel.windowText(EvidenceEntry(sighting: s, evidence: nil)) == "Calendar")
+    }
+
+    @Test func windowTextIsNilWithoutAWindowAndComesFromTheCutOutWhenTheSightingIsGone() {
+        #expect(ItemListModel.windowText(EvidenceEntry(sighting: sighting("a", at: 1), evidence: evidence("e", sighting: "a", at: 1))) == nil)
+        var e = evidence("e", sighting: nil, at: 1); e.windowApp = "Mail"; e.windowTitle = "Inbox"
+        #expect(ItemListModel.windowText(EvidenceEntry(sighting: nil, evidence: e)) == "Mail — Inbox")
+    }
 }

@@ -3,6 +3,8 @@ import Foundation
 /// The instructions sent to the model (ADR 0014). Changing one changes its version.
 public enum ExtractionPrompts {
     public static let classifyVersion = "classify-v2"
+    /// The windows call (spec 011): it replaces `classify` for a capture whose windows are read apart.
+    public static let windowsVersion = "windows-v1"
     /// More lines than this are cut before they go to the model; the smallest boxes go first (research R4).
     public static let maxLines = 600
 
@@ -17,7 +19,38 @@ public enum ExtractionPrompts {
             + "Use empty strings for what you cannot tell."
     }
 
-    public static func version(for kind: ScreenKind) -> String { "extract-\(kind.rawValue)-v12" }
+    /// `extract-<kind>-v12` reads a whole picture; `-v13` is the same prompt for the lines of one window (spec 011).
+    public static func version(for kind: ScreenKind, windowed: Bool = false) -> String { "extract-\(kind.rawValue)-\(windowed ? "v13" : "v12")" }
+
+    /// The most lines of a window the windows prompt shows, and the longest a shown line may be.
+    static let windowsPromptLines = 12
+    static let windowsPromptLineLength = 60
+
+    /// The windows call: the picture, and per visible window its key, application, title, frame in pixels of the picture, how much of it is
+    /// visible and its first lines. The model says for each whether it can hold appointments, tasks or reminders, and what kind of view it is.
+    public static func windowsPrompt(windows: [VisibleWindow]) -> String {
+        let kinds = ScreenKind.allCases.map(\.rawValue).joined(separator: ", ")
+        let list = windows.map { window -> String in
+            let frame = window.frame
+            let shown = window.lines.prefix(windowsPromptLines).map { line -> String in
+                let text = line.text.count > windowsPromptLineLength ? String(line.text.prefix(windowsPromptLineLength)) + "…" : line.text
+                return "\"\(text.replacingOccurrences(of: "\"", with: "'"))\""
+            }.joined(separator: " | ")
+            return "[\(window.key)] app: \(window.appName ?? "unknown") · title: \(window.title ?? "none") · frame: \(frame.x),\(frame.y) \(frame.width)x\(frame.height)"
+                + " · visible: \(Int((window.visibleShare * 100).rounded()))%\n  first lines: \(shown)"
+        }.joined(separator: "\n")
+        return "This screenshot shows a computer screen with several windows. Below are the windows that can be seen on it, from the front one to the back one, "
+            + "each with the part of the screen it covers (a window is partly hidden when others are in front of it) and its first lines of text.\n\n\(list)\n\n"
+            + "For every window listed, exactly once and with its key as written, say: "
+            + "relevant (true only when the window can hold appointments, tasks, reminders or deadlines with a date, time or a person: a calendar, mail, a chat, a task list, notes or a document; "
+            + "false for a terminal, a code editor, a file manager, a media player, settings, or a page that has nothing to do with them), "
+            + "kind (\(kinds); other for what is not relevant), how sure you are (0 to 1), "
+            + "remote (true when the window shows a remote or virtual desktop, which has its own clock and windows inside it), and the calendar name if one is visible in it. "
+            + "Then say, for the screen as a whole: the application of the frontmost relevant window as people call it, such as Outlook, Teams, Apple Mail or Slack "
+            + "(say Web calendar or Web mail for a page in a browser), the platform look, that is whether the operating system it shows looks like macos, windows or linux "
+            + "(for a remote or virtual desktop, the system of the desktop inside the window, not of the Mac around it), "
+            + "whether any window shows a remote or virtual desktop (and which client), and the theme (light or dark). Use empty strings for what you cannot tell."
+    }
 
     private static func description(of kind: ScreenKind) -> String {
         switch kind {
@@ -32,7 +65,7 @@ public enum ExtractionPrompts {
     }
 
     /// The instructions for one kind of screen: numbered rules, what each field holds, and short examples (none of them from the golden set).
-    static func instructions(for kind: ScreenKind) -> String {
+    static func instructions(for kind: ScreenKind, windowed: Bool = false) -> String {
         var text = """
         You are given the text lines of a screenshot of a \(description(of: kind)). Each line looks like: L<number> (x%,y%) text.
         List the appointments, tasks, reminders and deadlines that the lines show.
@@ -53,6 +86,7 @@ public enum ExtractionPrompts {
         4. place: the room or place written with the item (a room name, a street, "Phone", "Online"). Always fill it when one is written. people: the other people the item names. Not the sender of a message, and not "me" or "you".
         """
         text += rules(for: kind)
+        if windowed { text += "\n\nThese lines are one window of the screen; cite only these line numbers." }
         if kind != .calendarWeek, kind != .calendarDay, kind != .calendarMonth { text += "\n\n" + examples }
         return text
     }
@@ -110,7 +144,7 @@ public enum ExtractionPrompts {
 
     /// `lines` are the recognised lines of the full-resolution picture of size `pictureSize`. They are given as
     /// `L<n> (x%,y%) text`, the position being the top-left corner of the line as a percentage of the picture.
-    public static func extractPrompt(kind: ScreenKind, lines: [RecognisedLine], pictureSize: (width: Int, height: Int))
+    public static func extractPrompt(kind: ScreenKind, lines: [RecognisedLine], pictureSize: (width: Int, height: Int), windowed: Bool = false)
         -> (prompt: String, capApplied: Bool) {
         var kept = lines
         let capped = lines.count > maxLines
@@ -122,7 +156,7 @@ public enum ExtractionPrompts {
         let list = kept.map { line in
             "L\(line.n) (\(Int((Double(line.box.x) / width * 100).rounded(.down)))%,\(Int((Double(line.box.y) / height * 100).rounded(.down)))%) \(line.text)"
         }.joined(separator: "\n")
-        let prompt = instructions(for: kind) + "\n\nLines:\n" + list
+        let prompt = instructions(for: kind, windowed: windowed) + "\n\nLines:\n" + list
         return (prompt, capped)
     }
 }

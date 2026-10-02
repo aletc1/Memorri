@@ -102,6 +102,15 @@ public struct FindingDraft: Sendable, Equatable {
                      columnLine: columnLine, sentText: sentText, messageTimeText: messageTimeText)
     }
 
+    /// This finding with every field it lacks taken from `other` (the same block listed twice), and the lines of both.
+    func filling(from other: FindingDraft) -> FindingDraft {
+        FindingDraft(kind: kind, title: title, citedLines: Array(Set(citedLines + other.citedLines)).sorted(), startText: startText ?? other.startText,
+                     endText: endText ?? other.endText, dateText: dateText ?? other.dateText, dueText: dueText ?? other.dueText,
+                     remindText: remindText ?? other.remindText, allDay: allDay ?? other.allDay, people: people.isEmpty ? other.people : people,
+                     place: place ?? other.place, notes: notes ?? other.notes, columnLine: columnLine ?? other.columnLine,
+                     sentText: sentText ?? other.sentText, messageTimeText: messageTimeText ?? other.messageTimeText)
+    }
+
     func withCitedLines(_ lines: [Int]) -> FindingDraft {
         FindingDraft(kind: kind, title: title, citedLines: lines, startText: startText, endText: endText, dateText: dateText,
                      dueText: dueText, remindText: remindText, allDay: allDay, people: people, place: place, notes: notes,
@@ -132,11 +141,14 @@ public struct Finding: Sendable, Equatable {
     public let unresolved: [String: String]
     /// A copy of the picture's tags at the time of this run.
     public let tags: [CaptureTag]
+    /// The window this was read from (`w<stack index>`, or `all`); nil for analyses made before windows were kept apart.
+    public let windowKey: String?
 
     public init(id: String = UUID().uuidString, kind: FindingKind, title: String, allDay: Bool, start: Date? = nil, end: Date? = nil,
                 due: Date? = nil, remind: Date? = nil, timezone: String, people: [String] = [], place: String? = nil,
                 notes: String? = nil, citedLines: [Int], confidence: Double, provenance: [String: FieldProvenance] = [:],
-                unresolved: [String: String] = [:], tags: [CaptureTag] = []) {
+                unresolved: [String: String] = [:], tags: [CaptureTag] = [], windowKey: String? = nil) {
+        self.windowKey = windowKey
         self.id = id; self.kind = kind; self.title = title; self.allDay = allDay; self.start = start; self.end = end
         self.due = due; self.remind = remind; self.timezone = timezone; self.people = people; self.place = place
         self.notes = notes; self.citedLines = citedLines; self.confidence = confidence
@@ -162,13 +174,16 @@ public enum CitationCheck {
 
     /// Keeps drafts that cite at least one line and only existing lines (numbers 1 to `lineCount`); the others become
     /// discards. Cited numbers of the kept drafts are sorted and distinct.
-    public static func apply(_ drafts: [FindingDraft], lineCount: Int) -> (kept: [FindingDraft], discarded: [Discard]) {
+    /// With `allowed` (the line numbers of one window) a draft that cites a line outside it is discarded as `outside the window`.
+    public static func apply(_ drafts: [FindingDraft], lineCount: Int, allowed: Set<Int>? = nil) -> (kept: [FindingDraft], discarded: [Discard]) {
         var kept: [FindingDraft] = [], discarded: [Discard] = []
         for draft in drafts {
             if draft.citedLines.isEmpty {
                 discarded.append(Discard(title: draft.title, reason: "cites no line", citedLines: []))
             } else if draft.citedLines.contains(where: { $0 < 1 || $0 > lineCount }) {
                 discarded.append(Discard(title: draft.title, reason: "cites a line that does not exist", citedLines: draft.citedLines))
+            } else if let allowed, draft.citedLines.contains(where: { !allowed.contains($0) }) {
+                discarded.append(Discard(title: draft.title, reason: "outside the window", citedLines: draft.citedLines))
             } else {
                 kept.append(draft.withCitedLines(Array(Set(draft.citedLines)).sorted()))
             }

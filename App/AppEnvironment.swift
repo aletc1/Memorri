@@ -84,6 +84,7 @@ final class AppEnvironment {
                 "test": testRunner,
                 ImageAnalysisJobRunner.analyseKind: analyseRunner,
                 ImageAnalysisJobRunner.forceKind: analyseRunner,
+                ImageAnalysisJobRunner.rereadKind: analyseRunner,
             ])
             analysis = AnalysisQueue(store: jobs, runner: runner, ready: { [ollama] in await ollama.check() },
                                      settings: ollamaSettings, results: AnalysisResultStore(database: database))
@@ -126,12 +127,18 @@ final class AppEnvironment {
         }
         startPermissionPolling()
         startClockTick()
+        let rereadSource = context?.database.map { ($0, context!.paths) }
         Task { [ollama, analysis, storage, settingsStore] in
             // The recommended model is chosen without opening Settings (FR-006), then one check,
             // and only then does the queue start, so its first look at the server sees the choice.
             await ollama.applyDefaultModelIfNeeded()
             await ollama.check()
             await analysis?.start()
+            // After an update that changes how pictures are read, the library is read again in the background, behind new captures (spec 011).
+            if let rereadSource, let analysis,
+               let added = try? LibraryReread(database: rereadSource.0, settings: settingsStore, paths: rereadSource.1).enqueueIfNeeded(now: Date()), added > 0 {
+                await analysis.jobsAdded()
+            }
             #if DEBUG
             await DebugIngest.runIfRequested(storage: storage, analysis: analysis, settingsStore: settingsStore)
             #endif

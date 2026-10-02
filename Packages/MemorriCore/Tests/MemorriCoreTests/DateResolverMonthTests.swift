@@ -280,4 +280,60 @@ import Testing
         let unstacked = WindowInfo(appName: "Calendar", bundleID: nil, title: nil, frame: calendar.frame, stack: nil)
         #expect(SubjectRegion.visibleLines(lines, around: (100, 100), windows: [unstacked, dialog]) == nil)         // no stack order recorded
     }
+
+    // MARK: month conflicts (spec 011, FR-007)
+
+    /// The grid with the label of its first day (the first "1") written with a month's name.
+    private func gridWithLabel(_ text: String, occurrence: Int = 0, title: String? = "October 2026") -> [RecognisedLine] {
+        var lines = grid(title: title)
+        let indexes = lines.indices.filter { lines[$0].text == "1" }
+        let i = indexes[occurrence]
+        lines[i] = RecognisedLine(n: lines[i].n, text: text, box: PixelBox(x: lines[i].box.x, y: lines[i].box.y, width: 34, height: 18), confidence: 0.9)
+        return lines
+    }
+
+    @Test func aLabelNamingAMonthThatCannotBeRightWithTheTitleFlagsEveryCell() {
+        let headers = cells(gridWithLabel("1 abr"))
+        #expect(headers.count == 42 && headers.allSatisfy { $0.monthConflict })
+        #expect(headers.allSatisfy { !$0.monthAssumed })                      // the month was named, twice, and the two disagree
+        #expect(headers.allSatisfy { $0.guessReason == "month-conflict" })
+    }
+
+    @Test func aLabelForTheTitlesOwnOrNeighbouringMonthIsNoConflict() {
+        // The first of the title's month, and the first of the next month (the grid's last row): both fit October.
+        for lines in [gridWithLabel("1 oct"), gridWithLabel("1 nov", occurrence: 1), gridWithLabel("1 sep")] {
+            let headers = cells(lines)
+            #expect(headers.allSatisfy { !$0.monthConflict && !$0.monthAssumed }, "\(lines.map(\.text))")
+        }
+    }
+
+    @Test func twoLabelsThatDisagreeConflictEvenWithoutATitle() {
+        var lines = gridWithLabel("1 feb", title: nil)
+        let second = lines.indices.filter { lines[$0].text == "1" }[0]
+        lines[second] = RecognisedLine(n: lines[second].n, text: "1 abr", box: lines[second].box, confidence: 0.9)
+        #expect(cells(lines).allSatisfy { $0.monthConflict })
+    }
+
+    @Test func aTitleAloneOrALabelAloneIsNoConflict() {
+        #expect(cells(grid()).allSatisfy { !$0.monthConflict })
+        #expect(cells(grid(title: nil)).allSatisfy { !$0.monthConflict && $0.monthAssumed })
+        #expect(cells(gridWithLabel("1 oct", title: nil)).allSatisfy { !$0.monthConflict && !$0.monthAssumed })
+    }
+
+    @Test func aConflictedEntryIsAGuessWithTheReasonMonthConflict() throws {
+        let lines = gridWithLabel("1 abr") + [RecognisedLine(n: 99, text: "Budget meeting", box: PixelBox(x: 10, y: 60 + 150 + 30, width: 160, height: 18), confidence: 0.9)]
+        let headers = cells(lines)
+        let context = ResolutionContext(captureTime: capture, timezone: madrid, lines: lines, locales: en, cells: headers)
+        let draft = FindingDraft(kind: .appointment, title: "Budget meeting", citedLines: [99], startText: "09:00")
+        let value = DateResolver.resolve(text: "09:00", field: "start", draft: draft, in: context)
+        #expect(value.date != nil)
+        #expect(value.provenance == FieldProvenance(origin: .inferred, rule: "month-cell", reason: "month-conflict"))
+        let allDay = DateResolver.resolve(text: "", field: "start", draft: FindingDraft(kind: .appointment, title: "Budget meeting", citedLines: [99], allDay: true), in: context)
+        #expect(allDay.provenance?.reason == "month-conflict" && allDay.provenance?.origin == .inferred)
+    }
+
+    @Test func aTitleNamingAnotherMonthThanTheCapturesIsNoConflictAndNotAGuess() {
+        let headers = cells(februaryGrid(title: "Febrero de 2026"), locales: es)
+        #expect(headers.allSatisfy { !$0.monthConflict && !$0.monthAssumed })
+    }
 }

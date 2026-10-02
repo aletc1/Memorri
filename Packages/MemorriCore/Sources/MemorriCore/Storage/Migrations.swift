@@ -355,6 +355,43 @@ enum Migrations {
         migrator.registerMigration("v7") { db in
             try db.alter(table: "evidence") { t in t.add(column: "geometry", .integer).notNull().defaults(to: 1) }
         }
+        // Spec 011: a picture is read window by window. What each window was (kept as a row per picture and window), the window a finding was read
+        // from, the clock used for relative dates, the window names that sightings and evidence carry, and a priority so a background re-read of the
+        // library never runs before a new capture.
+        migrator.registerMigration("v8") { db in
+            try db.create(table: "window_readings") { t in
+                t.column("image_id", .text).notNull().references("capture_images", onDelete: .cascade)
+                t.column("window_key", .text).notNull()
+                t.column("app_name", .text)
+                t.column("title", .text)
+                t.column("frame_json", .text).notNull()
+                t.column("visible_json", .text).notNull()
+                t.column("visible_share", .double).notNull()
+                t.column("relevant", .integer).notNull()
+                t.column("kind", .text)
+                t.column("confidence", .double).notNull()
+                t.column("remote", .integer).notNull().defaults(to: 0)
+                t.column("run_id", .text)
+                t.column("prompt_version", .text).notNull()
+                t.column("created_at", .datetime).notNull()
+                t.primaryKey(["image_id", "window_key"])
+            }
+            try db.alter(table: "findings") { t in t.add(column: "window_key", .text) }
+            try db.alter(table: "image_analysis") { t in
+                t.add(column: "reference_at", .datetime)
+                t.add(column: "reference_source", .text)
+                t.add(column: "windows_read", .integer).notNull().defaults(to: 1)
+            }
+            for table in ["sightings", "evidence"] {
+                try db.alter(table: table) { t in
+                    t.add(column: "window_app", .text)
+                    t.add(column: "window_title", .text)
+                }
+            }
+            try db.alter(table: "analysis_jobs") { t in t.add(column: "priority", .integer).notNull().defaults(to: 0) }
+            try db.drop(index: "analysis_jobs_state_created_at")
+            try db.create(index: "analysis_jobs_state_priority_created_at", on: "analysis_jobs", columns: ["state", "priority", "created_at"])
+        }
         return migrator
     }
 }

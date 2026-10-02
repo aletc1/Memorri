@@ -21,8 +21,10 @@ public struct GoldenWindow: Sendable, Equatable, Codable {
     public let title: String?
     /// x, y, width, height in the picture's pixels.
     public let frame: [Int]
-    public init(app: String?, bundleID: String?, title: String?, frame: [Int]) {
-        self.app = app; self.bundleID = bundleID; self.title = title; self.frame = frame
+    /// Its place in the stack of windows, 0 for the one in front; nil for a case that does not record one (the window is then one of many with no order).
+    public let stack: Int?
+    public init(app: String?, bundleID: String?, title: String?, frame: [Int], stack: Int? = nil) {
+        self.app = app; self.bundleID = bundleID; self.title = title; self.frame = frame; self.stack = stack
     }
 }
 
@@ -80,11 +82,18 @@ public struct ExpectedFinding: Sendable, Equatable, Codable {
     public let place: String?
     /// Fields the pipeline should flag as inferred (`end`, `remind`, ...).
     public let inferred: [String]?
+    /// The key of the window it is shown in (`w<stack>`), when the case has several; scored as a field.
+    public let window: String?
 
     public init(kind: String, title: String, start: Date? = nil, end: Date? = nil, due: Date? = nil, remind: Date? = nil,
-                allDay: Bool? = nil, people: [String]? = nil, place: String? = nil, inferred: [String]? = nil) {
+                allDay: Bool? = nil, people: [String]? = nil, place: String? = nil, inferred: [String]? = nil, window: String? = nil) {
         self.kind = kind; self.title = title; self.start = start; self.end = end; self.due = due; self.remind = remind
-        self.allDay = allDay; self.people = people; self.place = place; self.inferred = inferred
+        self.allDay = allDay; self.people = people; self.place = place; self.inferred = inferred; self.window = window
+    }
+
+    func inWindow(_ key: String) -> ExpectedFinding {
+        ExpectedFinding(kind: kind, title: title, start: start, end: end, due: due, remind: remind, allDay: allDay, people: people, place: place,
+                        inferred: inferred, window: key)
     }
 }
 

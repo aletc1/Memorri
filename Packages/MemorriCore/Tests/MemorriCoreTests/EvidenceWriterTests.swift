@@ -89,4 +89,29 @@ import Testing
         let path = try #require(try f.evidenceRows(imageID: image).first?["file_path"] as String?)
         #expect(try #require(f.decodedSize(path)).0 <= EvidenceGeometry.maxWidth)
     }
+
+    // MARK: a sighting from a window (geometry 3)
+
+    @Test func aSightingFromAWindowIsCutOutAsThatWindowAndKeepsItsName() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        let frame = PixelBox(x: 50, y: 40, width: 700, height: 400)
+        let image = try await f.see([f.windowed(f.fixture.finding("Daily standup", cited: [1]), key: "w0")],
+                                    windows: [f.window("w0", app: "Calendar", title: "Week", frame: frame)])
+        await f.writer().write(imageID: image)
+        let row = try #require(try f.evidenceRows(imageID: image).first)
+        #expect(row["geometry"] as Int == EvidenceGeometry.version)
+        #expect(row["window_app"] as String? == "Calendar" && row["window_title"] as String? == "Week")
+        #expect(try JSONDecoder().decode(PixelRegion.self, from: Data((row["region_json"] as String).utf8)) == PixelRegion(x: 50, y: 40, width: 700, height: 400))
+        let record = try #require(try f.store().evidence(itemID: row["item_id"]).first)
+        #expect(record.windowApp == "Calendar" && record.windowTitle == "Week")
+    }
+
+    @Test func aFindingWithoutAWindowKeepsThePictureShareRuleAndHasNoWindowName() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        let image = try await f.see([f.fixture.finding("Daily standup", cited: [1])])
+        await f.writer().write(imageID: image)
+        let row = try #require(try f.evidenceRows(imageID: image).first)
+        #expect(row["window_app"] as String? == nil && row["window_title"] as String? == nil)
+        #expect(try JSONDecoder().decode(PixelRegion.self, from: Data((row["region_json"] as String).utf8)) == PixelRegion(x: 0, y: 10, width: 600, height: 210))
+    }
 }

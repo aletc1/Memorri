@@ -1,0 +1,113 @@
+# Research: window-aware analysis
+
+## R1. Visible windows
+
+- **Decision**: from `capture_windows` (stack order, frame in picture pixels), each window's visible region is its frame minus the union of the frames of the windows in front, as a list of rectangles. A recognised line belongs to the window whose visible region holds its centre; lines in no window are the **desktop** (menu bar, dock, wallpaper text). Windows whose visible area is under 2% of the picture or that hold fewer than 3 lines are dropped. Windows of the app itself (Memorri) and of the system UI (Dock, Window Server, Control Centre) are dropped by bundle id. A capture with no stack, or one window, is one window covering the picture (FR-010). System-UI windows (and menus or dialogs drawn over a window) are dropped **after** the visibility step: they still hide what lies under them, and their own lines are not given to any window, so a menu over a calendar never adds text to it.
+- **Rationale**: FR-001; rectangles are exact for the window model the system gives; the centre rule matches the stop-gap's `visibleLines`, whose tests carry over.
+- **Alternatives**: masks per pixel (no gain over rectangles); asking the model to find windows (costly, imprecise).
+
+## R2. The windows call (sorting)
+
+- **Decision**: one call per capture, step `windows`, prompt `windows-v1`, on the classification-size picture with a numbered list of the visible windows: key, application, title, frame, visible share, and up to 12 of its lines. The schema answers per window `{key, relevant, kind, confidence, calendar_name}` plus the capture-wide fields of today's classify answer (application of the frontmost relevant window, platform look, theme, remote session) so tags and context matching keep their inputs. The model decides every window (clarification 5). `relevant` is false for windows that cannot hold events. If the call fails or the answer does not name the windows given, the capture takes the old path (classify + one extraction) and the failure is recorded.
+- **Rationale**: FR-002, FR-011 (the call replaces classify, so a one-window capture costs what it costs today); one call sees the whole screen, which the model needs to tell a remote desktop or a dialog apart.
+- **Alternatives**: one classify call per window (N calls, SC-004 fails); app-name rules (rejected by the user).
+
+## R3. Reading one window
+
+- **Decision**: per relevant window, the window's lines (keeping their global line numbers so citations, evidence and the stored OCR stay valid) and the window's cut of the analysis picture are passed to the existing extraction for its kind (prompt `extract-<kind>-v13`: v12 plus "this is one window; only cite these lines"). Month grids are read by geometry from the window's lines (ADR 0018), no call. Kind correction (`corrected`) and the subject region run on the window's lines. Citations to lines outside the window are discarded like citations to missing lines.
+- **Rationale**: FR-003, FR-004; smaller pictures and fewer lines make each call faster, offsetting the extra calls (SC-004).
+
+## R4. Reference clock
+
+- **Decision**: clock texts are lines that parse as a date with a time or as a time next to a weekday or date (`Jue 1 oct 20:31`, `Thu 10/1/2026 11:01 AM`, `20:31` under `01/10/2026`). Sources in order: inside the window's own surroundings (a remote-desktop window's taskbar strip: the bottom or top 6% of a window marked `remote` by the windows call), then the desktop's menu bar (desktop lines in the top 3% of the picture), then the capture time. For a capture with no stack (one `all` window) the top 3% strip is searched too, and when no clock is found the capture time is used **without** a flag, as before this feature (FR-005, FR-010); the flag applies only when windows are known. A clock without a date takes the capture's date in its own time; a clock more than 24 h from the capture time is ignored and the dates that depend on the reference get `reference-assumed` (FR-005, clarification 2). The time zone stays the context's (or the Mac's); the clock gives the reference instant.
+- **Rationale**: Story 3; the menu bar is always present on a normal capture and is the cheapest exact reference.
+
+## R5. Month evidence and conflicts
+
+- **Decision**: per window, the month evidence is the title (`monthTitle`), labels naming a month (`1 feb`), and headers with a month. The stop-gap's order stays (title over grid, then labels, then the capture's month with `month-assumed`). New: when a title and a label in the same window name months that cannot both be right (the label is not in the title's month or its neighbours), every date of the window gets `month-conflict` and `inferred` (FR-007).
+
+## R6. Storing what a window was
+
+- **Decision**: `window_readings` keeps, per picture and window key, the application, title, frame, visible share, relevance, kind and confidence, and the model run. `findings.window_key` names the window; `sightings.window_app`, `sightings.window_title`, `evidence.window_app`, `evidence.window_title` copy it (evidence outlives its capture, clarification 4). The window key is the stack index at capture time (`w0`, `w1`, …; `all` for one-window captures).
+- **Rationale**: FR-009, R9 reuse; copies mirror how evidence copies the sighting's details in spec 006.
+
+## R7. Reconciliation across windows
+
+- **Decision**: reconciliation runs once per picture on the findings of all its windows, as today. The rule that keeps two findings of the same picture apart when uncertain (`same-picture-different`) applies only within one window: two windows of one picture may show the same event (Story 1, scenario 4). Everything else in spec 005 is unchanged.
+
+## R8. Library re-read (FR-011a)
+
+- **Decision**: once, after the update (integer setting `library-reread-version` below the current integer version, 1 for `windows-v1`), every capture image with a stored picture and an analysis gets a job of kind `reread` with `priority = 1`; the queue orders by `priority, created_at`. A `reread` reuses the stored OCR lines, makes the windows call and the extractions afresh, saves, reconciles and writes evidence like `analyse`. Pictures whose files are gone are skipped (the job ends `finished` with nothing changed). Locks, approvals and dismissals live on items and are not touched by reanalysis (spec 005/006). The jobs persist, so a restart resumes.
+- **Alternatives**: `not_before` in the future (waits even when idle); spec 008 (not built; the user asked for it now).
+
+## R9. Reuse and cost
+
+- **Decision**: a retry (not forced) reuses the stored windows answer when the window list is the same (same keys and frames) and the prompt version matches, and the stored extraction run of each window by step name `extract:<key>`. Model calls: 1 (windows) + one per relevant window that is not a month grid.
+
+## R10a. Evidence cut-out from the window
+
+- **Decision**: for a finding with a window, the cut-out region is the window's frame clipped to the picture (not the whole screen, never other windows' pixels beyond the frame). When the frame is larger than 1400 x 800 pixels, the region is a 1400 x 800 rectangle centred on the union of the cited lines (with the margin of spec 006), shifted to stay inside the frame and always holding the cited lines when they fit. The saved file is still scaled to at most 1600 px wide. Evidence geometry version 3; version 2 cut-outs (context by share of the picture) are made again by the same remake pass as before. Findings without a window (captures before the stack) keep geometry 2.
+- **Rationale**: the user asked for the identified window, or a bounded subset of it; a window is what makes the calendar or mail recognisable. Windows in front are not removed from the picture, so a covered part of the cut-out may show another window: the frame is used as it is, and the cited lines are in its visible part by construction.
+
+## R11. One model or two for window sorting
+
+- **Experiment** (2026-10-02, not committed; drawn desktops with 3 to 5 overlapping windows of 9 kinds, 12 pictures, 47 windows, truth known; prompt of `windows-v1` with the window list and first lines, JSON-schema output, temperature 0, thinking off):
+
+  | Model | Relevant right | Kind right | Mean time per picture |
+  |---|---|---|---|
+  | `qwen3-vl:8b-instruct` (ADR 0019) | 47/47 (1.00) | 45/47 (0.96) | 5.2 s |
+  | `minicpm-v4.5` | 42/47 (0.89) | 40/47 (0.85) | 3.8 s |
+
+- **Decision**: one model. The default model sorts better; the alternative missed relevant windows (documents, a chat, a week view), which loses data, and is only 1.4 s faster. Its two kind errors are week/month/day confusions that the geometry check (`corrected`) already repairs.
+- **Limits of the result**: drawn windows with clean titles; 47 windows is small; real screens will be harder. The eval of FR-012 repeats it on the new cases, and the windows prompt is only accepted if it holds there (constitution VI). If it does not, the answer to try next is a better prompt, not a second model.
+- **Alternatives**: minicpm-v4.5 for sorting and qwen for extraction (two models loaded on a Mac, longer model swaps, worse sorting).
+
+## R10. Evaluation
+
+- **Decision**: `SyntheticChrome` learns to draw several windows (with stack order and frames in `meta.json`, including a menu-bar clock): calendar + mail side by side; calendar half under a browser full of dates and numbers; two calendar windows sharing an event; a remote-desktop window with its own taskbar clock in another zone; a month view on another month with a menu-bar clock. `GoldenWindow` gains an optional `stack`. Scores per case as today, plus model calls per case in the report (SC-004).
+
+## Results (2026-10-02)
+
+Whole eval on `qwen3-vl:8b-instruct` (ADR 0019), think off, size 2048, temperature 0. Before: the commit before spec 011 (`875508a`, built in a scratch worktree); after: this branch. Reports in `eval/out/vl8b-v13-before.json` and `vl8b-v13-after.json` (not committed). `memorri-eval compare` over the 28 older cases:
+
+| | Before | After |
+|---|---|---|
+| Precision | 0.843 | 0.843 |
+| Recall | 0.878 | 0.878 |
+| Field accuracy | 0.908 | 0.908 |
+| Model calls (28 cases) | 52 | 52 |
+| Mean seconds per case | 8.64 | 8.65 (+0.06%) |
+| Cases that changed | | none |
+
+The five new window cases (after only):
+
+| Case | Findings found / expected / matched | Fields equal | Model calls | Seconds |
+|---|---|---|---|---|
+| windows-calendar-and-mail | 4 / 4 / 4 | 25 of 25 | 3 | 15.3 |
+| windows-calendar-under-browser | 3 / 3 / 3 | 18 of 20 | 2 | 11.2 |
+| windows-month-other-month-menu-clock | 4 / 4 / 4 | 22 of 22 | 2 | 9.8 |
+| windows-remote-clock-other-zone | 1 / 1 / 1 | 6 of 6 | 3 | 13.5 |
+| windows-two-calendars-same-event | 4 / 4 / 4 | 25 of 26 | 3 | 15.7 |
+
+Precision and recall are 1.00 on the new cases. The three fields that differ are the `place` of events whose window does not show it (the old path misses the same field on the old cases); no date and no window differs.
+
+| Criterion | Result |
+|---|---|
+| SC-001 | Met: the month case gets 4 of 4 dates in the month its window shows. |
+| SC-002 | Met: calendar under a browser full of dates gives 3 of 3, nothing from the browser. |
+| SC-003 | Met by test (`DateResolverMonthTests`, `WindowPipelineTests`): a month nothing names is `month-assumed`, and a guess goes to the Inbox. |
+| SC-004 | Met: calls equal the old count on all 28 older cases (52 and 52); the new cases make one windows call plus one extraction per relevant window that is not a month grid (3, 2, 2, 3, 3); mean seconds +0.06% on the older set (limit +25%). |
+| SC-005 | Met: no older case changed (limit 0.02); no stack gives the old path (tests). |
+| SC-006 | Met: the remote case resolves its relative dates against its own taskbar clock (6 of 6 fields). |
+| SC-007 | Met by test (`ReconcilerWindowsTests`, `EvidenceLifecycleTests`): sightings and evidence carry the window's application and title, also after the capture is deleted. |
+| SC-008, SC-009 | Real library, counts only (user's go-ahead, 2026-10-02): the re-read ran on the user's copy of the new build, 15 `reread` jobs finished and none failed; 9 captures analysed, all 9 read window by window, 3 with a clock reading, 3 month views; the dates of the month view examined (scrolled, first row in the month before the title's) were checked against the picture and are right; no finding carries a month guess. The library has no edited, locked, approved or dismissed values, so there was nothing to protect; the protection is covered by `LibraryRereadTests` and `ImageAnalysisJobTests`. |
+
+### R11 repeated on the new cases
+
+`minicpm-v4.5` on the five window cases (same settings): matched 9 of 16 findings (default model 16 of 16), with 0 of 3 on the calendar under a browser and 0 of 1 on the remote case. The decision of R11 stands: one model, the default; the windows prompt holds on the new cases with it.
+
+### Known gaps
+
+- The `place` field of an event is only read where the window shows it, as before.
+- Real screens will be harder than drawn ones; the real library has only 9 captures and 3 month views, so SC-008 rests on few cases.
+- The month view of Apple Calendar scrolls by week, so its title can name the month after the first row's (the grid then starts in the month before): the cells are dated from their labels, which handles it.

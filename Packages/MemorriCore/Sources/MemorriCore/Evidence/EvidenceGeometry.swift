@@ -14,8 +14,12 @@ public struct PixelRegion: Sendable, Equatable, Codable {
 public enum EvidenceGeometry {
     public static let maxWidth = 1600
     /// Bumped when the shape of a cut-out changes; older cut-outs are made again while their picture is stored.
-    /// 1: the cited lines with a small margin. 2: the cited lines in the context around them.
-    public static let version = 2
+    /// 1: the cited lines with a small margin. 2: the cited lines in the context around them. 3: the window that holds the cited lines
+    /// (or a 1400 x 800 part of it), for findings that have a window; findings without one keep the shape of 2.
+    public static let version = 3
+    /// A window larger than this is not cut out whole; the part around the cited lines is.
+    static let windowMaxWidth = 1400
+    static let windowMaxHeight = 800
     static let minimumMargin = 24
     static let marginShare = 0.15
     /// A cut-out shows at least this share of the picture's width and height, around the cited lines, so the calendar block or the window
@@ -36,6 +40,44 @@ public enum EvidenceGeometry {
         let (y0, y1) = span(low: top, high: bottom, margin: margin, share: contextHeightShare, size: pictureHeight)
         guard x1 > x0, y1 > y0 else { return nil }
         return PixelRegion(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+    }
+
+    /// The window's frame clipped to the picture; when that is larger than 1400 x 800, a 1400 x 800 rectangle (or less on an axis the frame
+    /// is shorter on) centred on the cited lines with their margin, shifted to stay inside the frame and holding the cited lines when they
+    /// fit. Nil when the frame has nothing inside the picture.
+    public static func region(lines: [PixelBox], window: PixelBox, pictureWidth: Int, pictureHeight: Int) -> PixelRegion? {
+        guard pictureWidth > 0, pictureHeight > 0 else { return nil }
+        let left = max(0, window.x), top = max(0, window.y)
+        let right = min(pictureWidth, window.x + window.width), bottom = min(pictureHeight, window.y + window.height)
+        guard right > left, bottom > top else { return nil }
+        guard right - left > windowMaxWidth || bottom - top > windowMaxHeight else {
+            return PixelRegion(x: left, y: top, width: right - left, height: bottom - top)
+        }
+        // The cited lines, kept to the frame; with none inside, the middle of the frame.
+        let inside = lines.compactMap { box -> (Int, Int, Int, Int)? in
+            let l = max(left, box.x), t = max(top, box.y), r = min(right, box.x + box.width), b = min(bottom, box.y + box.height)
+            return r > l && b > t ? (l, t, r, b) : nil
+        }
+        let low = (x: inside.map { $0.0 }.min() ?? (left + right) / 2, y: inside.map { $0.1 }.min() ?? (top + bottom) / 2)
+        let high = (x: inside.map { $0.2 }.max() ?? (left + right) / 2, y: inside.map { $0.3 }.max() ?? (top + bottom) / 2)
+        let margin = max(minimumMargin, Int((marginShare * Double(high.y - low.y)).rounded(.up)))
+        let (x0, x1) = windowSpan(low: low.x, high: high.x, margin: margin, length: min(right - left, windowMaxWidth), from: left, to: right)
+        let (y0, y1) = windowSpan(low: low.y, high: high.y, margin: margin, length: min(bottom - top, windowMaxHeight), from: top, to: bottom)
+        return PixelRegion(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+    }
+
+    /// One axis of a window cut: `length` centred on `low...high`, inside `from...to`, covering `low...high` and its margin when they fit
+    /// (and the start of the lines when they do not).
+    private static func windowSpan(low: Int, high: Int, margin: Int, length: Int, from: Int, to: Int) -> (Int, Int) {
+        let wanted = max(low - margin, from), wantedEnd = min(high + margin, to)
+        var start = (wanted + wantedEnd) / 2 - length / 2
+        if wantedEnd - wanted <= length {
+            start = max(min(start, wanted), wantedEnd - length)
+        } else {
+            start = wanted
+        }
+        start = min(max(from, start), to - length)
+        return (start, start + length)
     }
 
     /// One axis: the range around `low...high` that is at least `share` of `size` (and covers the margin), centred on it, shifted to fit

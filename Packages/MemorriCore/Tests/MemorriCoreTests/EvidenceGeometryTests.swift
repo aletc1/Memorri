@@ -60,4 +60,58 @@ import Testing
         #expect(wide == (1600, 200))
         #expect(EvidenceGeometry.outputSize(for: PixelRegion(x: 0, y: 0, width: 4000, height: 1)).height == 1)
     }
+
+    // MARK: a finding with a window (version 3)
+
+    @Test func theVersionIsThreeForCutOutsOfWindows() {
+        #expect(EvidenceGeometry.version == 3)
+    }
+
+    @Test func aWindowNotLargerThan1400By800IsCutOutWhole() {
+        let region = EvidenceGeometry.region(lines: [box(500, 300, 100, 20)], window: box(200, 100, 1400, 800), pictureWidth: 3000, pictureHeight: 2000)
+        #expect(region == PixelRegion(x: 200, y: 100, width: 1400, height: 800))
+    }
+
+    @Test func aWindowPartlyOffThePictureIsClippedToIt() {
+        let region = EvidenceGeometry.region(lines: [box(20, 30, 100, 20)], window: box(-100, -50, 900, 600), pictureWidth: 2000, pictureHeight: 1200)
+        #expect(region == PixelRegion(x: 0, y: 0, width: 800, height: 550))
+    }
+
+    @Test func aWindowWithNothingInsideThePictureGivesNoRegion() {
+        #expect(EvidenceGeometry.region(lines: [box(0, 0, 10, 10)], window: box(2100, 0, 300, 300), pictureWidth: 2000, pictureHeight: 1200) == nil)
+    }
+
+    @Test func aLargerWindowGivesA1400By800RectangleAroundTheCitedLines() {
+        let region = EvidenceGeometry.region(lines: [box(1500, 900, 200, 30)], window: box(0, 0, 3000, 1800), pictureWidth: 3000, pictureHeight: 1800)
+        #expect(region?.width == 1400 && region?.height == 800)
+        let r = region!
+        #expect(r.x <= 1500 && r.x + r.width >= 1700 && r.y <= 900 && r.y + r.height >= 930)
+        #expect(r == PixelRegion(x: 900, y: 515, width: 1400, height: 800))   // centred on the line's middle (1600, 915)
+    }
+
+    @Test func theRectangleIsShiftedToStayInsideTheFrame() {
+        let window = box(1000, 500, 2000, 1200)
+        let corner = EvidenceGeometry.region(lines: [box(1010, 510, 100, 20)], window: window, pictureWidth: 3000, pictureHeight: 2000)!
+        #expect(corner == PixelRegion(x: 1000, y: 500, width: 1400, height: 800))
+        let far = EvidenceGeometry.region(lines: [box(2900, 1650, 90, 20)], window: window, pictureWidth: 3000, pictureHeight: 2000)!
+        #expect(far == PixelRegion(x: 1600, y: 900, width: 1400, height: 800))
+    }
+
+    @Test func aWindowWiderThanTallOnlyLimitsTheAxisThatIsLarge() {
+        let region = EvidenceGeometry.region(lines: [box(900, 100, 100, 20)], window: box(0, 0, 2400, 600), pictureWidth: 3000, pictureHeight: 2000)!
+        #expect(region.width == 1400 && region.height == 600 && region.y == 0)
+    }
+
+    @Test func theRegionNeverLeavesTheFrameEvenForLinesOutsideIt() {
+        let window = box(100, 100, 2000, 1500)
+        for line in [box(0, 0, 50, 20), box(2900, 1900, 50, 20), box(100, 100, 2000, 1500)] {
+            let r = EvidenceGeometry.region(lines: [line], window: window, pictureWidth: 3000, pictureHeight: 2000)!
+            #expect(r.x >= 100 && r.y >= 100 && r.x + r.width <= 2100 && r.y + r.height <= 1600)
+        }
+    }
+
+    @Test func linesTallerThanTheRectangleKeepTheirStartInView() {
+        let r = EvidenceGeometry.region(lines: [box(500, 200, 100, 20), box(500, 1400, 100, 20)], window: box(0, 0, 3000, 1800), pictureWidth: 3000, pictureHeight: 1800)!
+        #expect(r.y <= 200 && r.height == 800)
+    }
 }

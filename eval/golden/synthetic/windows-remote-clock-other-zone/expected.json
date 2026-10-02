@@ -1,0 +1,257 @@
+{
+  "context" : "Customer A",
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-16T15:00:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-16T14:00:00Z",
+      "title" : "Planning meeting",
+      "window" : "w0"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        20,
+        5,
+        47,
+        18
+      ],
+      "text" : "Finder"
+    },
+    {
+      "box" : [
+        2055,
+        5,
+        125,
+        18
+      ],
+      "text" : "Wed 14 Oct 20:30"
+    },
+    {
+      "box" : [
+        620,
+        69,
+        310,
+        18
+      ],
+      "text" : "Remote Desktop Connection - Customer A"
+    },
+    {
+      "box" : [
+        588,
+        126,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        588,
+        190,
+        91,
+        19
+      ],
+      "text" : "Design team"
+    },
+    {
+      "box" : [
+        588,
+        254,
+        82,
+        19
+      ],
+      "text" : "Carlos Ruiz"
+    },
+    {
+      "box" : [
+        588,
+        318,
+        118,
+        19
+      ],
+      "text" : "Release channel"
+    },
+    {
+      "box" : [
+        880,
+        116,
+        145,
+        26
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        1460,
+        176,
+        39,
+        17
+      ],
+      "text" : "Today"
+    },
+    {
+      "box" : [
+        936,
+        226,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        1056,
+        228,
+        36,
+        17
+      ],
+      "text" : "03:12"
+    },
+    {
+      "box" : [
+        936,
+        254,
+        259,
+        22
+      ],
+      "text" : "Morning! Did you see the notes?"
+    },
+    {
+      "box" : [
+        936,
+        322,
+        73,
+        19
+      ],
+      "text" : "Ben Ortiz"
+    },
+    {
+      "box" : [
+        1020,
+        324,
+        39,
+        17
+      ],
+      "text" : "03:28"
+    },
+    {
+      "box" : [
+        936,
+        350,
+        404,
+        22
+      ],
+      "text" : "Planning meeting tomorrow at 10:00, can you join?"
+    },
+    {
+      "box" : [
+        936,
+        418,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        1056,
+        420,
+        39,
+        17
+      ],
+      "text" : "03:29"
+    },
+    {
+      "box" : [
+        936,
+        446,
+        175,
+        22
+      ],
+      "text" : "Sounds good, thanks."
+    },
+    {
+      "box" : [
+        2029,
+        1091,
+        127,
+        19
+      ],
+      "text" : "Thu 15 Oct 03:30"
+    },
+    {
+      "box" : [
+        120,
+        69,
+        44,
+        18
+      ],
+      "text" : "Notes"
+    },
+    {
+      "box" : [
+        44,
+        120,
+        113,
+        22
+      ],
+      "text" : "Shopping list"
+    },
+    {
+      "box" : [
+        44,
+        156,
+        33,
+        22
+      ],
+      "text" : "milk"
+    },
+    {
+      "box" : [
+        44,
+        192,
+        47,
+        22
+      ],
+      "text" : "bread"
+    },
+    {
+      "box" : [
+        44,
+        228,
+        51,
+        22
+      ],
+      "text" : "coffee"
+    },
+    {
+      "box" : [
+        44,
+        264,
+        140,
+        22
+      ],
+      "text" : "Plumber came by"
+    }
+  ],
+  "screenKind" : "chat",
+  "tags" : [
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

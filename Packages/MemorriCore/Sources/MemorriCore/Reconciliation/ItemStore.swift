@@ -63,6 +63,9 @@ public struct SightingRow: Sendable, Equatable {
     public let citedLines: [Int]
     /// The stored decision (rule and scores) as JSON text.
     public let decisionJSON: String
+    /// The window the finding came from (application and title), when the capture was read by window.
+    public var windowApp: String? = nil
+    public var windowTitle: String? = nil
 }
 
 /// Reads and writes the item tables. The reconciler and the operations use the static helpers inside their own transactions.
@@ -156,7 +159,7 @@ public struct ItemStore: Sendable {
             """, arguments: [item.id]).map { row in
             SightingRow(id: row["id"], imageID: row["image_id"], displayName: row["display_name"], capturedAt: row["captured_at"], title: row["title"],
                         confidence: row["confidence"], citedLines: (try? decoder.decode([Int].self, from: Data((row["cited_lines_json"] as String).utf8))) ?? [],
-                        decisionJSON: row["decision_json"])
+                        decisionJSON: row["decision_json"], windowApp: row["window_app"], windowTitle: row["window_title"])
         }
 
         let own = TitleNormaliser.normalise(item.title)

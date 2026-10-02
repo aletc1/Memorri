@@ -6,7 +6,7 @@ public enum SchemaValidationError: Error, Sendable, Equatable {
 }
 
 /// Checks an answer against the subset of JSON Schema that our schemas use: `type` (object, string,
-/// boolean, integer, number, array), `properties`, `required`, `enum`, `items`, `minLength`, `minItems` and
+/// boolean, integer, number, array), `properties`, `required`, `enum`, `items`, `minLength`, `minItems`, `maxItems` and
 /// `additionalProperties: false`. A mismatch names the path of the first problem.
 public enum SchemaValidator {
     public static func validate(_ answer: String, against schema: JSONValue) -> Result<JSONValue, SchemaValidationError> {
@@ -27,6 +27,9 @@ public enum SchemaValidator {
         }
         if case .int(let minimum)? = rules["minItems"], case .array(let items) = value, items.count < minimum {
             return "\(here) has too few items"
+        }
+        if case .int(let maximum)? = rules["maxItems"], case .array(let items) = value, items.count > maximum {
+            return "\(here) has too many items"
         }
         if case .array(let allowed)? = rules["enum"], !allowed.contains(value) {
             return "\(here) is not one of the allowed values"

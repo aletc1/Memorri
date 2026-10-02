@@ -6,7 +6,7 @@ import os
 /// Debug builds only. `--ingest-picture <png>` (with optional `--ingest-windows <json>`) stores that picture as if it had
 /// been captured and queues its analysis, so a synthetic picture can go through the real pipeline without the screen.
 /// `<json>` is either a list of windows or a golden case's `meta.json`. `--ingest-case <folder>` (repeatable) stores the
-/// `screenshot.png` of a golden case with the windows of its `meta.json`. Compiled out of Release builds.
+/// `screenshot.png` of a golden case with the windows and the capture time of its `meta.json`. Compiled out of Release builds.
 enum DebugIngest {
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "extraction")
 
@@ -38,13 +38,21 @@ enum DebugIngest {
             do {
                 let png = try Data(contentsOf: URL(fileURLWithPath: request.picture))
                 let windows = try request.windows.map(loadWindows) ?? []
-                let imageID = try ingest.store(png: png, windows: windows)
+                let imageID = try ingest.store(png: png, windows: windows, capturedAt: request.windows.flatMap(capturedAt))
                 try await analysis.enqueue(kind: ImageAnalysisJobRunner.analyseKind, imageID: imageID)
                 logger.info("ingested picture image=\(imageID, privacy: .public) windows=\(windows.count)")
             } catch {
                 logger.error("ingest failed: \(String(describing: error), privacy: .public)")
             }
         }
+    }
+
+    /// The capture time of a golden case's `meta.json`, so a drawn clock and relative dates are read against the time the case is about.
+    private static func capturedAt(_ path: String) -> Date? {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode(GoldenMeta.self, from: data))?.capturedAt
     }
 
     private static func loadWindows(_ path: String) throws -> [WindowInfo] {
@@ -58,7 +66,8 @@ enum DebugIngest {
             let f = window.frame
             return WindowInfo(appName: window.app, bundleID: window.bundleID, title: window.title,
                               frame: PixelBox(x: f.count > 0 ? f[0] : 0, y: f.count > 1 ? f[1] : 0,
-                                              width: f.count > 2 ? f[2] : 0, height: f.count > 3 ? f[3] : 0))
+                                              width: f.count > 2 ? f[2] : 0, height: f.count > 3 ? f[3] : 0),
+                              stack: window.stack)
         }
     }
 }

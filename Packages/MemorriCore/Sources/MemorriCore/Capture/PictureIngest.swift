@@ -29,7 +29,7 @@ public struct PictureIngest: Sendable {
 
     /// Returns the new image id. Nothing is left behind when it throws.
     @discardableResult
-    public func store(png: Data, windows: [WindowInfo] = []) throws -> String {
+    public func store(png: Data, windows: [WindowInfo] = [], capturedAt takenAt: Date? = nil) throws -> String {
         guard let source = CGImageSourceCreateWithData(png as CFData, nil), CGImageSourceGetCount(source) > 0,
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw PictureIngestError.notAPicture }
 
@@ -40,7 +40,7 @@ public struct PictureIngest: Sendable {
         } catch { throw PictureIngestError.couldNotSave }
 
         let eventID = UUID().uuidString, imageID = UUID().uuidString
-        let capturedAt = time.now()
+        let capturedAt = takenAt ?? time.now()
         let staging: URL
         var committed = false
         do {

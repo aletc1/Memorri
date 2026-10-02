@@ -92,6 +92,9 @@ public struct EvidenceEntry: Sendable, Equatable, Identifiable {
     public var capturedAt: Date { sighting?.capturedAt ?? evidence?.capturedAt ?? .distantPast }
     public var title: String { sighting?.title ?? evidence?.title ?? "" }
     public var displayName: String? { sighting?.displayName ?? evidence?.displayName }
+    /// The window the finding came from; the cut-out keeps it when the sighting is gone.
+    public var windowApp: String? { sighting?.windowApp ?? evidence?.windowApp }
+    public var windowTitle: String? { sighting?.windowTitle ?? evidence?.windowTitle }
 }
 
 /// Why an edit typed into a field was not accepted (spec 006, FR-007). The message goes under the field.
@@ -407,6 +410,21 @@ public enum ItemListModel {
     public static func shownEntries(_ entries: [EvidenceEntry], showAll: Bool) -> (shown: [EvidenceEntry], moreText: String?) {
         guard !showAll, entries.count > evidenceCardsShown else { return (entries, nil) }
         return (Array(entries.prefix(evidenceCardsShown)), "Show all \(entries.count) sightings")
+    }
+
+    /// Which window a card's evidence came from: `"<app> — <title>"`, `"<app>"` when the window had no title, nil when there is no window
+    /// (a capture read as a whole, or from before windows were read).
+    public static func windowText(_ entry: EvidenceEntry) -> String? {
+        func clean(_ text: String?) -> String? {
+            guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+            return text
+        }
+        switch (clean(entry.windowApp), clean(entry.windowTitle)) {
+        case let (app?, title?): return "\(app) — \(title)"
+        case let (app?, nil): return app
+        case let (nil, title?): return title
+        case (nil, nil): return nil
+        }
     }
 
     /// What a card says in place of a missing cut-out.

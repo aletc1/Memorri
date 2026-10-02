@@ -175,6 +175,12 @@ public actor AnalysisQueue: AnalysisEnqueuing {
         }
     }
 
+    /// Tells the queue that jobs were added to the store by someone else (the library re-read): it publishes the progress and wakes up.
+    public func jobsAdded() {
+        publish()
+        Task { await wake.fire() }
+    }
+
     /// One `analyse` job per stored picture that has no analysis and no pending job, oldest first. Returns how many.
     @discardableResult
     public func enqueueBacklog() -> Int {

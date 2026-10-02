@@ -358,4 +358,103 @@ import Testing
         let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
         #expect(headers.count == 2 && headers.allSatisfy { $0.date == DateComponents(year: 2026, month: 2, day: 11) && !$0.monthAssumed })
     }
+
+    // MARK: week and day view conflicts (spec 011, FR-007)
+
+    @Test func aHeaderThatNamesAnotherMonthThanTheTitleFlagsTheWholeView() {
+        let lines = headerLines([("Mon 9", 100), ("Tue 10", 400), ("Wed Jun 17", 700)], title: "March 9 – 13, 2026")
+        let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
+        #expect(headers.count == 3 && headers.allSatisfy { $0.monthConflict && $0.guessReason == "month-conflict" })
+    }
+
+    @Test func aHeaderThatNamesAnotherYearThanTheTitleFlagsTheWholeView() {
+        let lines = headerLines([("Mon 12", 100), ("Tue 13", 400), ("Wed Oct 14 2025", 700)], title: "October 12 – 16, 2026")
+        let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
+        #expect(!headers.isEmpty && headers.allSatisfy { $0.monthConflict })
+    }
+
+    @Test func aTitleAndHeadersThatAgreeAreNoConflictAndAWeekAcrossTheMonthsEdgeIsFine() {
+        let agree = headerLines([("Mon 12", 100), ("Tue 13", 400), ("Wed Oct 14", 700)], title: "October 12 – 16, 2026")
+        #expect(DateResolver.headers(in: agree, locales: en, reference: capture, timezone: madrid).allSatisfy { !$0.monthConflict })
+        let edge = headerLines([("Mon 28", 100), ("Tue 29", 400), ("Wed 30", 700), ("Thu 31", 1000), ("Fri Nov 1", 1300)], title: "October 2026")
+        #expect(DateResolver.headers(in: edge, locales: en, reference: capture, timezone: madrid).allSatisfy { !$0.monthConflict })
+        let newYear = headerLines([("Mon 29", 100), ("Tue 30", 400), ("Wed 31", 700), ("Thu Jan 1 2026", 1000)], title: "December 2025")
+        #expect(DateResolver.headers(in: newYear, locales: en, reference: capture, timezone: madrid).allSatisfy { !$0.monthConflict })
+    }
+
+    @Test func aWeekViewWhoseOnlyMonthEvidenceIsATitleInAnotherMonthIsReadInThatMonth() {
+        let lines = headerLines([("Mon 9", 100), ("Tue 10", 400), ("Wed 11", 700)], title: "March 9 – 13, 2026")
+        let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
+        #expect(headers.map { "\($0.date.year!)-\($0.date.month!)-\($0.date.day!)" } == ["2026-3-9", "2026-3-10", "2026-3-11"])
+        #expect(headers.allSatisfy { !$0.monthAssumed && !$0.monthConflict && $0.guessReason == nil })
+    }
+
+    @Test func aWeekViewThatNamesNoMonthIsAGuessWithTheReasonMonthAssumed() {
+        let lines = headerLines([("Mon 12", 100), ("Tue 13", 400), ("Wed 14", 700)])
+        let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
+        #expect(headers.allSatisfy { $0.monthAssumed && !$0.monthConflict && $0.guessReason == "month-assumed" })
+    }
+
+    @Test func aConflictedHeaderGivesAnInferredStartThatReviewRulesCallsGuessed() {
+        let lines = headerLines([("Mon 9", 100), ("Tue 10", 400), ("Wed Jun 17", 700)], title: "March 9 – 13, 2026") + [line(9, "Design review", x: 110, y: 400, w: 120)]
+        let headers = DateResolver.headers(in: lines, locales: en, reference: capture, timezone: madrid)
+        let context = ResolutionContext(captureTime: capture, timezone: madrid, headers: headers, lines: lines, locales: en)
+        let draft = FindingDraft(kind: .appointment, title: "Design review", citedLines: [9], startText: "13:00")
+        let value = DateResolver.resolve(text: "13:00", field: "start", draft: draft, in: context)
+        #expect(value.provenance?.origin == .inferred && value.provenance?.reason == "month-conflict")
+        var item = Item.sample(); item.confidence = 0.9
+        let reasons = ReviewRules.reasons(item: item, chosenSources: [.start: .inferred], locked: [], hasOpenPossibleDuplicate: false,
+                                          approvedValues: nil, currentValues: ReviewRules.snapshot(of: item))
+        #expect(reasons.contains(.guessedStart))
+    }
+
+    // MARK: reference clock (spec 011, FR-005)
+
+    private func resolveTomorrow(clock: ReferenceClock?, sent: Date? = nil, dateText: String = "tomorrow") -> ResolvedValue {
+        let context = ResolutionContext(captureTime: capture, timezone: madrid, locales: en, sentReference: sent, clock: clock)
+        let draft = FindingDraft(kind: .appointment, title: "Planning", citedLines: [1], startText: "10:00", dateText: dateText)
+        return DateResolver.resolve(text: "10:00", field: "start", draft: draft, in: context)
+    }
+
+    @Test func tomorrowCountsFromAClockThatIsHoursAwayFromTheCaptureTime() {
+        // The capture was at 09:12 on the 14th; the window's own clock says it is already 03:30 on the 15th: tomorrow is the 16th for it.
+        let clock = ReferenceClock(instant: at(2026, 10, 15, 3, 30), source: .windowClock)
+        let value = resolveTomorrow(clock: clock)
+        #expect(value.date == at(2026, 10, 16, 10, 0))
+        #expect(value.provenance == FieldProvenance(origin: .read, rule: "relative-day", reason: nil))
+        #expect(resolveTomorrow(clock: nil).date == at(2026, 10, 15, 10, 0))                       // no clock: from the capture, as before
+    }
+
+    @Test func aClockThatWasNotBelievedResolvesFromTheCaptureTimeAndTheDateIsAGuess() {
+        for source in [ReferenceClock(instant: capture, source: .captureFarClock), ReferenceClock(instant: capture, source: .capture, isGuess: true)] {
+            let value = resolveTomorrow(clock: source)
+            #expect(value.date == at(2026, 10, 15, 10, 0))
+            #expect(value.provenance == FieldProvenance(origin: .inferred, rule: "relative-day", reason: "reference-assumed"))
+        }
+    }
+
+    @Test func everyWordThatCountsFromTodayIsMarkedWhenTheClockIsAGuess() {
+        let guess = ReferenceClock(instant: capture, source: .captureFarClock)
+        for text in ["today", "tomorrow", "yesterday", "in 3 days", "next Monday", "Friday", "end of week"] {
+            let value = resolveTomorrow(clock: guess, dateText: text)
+            #expect(value.provenance?.reason == "reference-assumed" && value.provenance?.origin == .inferred, "\(text)")
+        }
+        // A time alone is today's: the same.
+        let context = ResolutionContext(captureTime: capture, timezone: madrid, locales: en, clock: guess)
+        let timeOnly = DateResolver.resolve(text: "10:00", field: "start", draft: FindingDraft(kind: .appointment, title: "x", citedLines: [1], startText: "10:00"), in: context)
+        #expect(timeOnly.provenance?.reason == "reference-assumed")
+    }
+
+    @Test func aWrittenDateOrAnEmailsOwnDateIsNoGuessWhateverTheClock() {
+        let guess = ReferenceClock(instant: capture, source: .captureFarClock)
+        #expect(resolveTomorrow(clock: guess, dateText: "Oct 15").provenance?.reason == nil)
+        let sent = at(2026, 10, 14, 8, 0)
+        let value = resolveTomorrow(clock: guess, sent: sent)
+        #expect(value.provenance?.reason == nil && value.provenance?.origin == .read && value.date == at(2026, 10, 15, 10, 0))
+    }
+
+    @Test func aBelievedClockIsNotAGuessAndHeadersUseItToo() {
+        let clock = ReferenceClock(instant: capture, source: .screenClock)
+        #expect(resolveTomorrow(clock: clock).provenance?.origin == .read)
+    }
 }

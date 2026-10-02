@@ -1,0 +1,461 @@
+{
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-15T09:00:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-15T08:00:00Z",
+      "title" : "Planning meeting",
+      "window" : "w0"
+    },
+    {
+      "allDay" : false,
+      "end" : "2026-10-12T07:30:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-12T07:00:00Z",
+      "title" : "Daily standup",
+      "window" : "w1"
+    },
+    {
+      "allDay" : false,
+      "end" : "2026-10-14T12:30:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "place" : "Board room",
+      "start" : "2026-10-14T11:00:00Z",
+      "title" : "Design review",
+      "window" : "w1"
+    },
+    {
+      "allDay" : false,
+      "end" : "2026-10-16T10:30:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-16T09:30:00Z",
+      "title" : "Coffee with Sam",
+      "window" : "w1"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        20,
+        5,
+        47,
+        18
+      ],
+      "text" : "Finder"
+    },
+    {
+      "box" : [
+        2057,
+        5,
+        123,
+        18
+      ],
+      "text" : "Wed 14 Oct 09:12"
+    },
+    {
+      "box" : [
+        1380,
+        69,
+        41,
+        18
+      ],
+      "text" : "Inbox"
+    },
+    {
+      "box" : [
+        1300,
+        106,
+        61,
+        19
+      ],
+      "text" : "Finance"
+    },
+    {
+      "box" : [
+        1300,
+        130,
+        87,
+        18
+      ],
+      "text" : "Invoice 4471"
+    },
+    {
+      "box" : [
+        1300,
+        154,
+        168,
+        17
+      ],
+      "text" : "Attached is the invoice for"
+    },
+    {
+      "box" : [
+        1300,
+        198,
+        102,
+        19
+      ],
+      "text" : "Laura Gómez"
+    },
+    {
+      "box" : [
+        1300,
+        222,
+        119,
+        18
+      ],
+      "text" : "Planning meeting"
+    },
+    {
+      "box" : [
+        1300,
+        246,
+        54,
+        17
+      ],
+      "text" : "Hi team,"
+    },
+    {
+      "box" : [
+        1300,
+        290,
+        67,
+        19
+      ],
+      "text" : "HR team"
+    },
+    {
+      "box" : [
+        1300,
+        314,
+        109,
+        18
+      ],
+      "text" : "Benefits update"
+    },
+    {
+      "box" : [
+        1300,
+        338,
+        180,
+        17
+      ],
+      "text" : "Open enrolment starts soon"
+    },
+    {
+      "box" : [
+        1300,
+        382,
+        81,
+        19
+      ],
+      "text" : "IT support"
+    },
+    {
+      "box" : [
+        1300,
+        406,
+        112,
+        18
+      ],
+      "text" : "Password expiry"
+    },
+    {
+      "box" : [
+        1300,
+        430,
+        163,
+        17
+      ],
+      "text" : "Your password will expire"
+    },
+    {
+      "box" : [
+        1780,
+        124,
+        228,
+        33
+      ],
+      "text" : "Planning meeting"
+    },
+    {
+      "box" : [
+        1780,
+        174,
+        143,
+        19
+      ],
+      "text" : "From: Laura Gómez"
+    },
+    {
+      "box" : [
+        1780,
+        198,
+        49,
+        19
+      ],
+      "text" : "To: me"
+    },
+    {
+      "box" : [
+        1780,
+        222,
+        322,
+        19
+      ],
+      "text" : "Date: Wednesday, 14 October 2026 at 09:12"
+    },
+    {
+      "box" : [
+        1780,
+        286,
+        71,
+        23
+      ],
+      "text" : "Hi team,"
+    },
+    {
+      "box" : [
+        1780,
+        320,
+        316,
+        23
+      ],
+      "text" : "Planning meeting: tomorrow at 10:00."
+    },
+    {
+      "box" : [
+        1780,
+        354,
+        122,
+        23
+      ],
+      "text" : "See you there."
+    },
+    {
+      "box" : [
+        1780,
+        388,
+        48,
+        23
+      ],
+      "text" : "Laura"
+    },
+    {
+      "box" : [
+        120,
+        69,
+        67,
+        18
+      ],
+      "text" : "Calendar"
+    },
+    {
+      "box" : [
+        40,
+        108,
+        226,
+        26
+      ],
+      "text" : "October 12 – 16, 2026"
+    },
+    {
+      "box" : [
+        106,
+        158,
+        56,
+        19
+      ],
+      "text" : "Mon 12"
+    },
+    {
+      "box" : [
+        335,
+        158,
+        51,
+        19
+      ],
+      "text" : "Tue 13"
+    },
+    {
+      "box" : [
+        565,
+        158,
+        57,
+        19
+      ],
+      "text" : "Wed 14"
+    },
+    {
+      "box" : [
+        794,
+        158,
+        52,
+        19
+      ],
+      "text" : "Thu 15"
+    },
+    {
+      "box" : [
+        1024,
+        158,
+        43,
+        19
+      ],
+      "text" : "Fri 16"
+    },
+    {
+      "box" : [
+        32,
+        188,
+        39,
+        17
+      ],
+      "text" : "08:00"
+    },
+    {
+      "box" : [
+        32,
+        252,
+        39,
+        17
+      ],
+      "text" : "09:00"
+    },
+    {
+      "box" : [
+        32,
+        316,
+        37,
+        17
+      ],
+      "text" : "10:00"
+    },
+    {
+      "box" : [
+        32,
+        380,
+        35,
+        17
+      ],
+      "text" : "11:00"
+    },
+    {
+      "box" : [
+        32,
+        444,
+        36,
+        17
+      ],
+      "text" : "12:00"
+    },
+    {
+      "box" : [
+        32,
+        508,
+        37,
+        17
+      ],
+      "text" : "13:00"
+    },
+    {
+      "box" : [
+        32,
+        572,
+        37,
+        17
+      ],
+      "text" : "14:00"
+    },
+    {
+      "box" : [
+        32,
+        636,
+        37,
+        17
+      ],
+      "text" : "15:00"
+    },
+    {
+      "box" : [
+        32,
+        700,
+        37,
+        17
+      ],
+      "text" : "16:00"
+    },
+    {
+      "box" : [
+        110,
+        267,
+        141,
+        17
+      ],
+      "text" : "09:00 Daily standup"
+    },
+    {
+      "box" : [
+        569,
+        522,
+        140,
+        17
+      ],
+      "text" : "13:00 Design review"
+    },
+    {
+      "box" : [
+        569,
+        542,
+        71,
+        16
+      ],
+      "text" : "Board room"
+    },
+    {
+      "box" : [
+        1028,
+        426,
+        154,
+        17
+      ],
+      "text" : "11:30 Coffee with Sam"
+    }
+  ],
+  "screenKind" : "email",
+  "tags" : [
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

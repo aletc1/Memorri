@@ -16,6 +16,8 @@ import Testing
         let contexts: ContextStore
         let reconciler: FakeReconciler
         let evidence: FakeEvidenceWriter
+        /// The real reconciler, when the rig was made with one (the fake is then not wired in).
+        let real: Reconciler?
     }
 
     private func sampleLines() -> [RecognisedLine] {
@@ -24,7 +26,7 @@ import Testing
     }
 
     private func makeRig(lines: [RecognisedLine]? = nil, failWith error: Error? = nil, model modelName: String? = "qwen3.8:27b-mlx",
-                         windows: [WindowInfo] = [], reconcileSummary: ReconcileSummary = ReconcileSummary()) throws -> Rig {
+                         windows: [WindowInfo] = [], reconcileSummary: ReconcileSummary = ReconcileSummary(), realReconciler: Bool = false) throws -> Rig {
         let fixture = try makePipelineFixture(windows: windows)
         let recogniser = FakeTextRecogniser(lines: lines ?? sampleLines(), failWith: error)
         let model = FakeModelChatting()
@@ -46,12 +48,13 @@ import Testing
         reconciler.database = fixture.database
         let evidence = FakeEvidenceWriter()
         evidence.reconciler = reconciler
+        let real = realReconciler ? Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date() }) : nil
         let runner = ImageAnalysisJobRunner(service: service, pipeline: pipeline, pictures: provider, fullPictures: provider, ocr: ocr,
                                             results: results, jobs: jobs, settings: settings, time: time,
                                             contexts: ContextStore(database: fixture.database), windows: fixture.captures,
-                                            reconciler: reconciler, evidence: evidence)
+                                            reconciler: real ?? reconciler, evidence: real == nil ? evidence : nil)
         return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, results: results, jobs: jobs, settings: settings,
-                   contexts: ContextStore(database: fixture.database), reconciler: reconciler, evidence: evidence)
+                   contexts: ContextStore(database: fixture.database), reconciler: reconciler, evidence: evidence, real: real)
     }
 
     private func job(_ rig: Rig, kind: String = "analyse", imageID: String? = nil, nilImage: Bool = false) throws -> AnalysisJobRecord {
@@ -320,6 +323,166 @@ import Testing
         _ = await rig.runner.run(try job(rig), attempt: 1)
         _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
         #expect(rig.reconciler.imageIDs.count == 2)
+    }
+
+    // MARK: Windows (spec 011)
+
+    private func windowedLines() -> [RecognisedLine] {
+        let mail = ["From: Ana Ruiz", "Subject: Planning", "Planning meeting tomorrow at 10:00", "Date: Wed 14 Oct 2026 09:00"]
+        let terminal = ["$ ls -la", "drwxr-xr-x  5 user  staff", "-rw-r--r--  1 user  staff", "$ make build"]
+        return mail.enumerated().map { RecognisedLine(n: $0.offset + 1, text: $0.element, box: PixelBox(x: 620, y: 40 + $0.offset * 30, width: 300, height: 18), confidence: 0.9) }
+            + terminal.enumerated().map { RecognisedLine(n: $0.offset + 5, text: $0.element, box: PixelBox(x: 20, y: 300 + $0.offset * 30, width: 300, height: 18), confidence: 0.9) }
+    }
+
+    private let twoWindows = [WindowInfo(appName: "Mail", bundleID: "com.example.mail", title: "Inbox", frame: PixelBox(x: 600, y: 20, width: 560, height: 500), stack: 0),
+                              WindowInfo(appName: "Terminal", bundleID: "com.example.terminal", title: "zsh", frame: PixelBox(x: 0, y: 20, width: 1200, height: 560), stack: 1)]
+
+    private func windowsAnswer(mailRelevant: Bool = true) -> String {
+        #"""
+        {"windows":[{"key":"w0","relevant":\#(mailRelevant),"kind":"email","confidence":0.9,"remote":false,"calendar_name":""},
+                    {"key":"w1","relevant":false,"kind":"other","confidence":0.9,"remote":false,"calendar_name":""}],
+         "application":"Mail","platform_look":"macos","theme":"light","remote_session":{"is_remote":false,"client":""}}
+        """#
+    }
+
+    private func windowedRig() throws -> Rig {
+        let rig = try makeRig(lines: windowedLines(), windows: twoWindows)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer())
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Planning meeting","cited_lines":[3],"start_text":"10:00","date_text":"tomorrow"}]}"#)
+        return rig
+    }
+
+    private func readings(_ rig: Rig) throws -> [WindowReadingRecord] { try WindowReadingStore(database: rig.fixture.database).readings(imageID: rig.fixture.imageID) }
+
+    @Test func aCaptureWithWindowsStoresTheirReadingsAndTheWindowKeysOfItsFindings() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        #expect(await rig.runner.run(try job(rig), attempt: 1) == .success)
+        let stored = try readings(rig)
+        #expect(stored.map(\.windowKey) == ["w0", "w1"] && stored.map(\.relevant) == [true, false] && stored.map(\.appName) == ["Mail", "Terminal"])
+        let findings = try rig.results.findings(imageID: rig.fixture.imageID)
+        #expect(findings.map(\.title) == ["Planning meeting"] && findings.map(\.windowKey) == ["w0"])
+        let analysis = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
+        #expect(analysis.classifyVersion == "windows-v1" && analysis.windowsRead == 1 && analysis.kind == .email)
+        let run = try #require(try runs(rig).first { $0.step == "windows" })
+        #expect(run.promptVersion == "windows-v1")
+        #expect(stored.allSatisfy { $0.runID == run.id })
+        #expect(try runs(rig).map(\.step) == ["windows", "extract:w0"])
+    }
+
+    @Test func theWindowsCallIsSentAtTheClassificationSizeAndTheExtractionAtTheWindowsOwn() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let stored = try runs(rig)
+        let windows = try #require(stored.first { $0.step == "windows" }), extract = try #require(stored.first { $0.step == "extract:w0" })
+        #expect(windows.imageLongEdge == 600)                  // the analysis copy of this fixture is smaller than 1024, so it is not enlarged
+        #expect(extract.promptVersion == "extract-email-v13")
+    }
+
+    @Test func readingsAreReplacedWhenThePictureIsAnalysedAgain() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer(mailRelevant: false))
+        _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
+        let stored = try readings(rig)
+        #expect(stored.count == 2 && stored.map(\.relevant) == [false, false])
+        #expect(try rig.results.findings(imageID: rig.fixture.imageID).isEmpty)
+    }
+
+    @Test func readingsGoWithTheirCapture() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(try readings(rig).count == 2)
+        try await rig.fixture.database.pool.write { try $0.execute(sql: "DELETE FROM capture_images WHERE id = ?", arguments: [rig.fixture.imageID]) }
+        #expect(try readings(rig).isEmpty)
+    }
+
+    @Test func aCaptureWithoutWindowsKeepsTheClassifyStepAndStoresNoReadings() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(try readings(rig).isEmpty)
+        #expect(try runs(rig).map(\.step) == ["classify", "extract"])
+        #expect(try rig.results.analysis(imageID: rig.fixture.imageID)?.classifyVersion == "classify-v2")
+    }
+
+    // MARK: re-read and reuse (spec 011)
+
+    @Test func aRereadReusesTheStoredTextButAsksTheModelAgainEvenWhenItsAnswersAreStored() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let callsBefore = rig.model.callCount, readsBefore = rig.recogniser.callCount
+        let outcome = await rig.runner.run(try job(rig, kind: "reread"), attempt: 1)
+        #expect(outcome == .success)
+        #expect(rig.recogniser.callCount == readsBefore)                                // the stored text is reused
+        #expect(rig.model.callCount == callsBefore * 2)                                 // the windows call and the extractions are made afresh
+        #expect(try readings(rig).count == 2 && rig.results.findings(imageID: rig.fixture.imageID).count == 1)
+        #expect(rig.reconciler.imageIDs.count == 2 && rig.evidence.imageIDs.count == 2)       // saved, reconciled and evidence written like analyse
+    }
+
+    @Test func aRereadOfAPictureThatIsGoneEndsWithNothingChanged() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let before = try rig.results.analysis(imageID: rig.fixture.imageID)
+        try rig.fixture.captures.markMissing(imageID: rig.fixture.imageID)
+        let calls = rig.model.callCount
+        let outcome = await rig.runner.run(try job(rig, kind: "reread"), attempt: 1)
+        #expect(outcome == .success && rig.model.callCount == calls)
+        #expect(try rig.results.analysis(imageID: rig.fixture.imageID) == before && rig.results.findings(imageID: rig.fixture.imageID).count == 1)
+    }
+
+    @Test func aRereadKeepsWhatTheUserEditedApprovedOrDismissed() async throws {
+        let rig = try makeRig(realReconciler: true); defer { rig.fixture.cleanUp() }
+        let three = #"{"findings":[{"kind":"appointment","title":"Team sync","cited_lines":[1,2],"start_text":"10:00"},{"kind":"appointment","title":"Budget review","cited_lines":[1,2],"start_text":"11:00"},{"kind":"appointment","title":"Quarterly plan","cited_lines":[1,2],"start_text":"12:00","place":"Room 4"}]}"#
+        rig.model.answer(whenSchemaHas: "findings", three)
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let store = ItemStore(database: rig.fixture.database)
+        let items = try store.items(status: [.active], kinds: nil, contextID: nil).map(\.item)
+        let byTitle = Dictionary(uniqueKeysWithValues: items.map { ($0.title, $0.id) })
+        #expect(byTitle.count == 3)
+        let operations = ItemOperations(database: rig.fixture.database, reconciler: rig.real)
+        _ = try operations.edit(try #require(byTitle["Team sync"]), field: .title, value: .string("My own title"))
+        _ = try operations.dismiss(try #require(byTitle["Budget review"]))
+        _ = try operations.approve(try #require(byTitle["Quarterly plan"]))
+        // The model now reads the same picture differently.
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Team sync","cited_lines":[1,2],"start_text":"10:00","place":"Room 9"},{"kind":"appointment","title":"Budget review","cited_lines":[1,2],"start_text":"11:00"},{"kind":"appointment","title":"Quarterly plan","cited_lines":[1,2],"start_text":"12:00","place":"Room 5"}]}"#)
+        #expect(await rig.runner.run(try job(rig, kind: "reread"), attempt: 1) == .success)
+        let after = try store.items(status: [.active, .dismissed], kinds: nil, contextID: nil).map(\.item)
+        let edited = try #require(after.first { $0.id == byTitle["Team sync"] }), dismissed = try #require(after.first { $0.id == byTitle["Budget review"] })
+        let approved = try #require(after.first { $0.id == byTitle["Quarterly plan"] })
+        #expect(edited.title == "My own title" && edited.status == .active)
+        #expect(dismissed.status == .dismissed)                                          // not brought back
+        #expect(approved.approvedAt != nil && approved.status == .active)
+        #expect(after.filter { $0.status == .active }.count == 2 && after.count == 3)    // nothing was duplicated
+    }
+
+    @Test func aRetryReusesTheWindowsAnswerAndEachWindowsExtractionAndAForcedJobRedoesAll() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(rig.model.callCount == 2)                                                // windows + the mail
+        let again = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(again == .success && rig.model.callCount == 2)                           // no model call is repeated for an unchanged capture
+        #expect(try rig.results.findings(imageID: rig.fixture.imageID).map(\.title) == ["Planning meeting"] && readings(rig).count == 2)
+        _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
+        #expect(rig.model.callCount == 4)
+    }
+
+    @Test func aRetryAfterAFailedExtractionDoesNotAskForTheWindowsAgain() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        rig.model.answer(whenSchemaHas: "findings", "this is not json")
+        let first = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(first != .success)
+        #expect(rig.model.requests(whereSchemaHas: "windows").count == 1)
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Planning meeting","cited_lines":[3],"start_text":"10:00","date_text":"tomorrow"}]}"#)
+        #expect(await rig.runner.run(try job(rig), attempt: 2) == .success)
+        #expect(rig.model.requests(whereSchemaHas: "windows").count == 1)                // the stored answer was reused
+        #expect(rig.model.requests(whereSchemaHas: "findings").count == 2)
+    }
+
+    @Test func aStoredWindowsAnswerOfAnotherModelIsNotReused() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        try await rig.fixture.database.pool.write { try $0.execute(sql: "UPDATE model_runs SET model = 'another-model'") }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(rig.model.requests(whereSchemaHas: "windows").count == 2)
     }
 }
 
