@@ -148,6 +148,17 @@ public struct TrialComparison: Sendable {
         return out
     }
 
+    /// Equal as a person reads them: the same letters whatever their encoding (a composed or a decomposed accent), and the same words whatever the
+    /// spaces between them (including non-breaking ones) and whatever invisible characters sit among them. Case and accents still count: "Sala" and "sala" differ.
+    static func sameText(_ a: String, _ b: String) -> Bool {
+        func canonical(_ text: String) -> String {
+            // Invisible formatting characters (zero-width spaces, direction marks) and control characters are not part of what a person reads.
+            let visible = String(String.UnicodeScalarView(text.unicodeScalars.filter { $0.properties.generalCategory != .format && $0.properties.generalCategory != .control || $0.properties.isWhitespace }))
+            return visible.precomposedStringWithCanonicalMapping.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        return canonical(a) == canonical(b)
+    }
+
     /// What differs between an item and a proposal. A value the proposal does not have is not a difference.
     static func changes(from item: Item, to finding: Finding) -> [FieldChange] {
         var out: [FieldChange] = []
@@ -157,7 +168,7 @@ public struct TrialComparison: Sendable {
             out.append(FieldChange(field: field, current: ItemListModel.valueText(current, field: field, timezone: zone),
                                    proposed: ItemListModel.valueText(proposed, field: field, timezone: zone)))
         }
-        if finding.title.trimmingCharacters(in: .whitespacesAndNewlines) != item.title.trimmingCharacters(in: .whitespacesAndNewlines) {
+        if Self.sameText(finding.title, item.title) == false {
             add(.title, .string(item.title), .string(finding.title))
         }
         if finding.allDay != item.allDay { add(.allDay, .bool(item.allDay), .bool(finding.allDay)) }
@@ -168,7 +179,7 @@ public struct TrialComparison: Sendable {
             if let due = finding.due, differs(item.due, due) { add(.due, item.due.map { .date($0) }, .date(due)) }
             else if finding.due == nil, let start = finding.start, differs(item.start, start) { add(.start, item.start.map { .date($0) }, .date(start)) }
         }
-        if let place = finding.place, !place.isEmpty, place != item.place { add(.place, item.place.map { .string($0) }, .string(place)) }
+        if let place = finding.place, !place.isEmpty, Self.sameText(place, item.place ?? "") == false { add(.place, item.place.map { .string($0) }, .string(place)) }
         return out
     }
 }

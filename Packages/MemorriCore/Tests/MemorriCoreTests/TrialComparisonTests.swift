@@ -51,6 +51,16 @@ import Testing
         #expect(report.differences.map(\.kind) == [.unchanged] && report.totals.unchanged == 1 && report.totals.new == 0)
     }
 
+    @Test func aTitleThatOnlyDiffersInEncodingOrSpacesIsNotAChange() async throws {
+        let rig = try makeRig(); defer { rig.f.cleanUp() }
+        try await live(rig, [rig.f.finding("Revisi\u{00F3}n Servidor IA")])                              // composed accent
+        let t = try trial(rig, [rig.f.finding("Revisio\u{0301}n\u{00A0}Servidor  IA ")])               // decomposed accent, no-break and double spaces
+        let report = try await rig.comparison.report(trialID: t.id)
+        #expect(report.differences.map(\.kind) == [.unchanged])
+        #expect(TrialComparison.sameText("Revisi\u{00F3}n\u{200B} Servidor\u{200E} IA", "Revisi\u{00F3}n Servidor IA"))      // zero-width space and a direction mark
+        #expect(TrialComparison.sameText("Sala", "sala") == false && TrialComparison.sameText("Caf\u{00E9}", "Cafe") == false)
+    }
+
     @Test func aDifferentEndAndAPlaceAreAChangeWithCurrentAndProposedValues() async throws {
         let rig = try makeRig(); defer { rig.f.cleanUp() }
         try await live(rig, [rig.f.finding("Daily standup", end: ReconcileFixture.minutes(30))])
