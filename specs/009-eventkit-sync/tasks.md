@@ -20,7 +20,7 @@
 - [x] T011 [US3] Engine: adopt through `ItemOperations.edit` (locks), link states; tests
 
 ## Phase 5: US4 preview and runs, coordinator
-- [ ] T012 [US4] Preview writes nothing (counting test); `SyncCoordinator` (first run held, debounce, no overlap) with tests (Sync/SyncCoordinator.swift, Tests/SyncCoordinatorTests.swift)
+- [x] T012 [US4] Preview writes nothing (counting test); `SyncCoordinator` (first run held, debounce, no overlap) with tests (Sync/SyncCoordinator.swift, Tests/SyncCoordinatorTests.swift)
 
 ## Phase 6: App
 - [ ] T013 `EventKitStore` adapter; Info.plist usage strings and URL scheme; wiring and deep link (App/Sync/EventKitStore.swift, App/Info.plist/project.yml, App/AppEnvironment.swift)
