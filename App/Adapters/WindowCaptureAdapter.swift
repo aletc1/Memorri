@@ -17,8 +17,9 @@ struct WindowCaptureAdapter: WindowCapturing {
 
         let frontmost = await MainActor.run { NSWorkspace.shared.frontmostApplication?.processIdentifier }
         let chosen: WindowCandidate
+        let screens = content.displays.map { DesktopRect($0.frame) }
         switch ActiveWindowPicker.pick(candidates: Self.candidates(in: content), frontmostProcessID: frontmost,
-                                       ownProcessID: ProcessInfo.processInfo.processIdentifier) {
+                                       ownProcessID: ProcessInfo.processInfo.processIdentifier, screens: screens) {
         case .window(let candidate): chosen = candidate
         case .none: throw WindowCaptureFailure.noWindow
         case .ownWindow: throw WindowCaptureFailure.ownWindow
@@ -67,17 +68,22 @@ struct WindowCaptureAdapter: WindowCapturing {
     /// `SCDisplay` is a read-only description of a display; ScreenCaptureKit uses it from any thread.
     private struct DisplayBox: @unchecked Sendable { let display: SCDisplay }
 
-    /// Every window the system lists, front to back as it orders on-screen windows (windows it does not list come last).
+    /// Every window the system lists, front to back as it orders on-screen windows (windows it does not list come last), with the transparency the
+    /// system reports for each.
     private static func candidates(in content: SCShareableContent) -> [WindowCandidate] {
-        let order = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? [])
-            .compactMap { $0[kCGWindowNumber as String] as? CGWindowID }
-        var rank: [CGWindowID: Int] = [:]
-        for (index, id) in order.enumerated() where rank[id] == nil { rank[id] = index }
+        let listed = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        var rank: [CGWindowID: Int] = [:], alpha: [CGWindowID: Double] = [:]
+        for (index, entry) in listed.enumerated() {
+            guard let id = entry[kCGWindowNumber as String] as? CGWindowID, rank[id] == nil else { continue }
+            rank[id] = index
+            alpha[id] = entry[kCGWindowAlpha as String] as? Double ?? 1
+        }
         return content.windows.sorted { (rank[$0.windowID] ?? Int.max) < (rank[$1.windowID] ?? Int.max) }.map { window in
             let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines)
             return WindowCandidate(windowID: window.windowID, processID: window.owningApplication?.processID ?? -1, layer: window.windowLayer,
-                                   isOnScreen: window.isOnScreen, frame: DesktopRect(window.frame), appName: window.owningApplication?.applicationName,
-                                   bundleID: window.owningApplication?.bundleIdentifier, title: (title?.isEmpty ?? true) ? nil : title)
+                                   isOnScreen: window.isOnScreen, frame: DesktopRect(window.frame), alpha: alpha[window.windowID] ?? 1,
+                                   appName: window.owningApplication?.applicationName, bundleID: window.owningApplication?.bundleIdentifier,
+                                   title: (title?.isEmpty ?? true) ? nil : title)
         }
     }
 

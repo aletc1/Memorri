@@ -1,0 +1,25 @@
+{
+  "capturedAt" : "2026-10-14T07:12:00Z",
+  "displaySize" : [
+    900,
+    600
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "scope" : "window",
+  "windows" : [
+    {
+      "app" : "Terminal",
+      "bundleID" : "com.apple.Terminal",
+      "frame" : [
+        0,
+        0,
+        900,
+        600
+      ],
+      "stack" : 0,
+      "title" : "zsh - 80x24"
+    }
+  ]
+}

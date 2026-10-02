@@ -368,7 +368,7 @@ final class AppEnvironment {
         let pipeline = CapturePipeline(capturer: ScreenCaptureKitCapturer(), encoder: HEICImageEncoder(), disk: DiskSpaceAdapter(),
                                        files: context.files, store: store, paths: context.paths,
                                        settings: StorageSettings(store: settingsStore), enqueuer: enqueuer, analysisSettings: analysisSettings,
-                                       windowCapturer: WindowCaptureAdapter())
+                                       windowCapturer: WindowCaptureAdapter(), outliner: CaptureOutlinePanel())
         return (pipeline, pipeline)
     }
 

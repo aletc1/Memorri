@@ -1,0 +1,220 @@
+{
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-15T09:00:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-15T08:00:00Z",
+      "title" : "Planning meeting",
+      "window" : "w0"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        100,
+        9,
+        41,
+        18
+      ],
+      "text" : "Inbox"
+    },
+    {
+      "box" : [
+        20,
+        46,
+        61,
+        19
+      ],
+      "text" : "Finance"
+    },
+    {
+      "box" : [
+        20,
+        70,
+        87,
+        18
+      ],
+      "text" : "Invoice 4471"
+    },
+    {
+      "box" : [
+        20,
+        94,
+        168,
+        17
+      ],
+      "text" : "Attached is the invoice for"
+    },
+    {
+      "box" : [
+        20,
+        138,
+        102,
+        19
+      ],
+      "text" : "Laura Gómez"
+    },
+    {
+      "box" : [
+        20,
+        162,
+        119,
+        18
+      ],
+      "text" : "Planning meeting"
+    },
+    {
+      "box" : [
+        20,
+        186,
+        54,
+        17
+      ],
+      "text" : "Hi team,"
+    },
+    {
+      "box" : [
+        20,
+        230,
+        67,
+        19
+      ],
+      "text" : "HR team"
+    },
+    {
+      "box" : [
+        20,
+        254,
+        109,
+        18
+      ],
+      "text" : "Benefits update"
+    },
+    {
+      "box" : [
+        20,
+        278,
+        180,
+        17
+      ],
+      "text" : "Open enrolment starts soon"
+    },
+    {
+      "box" : [
+        20,
+        322,
+        81,
+        19
+      ],
+      "text" : "IT support"
+    },
+    {
+      "box" : [
+        20,
+        346,
+        112,
+        18
+      ],
+      "text" : "Password expiry"
+    },
+    {
+      "box" : [
+        20,
+        370,
+        163,
+        17
+      ],
+      "text" : "Your password will expire"
+    },
+    {
+      "box" : [
+        500,
+        64,
+        228,
+        33
+      ],
+      "text" : "Planning meeting"
+    },
+    {
+      "box" : [
+        500,
+        114,
+        143,
+        19
+      ],
+      "text" : "From: Laura Gómez"
+    },
+    {
+      "box" : [
+        500,
+        138,
+        49,
+        19
+      ],
+      "text" : "To: me"
+    },
+    {
+      "box" : [
+        500,
+        162,
+        322,
+        19
+      ],
+      "text" : "Date: Wednesday, 14 October 2026 at 09:12"
+    },
+    {
+      "box" : [
+        500,
+        226,
+        71,
+        23
+      ],
+      "text" : "Hi team,"
+    },
+    {
+      "box" : [
+        500,
+        260,
+        316,
+        23
+      ],
+      "text" : "Planning meeting: tomorrow at 10:00."
+    },
+    {
+      "box" : [
+        500,
+        294,
+        122,
+        23
+      ],
+      "text" : "See you there."
+    },
+    {
+      "box" : [
+        500,
+        328,
+        48,
+        23
+      ],
+      "text" : "Laura"
+    }
+  ],
+  "screenKind" : "email",
+  "tags" : [
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

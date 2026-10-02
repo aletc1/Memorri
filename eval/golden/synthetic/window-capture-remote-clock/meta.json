@@ -1,0 +1,39 @@
+{
+  "capturedAt" : "2026-10-14T18:30:00Z",
+  "context" : {
+    "hints" : [
+      {
+        "kind" : "domain",
+        "value" : "customer-a.example"
+      },
+      {
+        "kind" : "window_title",
+        "value" : "Customer A"
+      }
+    ],
+    "name" : "Customer A",
+    "timezone" : "America/New_York"
+  },
+  "displaySize" : [
+    1660,
+    1060
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "scope" : "window",
+  "windows" : [
+    {
+      "app" : "Microsoft Remote Desktop",
+      "bundleID" : "com.microsoft.rdc.macos",
+      "frame" : [
+        0,
+        0,
+        1660,
+        1060
+      ],
+      "stack" : 0,
+      "title" : "Remote Desktop Connection - Customer A"
+    }
+  ]
+}

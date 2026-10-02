@@ -1,0 +1,126 @@
+{
+  "findings" : [
+
+  ],
+  "lines" : [
+    {
+      "box" : [
+        100,
+        9,
+        88,
+        18
+      ],
+      "text" : "zsh - 80x24"
+    },
+    {
+      "box" : [
+        20,
+        56,
+        103,
+        22
+      ],
+      "text" : "$ make build"
+    },
+    {
+      "box" : [
+        20,
+        86,
+        189,
+        22
+      ],
+      "text" : "Compiling module Core"
+    },
+    {
+      "box" : [
+        20,
+        116,
+        213,
+        22
+      ],
+      "text" : "Compiling module Storage"
+    },
+    {
+      "box" : [
+        20,
+        146,
+        150,
+        22
+      ],
+      "text" : "Linking executable"
+    },
+    {
+      "box" : [
+        20,
+        176,
+        134,
+        22
+      ],
+      "text" : "Build succeeded"
+    },
+    {
+      "box" : [
+        20,
+        206,
+        94,
+        22
+      ],
+      "text" : "$ make test"
+    },
+    {
+      "box" : [
+        20,
+        236,
+        147,
+        22
+      ],
+      "text" : "Running 420 tests"
+    },
+    {
+      "box" : [
+        20,
+        266,
+        127,
+        22
+      ],
+      "text" : "All tests passed"
+    },
+    {
+      "box" : [
+        20,
+        296,
+        90,
+        22
+      ],
+      "text" : "$ git status"
+    },
+    {
+      "box" : [
+        20,
+        326,
+        128,
+        22
+      ],
+      "text" : "On branch main"
+    },
+    {
+      "box" : [
+        20,
+        356,
+        303,
+        22
+      ],
+      "text" : "nothing to commit, working tree clean"
+    }
+  ],
+  "screenKind" : "other",
+  "tags" : [
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

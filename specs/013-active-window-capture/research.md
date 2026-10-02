@@ -68,6 +68,12 @@ Facts about the code come from reading the repository on 2026-10-02. Items marke
 
 **Verify (S2)**: that a panel with this configuration shows over a full-screen application in a different Space, from a menu-bar-only (`LSUIElement`) app. If not, raise the level or use the `.stationary` and `.ignoresCycle` behaviours; if it still fails, document the limit.
 
+**Result (S2, 2026-10-02)**: checked in a Debug build with the panel as written (borderless non-activating panel, `ignoresMouseEvents`, never key or main, level `.screenSaver` (1000), all Spaces, full-screen auxiliary, stationary, `sharingType = .none`, `animationBehavior = .none`), from an `LSUIElement` app.
+- Over a normal window and over a window in full-screen mode in its own Space, the window list shows the panel on screen at layer 1000 with the exact frame of the recorded rectangle (700 x 400 at 500,150; 3440 x 1440 at 0,0 for the full-screen window), alpha 1 for about a second and then fading to 0 within about 0.3 s. It appeared about 0.3 s after the menu click.
+- `sharingType = .none` keeps it out of screenshots, including the check's own; the visual look over a full-screen window was therefore read from the window list, and is for the user to confirm by eye (quickstart section 3, item 2).
+- With the default animation behaviour the panel shrinks while it is ordered out (a 700 x 400 panel read 686 x 392 mid-animation); `animationBehavior = .none` removes that.
+- A full-screen application keeps a transparent toolbar window above the top edge (alpha 0) and shows it under the menu bar when the pointer is at the top, which happens when Memorri's menu is used. The picker therefore skips fully transparent windows, windows off every screen, and untitled strips across a whole display no taller than 44 points; with that the window capture takes the full-screen window.
+
 ## R9. Migration number
 
 **Decision**: the migration is `v13`, registered after `v12`. Specs 009 and 010 are merged and use `v11` and `v12`. Migrations are applied in registration order by name, so the name must be unique and registered last.

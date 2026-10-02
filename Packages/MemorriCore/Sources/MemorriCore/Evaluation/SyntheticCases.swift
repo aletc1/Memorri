@@ -4,7 +4,7 @@ import Foundation
 /// Nothing here is random and nothing reads the clock, so generating twice gives the same bytes.
 public enum SyntheticCases {
     static let cases: [SyntheticCase] = {
-        do { return try SyntheticCalendars.cases() + SyntheticMessages.cases() + SyntheticWindows.cases() }
+        do { return try SyntheticCalendars.cases() + SyntheticMessages.cases() + SyntheticWindows.cases() + SyntheticWindowCaptures.cases() }
         catch { fatalError("synthetic cases cannot be drawn: \(error)") }
     }()
 

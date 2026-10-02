@@ -36,14 +36,17 @@ public struct GoldenMeta: Sendable, Equatable, Codable {
     public let displaySize: [Int]
     public let scale: Double
     public let origin: GoldenOrigin?
+    /// `window` for a picture of one window (a window capture, spec 013); absent for the screens of a full-screen capture.
+    public let scope: CaptureScope?
 
     public init(capturedAt: Date, macTimezone: String, context: GoldenContext?, windows: [GoldenWindow],
-                displaySize: [Int], scale: Double, origin: GoldenOrigin?) {
+                displaySize: [Int], scale: Double, origin: GoldenOrigin?, scope: CaptureScope? = nil) {
+        self.scope = scope
         self.capturedAt = capturedAt; self.macTimezone = macTimezone; self.context = context; self.windows = windows
         self.displaySize = displaySize; self.scale = scale; self.origin = origin
     }
 
-    enum CodingKeys: String, CodingKey { case capturedAt, macTimezone, context, windows, displaySize, scale, origin }
+    enum CodingKeys: String, CodingKey { case capturedAt, macTimezone, context, windows, displaySize, scale, origin, scope }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -54,6 +57,7 @@ public struct GoldenMeta: Sendable, Equatable, Codable {
         displaySize = try c.decode([Int].self, forKey: .displaySize)
         scale = try c.decode(Double.self, forKey: .scale)
         origin = try c.decodeIfPresent(GoldenOrigin.self, forKey: .origin)
+        scope = try c.decodeIfPresent(CaptureScope.self, forKey: .scope)
     }
 }
 

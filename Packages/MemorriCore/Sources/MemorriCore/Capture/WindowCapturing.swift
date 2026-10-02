@@ -38,13 +38,15 @@ public struct WindowCandidate: Sendable, Equatable {
     public let layer: Int
     public let isOnScreen: Bool
     public let frame: DesktopRect
+    /// 0 for a window that is there but cannot be seen (a full-screen app's hidden toolbar window); 1 for an ordinary one.
+    public let alpha: Double
     public let appName: String?
     public let bundleID: String?
     public let title: String?
 
-    public init(windowID: UInt32, processID: Int32, layer: Int = 0, isOnScreen: Bool = true, frame: DesktopRect,
+    public init(windowID: UInt32, processID: Int32, layer: Int = 0, isOnScreen: Bool = true, frame: DesktopRect, alpha: Double = 1,
                 appName: String? = nil, bundleID: String? = nil, title: String? = nil) {
-        self.windowID = windowID; self.processID = processID; self.layer = layer; self.isOnScreen = isOnScreen; self.frame = frame
+        self.windowID = windowID; self.processID = processID; self.layer = layer; self.isOnScreen = isOnScreen; self.frame = frame; self.alpha = alpha
         self.appName = appName; self.bundleID = bundleID; self.title = title
     }
 }
