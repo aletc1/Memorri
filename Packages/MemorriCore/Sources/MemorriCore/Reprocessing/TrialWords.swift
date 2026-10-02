@@ -74,7 +74,20 @@ public enum TrialWords {
     }
 
     /// `end: Wed 14 Oct 07:30 → Wed 14 Oct 08:00`.
-    public static func change(_ c: FieldChange) -> String { "\(c.field.rawValue): \(c.current) → \(c.proposed)" }
+    public static func change(_ c: FieldChange) -> String {
+        "\(c.field.rawValue): \(c.current) → \(c.proposed)" + (lookAlike(c).map { " (\($0))" } ?? "")
+    }
+
+    /// When two texts of the same length differ in a few letters that may look alike on screen (an `I` and an `l`, a `0` and an `O`),
+    /// says which: `letter 19: “l” → “I”`. Nil when the texts differ in more than that, or when they are not texts.
+    public static func lookAlike(_ c: FieldChange) -> String? {
+        guard [.title, .place, .notes].contains(c.field) else { return nil }
+        let a = Array(c.current), b = Array(c.proposed)
+        guard a.count == b.count else { return nil }
+        let differing = a.indices.filter { a[$0] != b[$0] }
+        guard !differing.isEmpty, differing.count <= 3 else { return nil }
+        return differing.map { "letter \($0 + 1): “\(a[$0])” → “\(b[$0])”" }.joined(separator: ", ")
+    }
 
     public static func progress(_ trial: TrialRecord) -> String {
         let c = trial.counts
