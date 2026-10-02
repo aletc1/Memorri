@@ -4,11 +4,13 @@ import GRDB
 extension Reconciler {
     // MARK: Reading what a plan needs
 
-    static func snapshot(_ db: Database, imageID: String) throws -> Snapshot {
-        guard try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM image_analysis WHERE image_id = ?)", arguments: [imageID]) == true else {
-            throw ReconcileError.noAnalysis
+    static func snapshot(_ db: Database, imageID: String, findings proposals: [Finding]? = nil) throws -> Snapshot {
+        if proposals == nil {
+            guard try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM image_analysis WHERE image_id = ?)", arguments: [imageID]) == true else {
+                throw ReconcileError.noAnalysis
+            }
         }
-        let findings = try AnalysisResultStore.findings(db, imageID: imageID)
+        let findings = try proposals ?? AnalysisResultStore.findings(db, imageID: imageID)
         let context = try String?.fetchOne(db, sql: "SELECT context_id FROM image_context WHERE image_id = ?", arguments: [imageID]) ?? nil
         let contextName = try context.flatMap { try String.fetchOne(db, sql: "SELECT name FROM contexts WHERE id = ?", arguments: [$0]) }
 
@@ -134,7 +136,7 @@ extension Reconciler {
     }
 
     /// The item to attach to: the one asked for, or the one it was merged into; nil when it is gone.
-    private static func live(_ db: Database, _ id: String) throws -> String? {
+    static func live(_ db: Database, _ id: String) throws -> String? {
         var current = id
         for _ in 0..<10 {
             guard let row = try Row.fetchOne(db, sql: "SELECT status, merged_into FROM items WHERE id = ?", arguments: [current]) else { return nil }
@@ -143,21 +145,24 @@ extension Reconciler {
         return nil
     }
 
+    /// `window` gives the window's application and title when the finding is not one of the picture's stored ones (a trial's proposal).
     @discardableResult
-    private static func attach(_ db: Database, finding: Finding, itemID: String, imageID: String, capturedAt: Date, step: ReconcilePlan.Step, at date: Date) throws -> String {
+    static func attach(_ db: Database, finding: Finding, itemID: String, imageID: String, capturedAt: Date, step: ReconcilePlan.Step, at date: Date,
+                       window given: (app: String?, title: String?)? = nil) throws -> String {
         let sightingID = UUID().uuidString
         let decision = SightingDecision(rule: step.rule, scores: step.scores, candidate: step.candidate, kind: finding.kind.rawValue, timezone: finding.timezone)
         let cited = (try? JSONEncoder().encode(finding.citedLines)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
         // The window's application and title stay with the sighting, so they outlive the capture and its window readings.
-        let window = try finding.windowKey.flatMap {
+        let stored = try finding.windowKey.flatMap {
             try Row.fetchOne(db, sql: "SELECT app_name, title FROM window_readings WHERE image_id = ? AND window_key = ?", arguments: [imageID, $0])
         }
+        let window: (app: String?, title: String?) = given ?? (stored?["app_name"] as String?, stored?["title"] as String?)
         try db.execute(sql: """
             INSERT INTO sightings (id, item_id, image_id, finding_id, captured_at, title, cited_lines_json, confidence, decision_json, created_at,
                                    window_app, window_title)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, arguments: [sightingID, itemID, imageID, finding.id, capturedAt, finding.title, cited, finding.confidence, decision.json(), date,
-                             window?["app_name"] as String?, window?["title"] as String?])
+                             window.app, window.title])
 
         func source(_ key: String) -> ObservationSource { finding.provenance[key]?.origin == .inferred ? .inferred : .read }
         var values: [(ItemField, JSONValue, ObservationSource)] = [(.title, .string(finding.title), .read), (.allDay, .bool(finding.allDay), .read)]
