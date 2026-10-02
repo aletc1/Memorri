@@ -20,8 +20,8 @@ import Testing
 
     @Test func notesPlacePeopleAndAliasesAreSearchedAndNamed() async throws {
         let f = try SearchFixture(); defer { f.cleanUp() }
-        try f.addItem("a", title: "Weekly sync", notes: "bring the budget deck", place: "Sala Cervantes", people: ["Ana Pérez", "Luis"], aliases: ["Sprint planning (moved)"])
-        let expected: [(String, SearchField)] = [("budget", .notes), ("cervantes", .place), ("perez", .people), ("moved", .alias), ("weekly", .title)]
+        try f.addItem("a", title: "Weekly sync", notes: "bring the budget deck", place: "Sala Azul", people: ["Anna Example", "Luis"], aliases: ["Sprint planning (moved)"])
+        let expected: [(String, SearchField)] = [("budget", .notes), ("azul", .place), ("example", .people), ("moved", .alias), ("weekly", .title)]
         for (text, field) in expected {
             let hit = try #require(try await f.service.search(SearchQuery(text: text)).items.first, "\(text)")
             #expect(hit.matchedIn == field, "\(text)")

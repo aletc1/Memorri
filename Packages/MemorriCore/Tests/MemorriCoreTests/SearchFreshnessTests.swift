@@ -57,9 +57,9 @@ import Testing
         let old = try await found(f, "standup")
         #expect(old.first?.id == id && old.first?.matchedIn == .alias)
         _ = try operations(f).edit(id, field: .notes, value: .string("bring the roadmap"))
-        _ = try operations(f).edit(id, field: .place, value: .string("Sala Cervantes"))
-        _ = try operations(f).edit(id, field: .people, value: .array([.string("Ana Pérez")]))
-        for (word, field) in [("roadmap", SearchField.notes), ("cervantes", .place), ("perez", .people)] {
+        _ = try operations(f).edit(id, field: .place, value: .string("Sala Azul"))
+        _ = try operations(f).edit(id, field: .people, value: .array([.string("Anna Example")]))
+        for (word, field) in [("roadmap", SearchField.notes), ("azul", .place), ("example", .people)] {
             let hit = try await found(f, word).first
             #expect(hit?.id == id && hit?.matchedIn == field, "\(word)")
         }

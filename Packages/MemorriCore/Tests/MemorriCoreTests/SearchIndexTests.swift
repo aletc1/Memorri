@@ -119,7 +119,7 @@ import Testing
 
     @Test func aFullRebuildEqualsTheIndexTheWritesKept() async throws {
         let f = try SearchFixture(); defer { f.cleanUp() }
-        try f.addItem("a", title: "Café - Pruebas", notes: "sala grande", place: "Madrid", people: ["Ana Pérez"], aliases: ["Pruebas Café"])
+        try f.addItem("a", title: "Café - Pruebas", notes: "sala grande", place: "Madrid", people: ["Anna Example"], aliases: ["Pruebas Café"])
         try f.addItem("b", title: "Dentist", status: "dismissed")
         try f.addItem("c", title: "Merged away", status: "merged")
         try f.addItem("d", title: "Pay rent", kind: "task", due: SearchFixture.date(3))
@@ -127,7 +127,7 @@ import Testing
         try SearchIndex(database: f.database).rebuild()
         let rebuilt = try snapshot(f.database)
         #expect(live == rebuilt && live.count == 3)
-        let queries = ["cafe", "pru", "sala", "madrid", "perez", "dentist", "pay", "merged", "pruebas cafe", "\"pruebas cafe\"", "rent -pay", "x"]
+        let queries = ["cafe", "pru", "sala", "madrid", "example", "dentist", "pay", "merged", "pruebas cafe", "\"pruebas cafe\"", "rent -pay", "x"]
         for text in queries { _ = try await f.service.search(SearchQuery(text: text, includeDismissed: true)) }
     }
 
