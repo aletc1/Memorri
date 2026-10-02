@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,4 +31,4 @@
 
 ## Notes
 
-- Two markers remain (FR-016 where the area lives, FR-017 how captures are chosen); they go to the user before planning.
+- Clarified 2026-10-02: the area is a section of Settings > Analysis (FR-016); a trial reads all stored captures (FR-017).
