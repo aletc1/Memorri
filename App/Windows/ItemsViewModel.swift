@@ -42,9 +42,51 @@ final class ItemsViewModel {
     var lockSheet: LockSheet?
     private var observing: Task<Void, Never>?
 
+    /// The left pane: the list or the month calendar (spec 012). Both views show `visibleRows` and share `selection`.
+    enum ViewMode: String { case list, calendar }
+    private static let viewModeKey = "items.viewMode"
+    private static let monthKey = "items.month"
+
+    var viewMode: ViewMode = .list {
+        didSet {
+            UserDefaults.standard.set(viewMode.rawValue, forKey: Self.viewModeKey)
+            if viewMode == .calendar { showMonthOfSelection() }
+        }
+    }
+    /// The first day of the month the calendar shows.
+    private(set) var month = ItemCalendar.firstOfMonth(ItemCalendar.today())
+
     init(environment: AppEnvironment) {
         self.environment = environment
         cutOuts.countLimit = 100
+        let defaults = UserDefaults.standard
+        viewMode = defaults.string(forKey: Self.viewModeKey).flatMap(ViewMode.init(rawValue:)) ?? .list
+        if let saved = defaults.string(forKey: Self.monthKey).flatMap({ CalendarDay(monthText: $0) }) { month = saved }
+    }
+
+    var grid: MonthGrid { ItemCalendar.grid(rows: visibleRows, month: month, today: ItemCalendar.today(), firstWeekday: Calendar.current.firstWeekday) }
+
+    func shiftMonth(_ count: Int) { setMonth(ItemCalendar.shift(month, by: count)) }
+    func goToToday() { setMonth(ItemCalendar.firstOfMonth(ItemCalendar.today())) }
+
+    private func setMonth(_ value: CalendarDay) {
+        month = value
+        UserDefaults.standard.set(value.monthText, forKey: Self.monthKey)
+    }
+
+    /// Moves the calendar to the month of the one selected item, so choosing it elsewhere (search, the menu) shows it.
+    private func showMonthOfSelection() {
+        guard selection.count == 1, let row = selectedRows.first, let target = ItemCalendar.month(of: row.item) else { return }
+        if target != month { setMonth(target) }
+    }
+
+    /// A click on a chip selects it alone; Command-click adds or removes it, so two items can be merged from the calendar.
+    func choose(_ id: String, extending: Bool) {
+        if extending {
+            if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
+        } else {
+            selection = [id]
+        }
     }
 
     // MARK: Reading
@@ -91,7 +133,7 @@ final class ItemsViewModel {
 
     /// Selects an item. When the list is not loaded yet (the window was just opened), the choice waits for it.
     func select(_ id: String) {
-        if rows.contains(where: { $0.item.id == id }) { selection = [id]; pendingSelection = nil } else { pendingSelection = id }
+        if rows.contains(where: { $0.item.id == id }) { selection = [id]; pendingSelection = nil; showMonthOfSelection() } else { pendingSelection = id }
     }
 
     private var pendingSelection: String?
@@ -99,7 +141,7 @@ final class ItemsViewModel {
     private func apply(_ rows: [ItemRow]) {
         self.rows = rows
         if !searchText.isEmpty { runSearch() }
-        if let pending = pendingSelection, rows.contains(where: { $0.item.id == pending }) { selection = [pending]; pendingSelection = nil }
+        if let pending = pendingSelection, rows.contains(where: { $0.item.id == pending }) { selection = [pending]; pendingSelection = nil; showMonthOfSelection() }
         selection.formIntersection(Set(rows.map(\.item.id)))
         Task { await refresh() }
     }

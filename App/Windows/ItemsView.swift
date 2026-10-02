@@ -20,9 +20,10 @@ struct ItemsView: View {
                 Text("The capture storage is not available, so there are no items to show.")
                     .foregroundStyle(.secondary).padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                HSplitView {
-                    list(model: model).frame(minWidth: 340, idealWidth: 400)
-                    detailPane.frame(minWidth: 340)
+                ItemsSplit(minLeading: model.viewMode == .calendar ? 480 : 340) {
+                    if model.viewMode == .calendar { CalendarMonthView(model: model) } else { list(model: model) }
+                } trailing: {
+                    detailPane
                 }
             }
             if let message = model.message {
@@ -53,67 +54,81 @@ struct ItemsView: View {
         }
     }
 
-    // MARK: Filters and buttons
+    // MARK: Header (one row, spec 012)
 
     private func toolbar(model: ItemsViewModel) -> some View {
         @Bindable var model = model
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Picker("Kind", selection: $model.filter.kind) {
-                    Text("All").tag(ItemKindFilter.all)
-                    Text("Appointments").tag(ItemKindFilter.appointments)
-                    Text("Tasks").tag(ItemKindFilter.tasks)
-                    Text("Reminders").tag(ItemKindFilter.reminders)
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("Tasks include deadlines")
-                .accessibilityLabel("Kind filter")
-
-                Picker("Context", selection: $model.filter.context) {
-                    Text("All contexts").tag(ItemContextFilter.all)
-                    ForEach(model.contexts, id: \.id) { Text($0.name).tag(ItemContextFilter.context($0.id)) }
-                    Text("No context").tag(ItemContextFilter.none)
-                }
-                .labelsHidden().fixedSize()
-                .accessibilityLabel("Context filter")
-
-                Toggle("Show dismissed", isOn: $model.filter.showDismissed)
-                    .fixedSize()
-                    .accessibilityLabel("Show dismissed items")
-
-                Spacer(minLength: 0)
-                TextField("Search items", text: $model.searchText)
-                    .textFieldStyle(.roundedBorder).frame(width: 200)
-                    .accessibilityLabel("Search items")
+        return HStack(spacing: 10) {
+            Picker("View", selection: $model.viewMode) {
+                Image(systemName: "list.bullet").tag(ItemsViewModel.ViewMode.list)
+                Image(systemName: "calendar").tag(ItemsViewModel.ViewMode.calendar)
             }
-            HStack(spacing: 8) {
-                Picker("Show", selection: $model.filter.scope) {
-                    Text("Items").tag(ItemScope.all)
-                    Text("Inbox (\(model.inboxCount))").tag(ItemScope.inbox)
-                    Text("Approved").tag(ItemScope.approved)
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .accessibilityLabel("Show items, the Inbox or approved items")
-                if model.canApprove {
-                    Button("Approve") { Task { await model.approve() } }
-                        .accessibilityLabel("Approve the selected items")
-                }
-                if model.canMerge {
-                    Button("Merge") { Task { await model.merge() } }
-                        .accessibilityLabel("Merge the two selected items")
-                }
-                if let action = model.statusAction {
-                    Button(action == .dismiss ? "Dismiss" : "Restore") { Task { await model.dismissOrRestore() } }
-                        .accessibilityLabel(action == .dismiss ? "Dismiss the selected items" : "Restore the selected items")
-                }
-                Spacer(minLength: 0)
-                Button("Undo last") { Task { await model.undoLast() } }
-                    .disabled(model.undoTarget == nil)
-                    .help(model.undoTarget.map { "Undo: \(ItemListModel.operationText($0.kind))" } ?? "Nothing to undo")
-                    .accessibilityLabel("Undo your last operation")
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            .help("Switch between the list and the month calendar")
+            .accessibilityLabel("List or calendar view")
+
+            Picker("Show", selection: $model.filter.scope) {
+                Text("Items").tag(ItemScope.all)
+                Text("Inbox (\(model.inboxCount))").tag(ItemScope.inbox)
+                Text("Approved").tag(ItemScope.approved)
             }
+            .labelsHidden().fixedSize()
+            .help("Show all items, only the Inbox (items that need review) or only approved items")
+            .accessibilityLabel("Show items, the Inbox or approved items")
+
+            Picker("Kind", selection: $model.filter.kind) {
+                Text("All kinds").tag(ItemKindFilter.all)
+                Text("Appointments").tag(ItemKindFilter.appointments)
+                Text("Tasks").tag(ItemKindFilter.tasks)
+                Text("Reminders").tag(ItemKindFilter.reminders)
+            }
+            .labelsHidden().fixedSize()
+            .help("Filter by kind. Tasks include deadlines")
+            .accessibilityLabel("Kind filter")
+
+            Picker("Context", selection: $model.filter.context) {
+                Text("All contexts").tag(ItemContextFilter.all)
+                ForEach(model.contexts, id: \.id) { Text($0.name).tag(ItemContextFilter.context($0.id)) }
+                Text("No context").tag(ItemContextFilter.none)
+            }
+            .labelsHidden().fixedSize()
+            .help("Filter by context (customer or session)")
+            .accessibilityLabel("Context filter")
+
+            Toggle(isOn: $model.filter.showDismissed) { Label("Dismissed", systemImage: model.filter.showDismissed ? "eye" : "eye.slash") }
+                .toggleStyle(.button)
+                .help(model.filter.showDismissed ? "Dismissed items are shown (dimmed). Click to hide them" : "Dismissed items are hidden. Click to show them, dimmed")
+                .accessibilityLabel("Show dismissed items")
+
+            TextField("Search items", text: $model.searchText)
+                .textFieldStyle(.roundedBorder).frame(minWidth: 100, idealWidth: 180, maxWidth: 220)
+                .help("Search the titles, places, people and notes of items")
+                .accessibilityLabel("Search items")
+
+            Spacer(minLength: 0)
+
+            if model.canApprove {
+                iconButton("checkmark", "Approve the selected items: they leave the Inbox", "Approve the selected items") { await model.approve() }
+            }
+            if model.canMerge {
+                iconButton("arrow.triangle.merge", "Merge the two selected items into one", "Merge the two selected items") { await model.merge() }
+            }
+            if let action = model.statusAction {
+                iconButton(action == .dismiss ? "xmark" : "arrow.uturn.backward.circle",
+                           action == .dismiss ? "Dismiss the selected items: they are hidden and not recreated" : "Restore the selected items",
+                           action == .dismiss ? "Dismiss the selected items" : "Restore the selected items") { await model.dismissOrRestore() }
+            }
+            Button { Task { await model.undoLast() } } label: { Image(systemName: "arrow.uturn.backward") }
+                .disabled(model.undoTarget == nil)
+                .help(model.undoTarget.map { "Undo: \(ItemListModel.operationText($0.kind))" } ?? "Nothing to undo")
+                .accessibilityLabel("Undo your last operation")
         }
         .padding(10)
+    }
+
+    private func iconButton(_ symbol: String, _ help: String, _ label: String, _ action: @escaping () async -> Void) -> some View {
+        Button { Task { await action() } } label: { Image(systemName: symbol) }
+            .help(help).accessibilityLabel(label)
     }
 
     // MARK: List
@@ -232,5 +247,46 @@ private struct LockChoiceSheet: View {
             }
         }
         .padding(20).frame(minWidth: 380)
+    }
+}
+
+/// The list (or calendar) and the detail pane. The detail keeps its width while the user clicks and navigates; only dragging the divider
+/// changes it, and the width is remembered.
+private struct ItemsSplit<Leading: View, Trailing: View>: View {
+    static var defaultWidth: Double { 520 }
+    static var minTrailing: Double { 340 }
+
+    let minLeading: Double
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
+    @AppStorage("items.detailWidth") private var storedWidth = ItemsSplit.defaultWidth
+    @State private var dragStart: Double?
+    @State private var dragWidth: Double?
+
+    private func clamped(_ width: Double, total: Double) -> Double {
+        max(Self.minTrailing, min(width, max(Self.minTrailing, total - minLeading)))
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = clamped(dragWidth ?? storedWidth, total: proxy.size.width)
+            HStack(spacing: 0) {
+                leading.frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider()
+                    .overlay(Color.clear.frame(width: 9).contentShape(Rectangle())
+                        .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                        .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { value in
+                                let start = dragStart ?? width
+                                dragStart = start
+                                dragWidth = clamped(start - value.translation.width, total: proxy.size.width)
+                            }
+                            .onEnded { _ in
+                                if let dragWidth { storedWidth = dragWidth }
+                                dragStart = nil; dragWidth = nil
+                            }))
+                trailing.frame(width: width).frame(maxHeight: .infinity)
+            }
+        }
     }
 }

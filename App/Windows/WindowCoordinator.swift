@@ -18,7 +18,7 @@ enum WindowID: String, CaseIterable {
     /// Settings and Items hold long lists (pictures, contexts, items), so they can be resized.
     var isResizable: Bool { self == .settings || self == .items || self == .capture }
 
-    var minimumContentSize: NSSize { self == .items ? NSSize(width: 720, height: 420) : NSSize(width: 560, height: 420) }
+    var minimumContentSize: NSSize { self == .items ? NSSize(width: 860, height: 440) : NSSize(width: 560, height: 420) }
 
     var contentSize: NSSize {
         switch self {
