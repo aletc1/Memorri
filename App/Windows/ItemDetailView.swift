@@ -47,6 +47,26 @@ struct ItemDetailView: View {
                 }
             }
             .font(.callout)
+            if let suspicion = detail.suspicion {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
+                        Text("Possibly cancelled").fontWeight(.medium)
+                    }
+                    Text(ItemListModel.suspicionText(suspicion)).foregroundStyle(.secondary)
+                    if let seen = suspicion.lastSeen { Text("Last seen: \(seen.formatted(date: .abbreviated, time: .shortened))").foregroundStyle(.secondary) }
+                    if !suspicion.notShownIn.isEmpty {
+                        Text("Not in: " + suspicion.notShownIn.map { $0.formatted(date: .abbreviated, time: .shortened) }.joined(separator: ", ")).foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Button("Cancelled") { Task { await model.cancelled(detail.item.id) } }
+                            .help("The meeting is gone: dismiss it. Its Calendar entry is removed. You can undo this")
+                        Button("Still happening") { Task { await model.stillHappening(detail.item.id) } }
+                            .help("The meeting is still on: keep it. Memorri asks again only if it is seen again and then missing again")
+                    }
+                }
+                .font(.callout)
+            }
             if let line = model.syncLine(for: detail.item) {
                 HStack(spacing: 8) {
                     Image(systemName: "calendar.badge.checkmark").foregroundStyle(.secondary).accessibilityHidden(true)

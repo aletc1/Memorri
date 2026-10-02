@@ -55,6 +55,16 @@ import Testing
         #expect(reasons(rig).contains(.possiblyCancelled))
     }
 
+    @Test func theDetailShowsWhenItWasLastSeenAndWhichCapturesMissedIt() async throws {
+        let rig = try await flagged(); defer { rig.f.cleanUp() }
+        let detail = try #require(try ItemStore(database: rig.f.database).detail(itemID: rig.id))
+        let suspicion = try #require(detail.suspicion)
+        #expect(suspicion.lastSeen == ReconcileFixture.nine && suspicion.notShownIn == [ReconcileFixture.nine.addingTimeInterval(day), ReconcileFixture.nine.addingTimeInterval(2 * day)])
+        #expect(ItemListModel.suspicionText(suspicion) == "It was not in the last 2 captures of this calendar that covered its time.")
+        _ = try rig.ops.confirmStillHappening(rig.id)
+        #expect(try ItemStore(database: rig.f.database).detail(itemID: rig.id).suspicion == nil)
+    }
+
     @Test func approveOnAFlaggedItemIsTheSameAsStillHappening() async throws {
         let rig = try await flagged(); defer { rig.f.cleanUp() }
         let op = try rig.ops.approve(rig.id)

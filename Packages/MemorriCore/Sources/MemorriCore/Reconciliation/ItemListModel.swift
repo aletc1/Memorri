@@ -203,6 +203,12 @@ public enum ItemListModel {
         }
     }
 
+    /// The line of the item detail for a possibly cancelled item: how many captures of the calendar left it out since it was last seen.
+    public static func suspicionText(_ suspicion: CancelSuspicion) -> String {
+        let count = suspicion.notShownIn.count
+        return "It was not in the last \(count) \(count == 1 ? "capture" : "captures") of this calendar that covered its time."
+    }
+
     /// An item that does not need review counts as approved without any action (FR-013).
     public static func approvalText(_ item: Item) -> String {
         if item.status == .dismissed { return "Dismissed" }

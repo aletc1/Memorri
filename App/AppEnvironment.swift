@@ -88,7 +88,8 @@ final class AppEnvironment {
             let analyseRunner = ImageAnalysisJobRunner(
                 service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                 results: AnalysisResultStore(database: database), jobs: jobs, settings: ollamaSettings, time: SystemTimeSource(),
-                contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler, evidence: evidence)
+                contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler, evidence: evidence,
+                cancellation: CancellationDetector(database: database))
             let trialStore = TrialStore(database: database, paths: context.paths)
             let trialRunner = TrialJobRunner(service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                                              store: trialStore, settings: ollamaSettings, time: SystemTimeSource(), windows: CaptureStore(database: database),
