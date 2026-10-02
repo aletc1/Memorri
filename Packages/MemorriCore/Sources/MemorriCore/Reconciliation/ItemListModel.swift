@@ -198,6 +198,7 @@ public enum ItemListModel {
             case .guessedDue: "Guessed due date"
             case .possibleDuplicate: "Possible duplicate"
             case .changedAfterApproval: "Changed after you approved it"
+            case .possiblyCancelled: "Possibly cancelled"
             }
         }
     }

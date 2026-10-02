@@ -40,6 +40,8 @@ import Testing
         #expect(try sightingCount(fixture, item: all[0].id) == 2)
         #expect(first.summary.created == 1 && first.summary.merged == 0)
         #expect(second.summary.created == 0 && second.summary.merged == 1 && second.summary.error == nil)
+        // The summary names the items it created (the notice of new items counts them), and none when it only joined.
+        #expect(first.summary.createdItemIDs == [all[0].id] && second.summary.createdItemIDs.isEmpty)
     }
 
     @Test func aTruncatedTitleJoinsTheItemWithTheFullTitle() async throws {

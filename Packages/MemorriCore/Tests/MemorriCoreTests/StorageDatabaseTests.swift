@@ -389,7 +389,8 @@ import Testing
         ("items", ["id", "kind", "family", "status", "merged_into", "context_id", "title", "all_day", "start_at", "end_at", "due_at", "remind_at",
                    "timezone", "day_key", "people_json", "place", "notes", "confidence", "user_touched", "first_seen", "last_seen",
                    "created_at", "updated_at",
-                   "needs_review", "review_reasons_json", "approved_at", "approved_values_json"]),      // the last four: migration v6
+                   "needs_review", "review_reasons_json", "approved_at", "approved_values_json",      // migration v6
+                   "cancel_cleared_at"]),                                                              // migration v12
         ("sightings", ["id", "item_id", "image_id", "finding_id", "captured_at", "title", "cited_lines_json", "confidence", "decision_json", "created_at",
                        "window_app", "window_title"]),       // the window names: migration v8
         ("observations", ["id", "item_id", "sighting_id", "field", "value_json", "source", "confidence", "observed_at"]),
@@ -872,6 +873,32 @@ import Testing
             // A link goes with its item.
             try db.execute(sql: "DELETE FROM items WHERE id = 'i1'")
             #expect(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM sync_links") == 0)
+        }
+    }
+
+    // MARK: migration "v12" (spec 010)
+
+    @Test func aV11DatabaseMigratesToV12KeepingItsItemsAndAddingTheCoverageTables() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v11")
+            try pool.write { try self.insertItem($0, id: "i1", title: "Daily standup") }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.write { db in
+            #expect(try String.fetchAll(db, sql: "SELECT id FROM items") == ["i1"])
+            #expect(try db.columns(in: "calendar_coverage").map(\.name) == ["image_id", "window_key", "kind", "spans_json", "created_at"])
+            #expect(try db.columns(in: "cancel_absences").map(\.name) == ["item_id", "image_id", "event_id", "captured_at"])
+            #expect(try db.columns(in: "items").map(\.name).contains("cancel_cleared_at"))
+            #expect(try db.indexes(on: "cancel_absences").contains { $0.name == "cancel_absences_item" })
+            #expect(try String.fetchOne(db, sql: "SELECT cancel_cleared_at FROM items WHERE id = 'i1'") == nil)
+            let foreign = try db.foreignKeys(on: "cancel_absences").map(\.destinationTable)
+            let coverageForeign = try db.foreignKeys(on: "calendar_coverage").map(\.destinationTable)
+            #expect(Set(foreign) == ["items", "capture_images"] && Set(coverageForeign) == ["capture_images"])
         }
     }
 

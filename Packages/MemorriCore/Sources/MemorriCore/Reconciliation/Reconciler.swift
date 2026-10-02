@@ -20,6 +20,8 @@ public struct ReconcileSummary: Sendable, Equatable {
     public var judged = 0
     /// Candidate items a finding was compared with (the pairs scored).
     public var compared = 0
+    /// The items this reconcile created, for the notice of new items (spec 010).
+    public var createdItemIDs: [String] = []
     public var error: String?
 
     public init(created: Int = 0, merged: Int = 0, possibleDuplicates: Int = 0, judged: Int = 0, compared: Int = 0, error: String? = nil) {

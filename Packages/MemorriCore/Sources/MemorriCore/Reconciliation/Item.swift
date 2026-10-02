@@ -23,6 +23,8 @@ public enum ReviewReason: String, Sendable, Equatable, Codable, CaseIterable {
     case guessedDue = "guessed-due"
     case possibleDuplicate = "possible-duplicate"
     case changedAfterApproval = "changed-after-approval"
+    /// Two later captures of the same calendar dates did not show it (spec 010).
+    case possiblyCancelled = "possibly-cancelled"
 }
 
 /// One real-world appointment, task or reminder, made of one or more sightings. Its fields are chosen from observations

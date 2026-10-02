@@ -531,6 +531,26 @@ enum Migrations {
                 t.column("detail_json", .text).notNull().defaults(to: "[]")
             }
         }
+        // Spec 010: what calendar views showed, the captures that covered an item without showing it, and the user's `Still happening`.
+        migrator.registerMigration("v12") { db in
+            try db.create(table: "calendar_coverage") { t in
+                t.column("image_id", .text).notNull().references("capture_images", onDelete: .cascade)
+                t.column("window_key", .text).notNull().defaults(to: "")
+                t.column("kind", .text).notNull().check(sql: "kind IN ('calendar_week', 'calendar_day')")
+                t.column("spans_json", .text).notNull()
+                t.column("created_at", .datetime).notNull()
+                t.primaryKey(["image_id", "window_key"])
+            }
+            try db.create(table: "cancel_absences") { t in
+                t.column("item_id", .text).notNull().references("items", onDelete: .cascade)
+                t.column("image_id", .text).notNull().references("capture_images", onDelete: .cascade)
+                t.column("event_id", .text).notNull()
+                t.column("captured_at", .datetime).notNull()
+                t.primaryKey(["item_id", "image_id"])
+            }
+            try db.create(index: "cancel_absences_item", on: "cancel_absences", columns: ["item_id", "captured_at"])
+            try db.alter(table: "items") { t in t.add(column: "cancel_cleared_at", .datetime) }
+        }
         return migrator
     }
 }
