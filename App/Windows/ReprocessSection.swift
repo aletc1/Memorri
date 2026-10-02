@@ -32,8 +32,9 @@ struct ReprocessSection: View {
             }
             HStack {
                 Button("Start trial on \(eligible) \(eligible == 1 ? "capture" : "captures")") { start() }
-                    .disabled(starting || eligible == 0 || model.isEmpty)
-                    .help("Reads every stored capture again with the chosen model, in the background, behind new captures")
+                    .disabled(starting || eligible == 0 || model.isEmpty || trials.contains { $0.state == .running })
+                    .help(trials.contains { $0.state == .running } ? "A trial is already reading. Cancel it or wait for it to finish"
+                          : "Reads every stored capture again with the chosen model, in the background, behind new captures")
                 Text(TrialWords.outOfDate(outOfDate)).foregroundStyle(.secondary)
             }
             if models == nil {
