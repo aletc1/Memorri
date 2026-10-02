@@ -130,6 +130,13 @@ public enum ItemListModel {
 
     // MARK: List
 
+    /// The rows whose item is among `ids`, in the order of `ids` (best match first); `nil` means no search and keeps the rows as they are.
+    public static func restrict(_ rows: [ItemRow], to ids: [String]?) -> [ItemRow] {
+        guard let ids else { return rows }
+        let byID = Dictionary(rows.map { ($0.item.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return ids.compactMap { byID[$0] }
+    }
+
     /// The filter under which an item with this status is in the list: every kind, every context, the whole scope, and dismissed items only when it is one.
     public static func filter(showing status: ItemStatus) -> ItemFilter {
         ItemFilter(kind: .all, context: .all, scope: .all, showDismissed: status == .dismissed)

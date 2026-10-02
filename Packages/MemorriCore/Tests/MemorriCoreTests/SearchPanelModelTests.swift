@@ -99,3 +99,65 @@ import Testing
         #expect(CaptureViewerModel(lines: lines, query: SearchQuery(text: "zzz"), pictureStored: true).heading == "No matching lines")
     }
 }
+
+@Suite struct SearchFilterTextTests {
+    private let utc = TimeZone(identifier: "UTC")!
+    private let english = Locale(identifier: "en_US")
+
+    private func texts(_ query: SearchQuery, context: String? = nil) -> [String] {
+        SearchPanelModel.filterTexts(query, contextName: context, timezone: utc, locale: english)
+    }
+
+    @Test func eachActiveFilterIsNamedInAFixedOrder() {
+        #expect(texts(SearchQuery(text: "x")) == [])
+        #expect(texts(SearchQuery(text: "x", kinds: [.tasks, .appointments])) == ["Kind: Appointments, Tasks"])
+        #expect(texts(SearchQuery(text: "x", kinds: [.captures, .reminders])) == ["Kind: Reminders, Captures"])
+        #expect(texts(SearchQuery(text: "x", context: .one("a")), context: "Customer A") == ["Context: Customer A"])
+        #expect(texts(SearchQuery(text: "x", context: .none)) == ["No context"])
+        let range = SearchFixture.date(1, hour: 0)...SearchFixture.date(31, hour: 23)
+        #expect(texts(SearchQuery(text: "x", dates: range)) == ["Dates: 1 Oct – 31 Oct"])
+        #expect(texts(SearchQuery(text: "x", includeDismissed: true)) == ["Including dismissed"])
+        let all = SearchQuery(text: "x", kinds: [.tasks], context: .none, dates: range, includeDismissed: true)
+        #expect(texts(all) == ["Kind: Tasks", "No context", "Dates: 1 Oct – 31 Oct", "Including dismissed"])
+    }
+
+    @Test func theEmptyMessageNamesTheFiltersThatAreOn() {
+        let query = SearchQuery(text: "zzz", kinds: [.tasks], context: .none)
+        let message = SearchPanelModel.message(for: query, results: .empty, state: .ready, contextName: nil)
+        #expect(message == "Nothing found with Kind: Tasks, No context.")
+        let waiting = SearchResults(items: [], captures: [], moreItems: false, moreCaptures: false, waitingToBeAnalysed: 2)
+        #expect(SearchPanelModel.message(for: query, results: waiting, state: .ready, contextName: nil)
+                == "Nothing found with Kind: Tasks, No context. 2 captures are still waiting to be analysed.")
+    }
+
+    @Test func clearingFiltersLeavesTheTextAndNothingElse() {
+        var query = SearchQuery(text: "zzz", kinds: [.tasks], context: .none, dates: SearchFixture.date(1)...SearchFixture.date(2), includeDismissed: true)
+        #expect(query.hasFilters)
+        query.clearFilters()
+        #expect(query == SearchQuery(text: "zzz") && !query.hasFilters)
+        var kinds = SearchQuery(text: "q", kinds: [.tasks, .reminders])
+        kinds.kinds.remove(.tasks)                      // clearing one filter keeps the rest
+        #expect(kinds.kinds == [.reminders])
+    }
+}
+
+@Suite struct SearchDatePresetTests {
+    private var calendar: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }
+    private let now = SearchFixture.date(15, hour: 14)
+
+    @Test func presetsGiveWholeDayRangesAroundNow() {
+        let today = SearchPanelModel.DatePreset.today.range(now: now, calendar: calendar)
+        #expect(today.lowerBound == SearchFixture.date(15, hour: 0) && today.upperBound > SearchFixture.date(15, hour: 23) && today.upperBound < SearchFixture.date(16, hour: 0))
+        let week = SearchPanelModel.DatePreset.last7Days.range(now: now, calendar: calendar)
+        #expect(week.lowerBound == SearchFixture.date(9, hour: 0) && week.contains(now))
+        let month = SearchPanelModel.DatePreset.thisMonth.range(now: now, calendar: calendar)
+        #expect(month.lowerBound == SearchFixture.date(1, hour: 0) && month.contains(SearchFixture.date(31, hour: 12)) && !month.contains(SearchFixture.date(1, month: 11, hour: 1)))
+        let next = SearchPanelModel.DatePreset.next30Days.range(now: now, calendar: calendar)
+        #expect(next.lowerBound == SearchFixture.date(15, hour: 0) && next.contains(SearchFixture.date(14, month: 11)) && !next.contains(SearchFixture.date(16, month: 11)))
+    }
+
+    @Test func customRangesAreWholeDaysAndNeverBackwards() {
+        let range = SearchPanelModel.customRange(from: SearchFixture.date(20, hour: 9), to: SearchFixture.date(10, hour: 18), calendar: calendar)
+        #expect(range.lowerBound == SearchFixture.date(10, hour: 0) && range.upperBound > SearchFixture.date(20, hour: 23))        // swapped, widened to whole days
+    }
+}

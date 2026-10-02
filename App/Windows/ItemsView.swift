@@ -82,6 +82,9 @@ struct ItemsView: View {
                     .accessibilityLabel("Show dismissed items")
 
                 Spacer(minLength: 0)
+                TextField("Search items", text: $model.searchText)
+                    .textFieldStyle(.roundedBorder).frame(width: 200)
+                    .accessibilityLabel("Search items")
             }
             HStack(spacing: 8) {
                 Picker("Show", selection: $model.filter.scope) {

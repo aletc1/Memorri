@@ -20,6 +20,9 @@ struct SearchPanelView: View {
     let onOpen: (SearchPanelModel.Target) -> Void
     let onClose: () -> Void
     @FocusState private var focused: Bool
+    @State private var customOpen = false
+    @State private var customFrom = Date()
+    @State private var customTo = Date()
 
     var body: some View {
         @Bindable var model = model
@@ -33,6 +36,7 @@ struct SearchPanelView: View {
                     .accessibilityLabel("Search")
             }
             .padding(12)
+            filterBar
             Divider()
             resultList
         }
@@ -42,6 +46,53 @@ struct SearchPanelView: View {
         .onKeyPress(.escape) { onClose(); return .handled }
         .onChange(of: model.focusToken) { focused = true }
         .task { focused = true }
+    }
+
+    private var filterBar: some View {
+        @Bindable var model = model
+        return HStack(spacing: 8) {
+            Menu("Kind") {
+                ForEach([(SearchQuery.Kinds.appointments, "Appointments"), (.tasks, "Tasks"), (.reminders, "Reminders"), (.captures, "Captures")], id: \.1) { kind, name in
+                    Button { model.toggle(kind) } label: { if model.kinds.contains(kind) { Label(name, systemImage: "checkmark") } else { Text(name) } }
+                }
+                Divider()
+                Button("Any kind") { model.kinds = [] }
+            }
+            .accessibilityLabel("Kind filter")
+            Menu("Context") {
+                Button("Any context") { model.context = .any }
+                Button("No context") { model.context = .none }
+                Divider()
+                ForEach(model.contexts, id: \.id) { context in Button(context.name) { model.context = .one(context.id) } }
+            }
+            .accessibilityLabel("Context filter")
+            Menu("Date") {
+                Button("Any date") { model.dates = nil }
+                Divider()
+                ForEach(SearchPanelModel.DatePreset.allCases, id: \.self) { preset in Button(preset.rawValue) { model.dates = preset.range(now: Date()) } }
+                Divider()
+                Button("Custom range…") { customOpen = true }
+            }
+            .accessibilityLabel("Date filter")
+            .popover(isPresented: $customOpen) {
+                VStack(alignment: .leading, spacing: 8) {
+                    DatePicker("From", selection: $customFrom, displayedComponents: .date)
+                    DatePicker("To", selection: $customTo, displayedComponents: .date)
+                    HStack { Spacer(); Button("Apply") { model.dates = SearchPanelModel.customRange(from: customFrom, to: customTo); customOpen = false }.keyboardShortcut(.defaultAction) }
+                }
+                .padding(12).frame(width: 240)
+            }
+            Toggle("Dismissed", isOn: $model.includeDismissed).toggleStyle(.checkbox)
+                .accessibilityLabel("Include dismissed items")
+            Spacer(minLength: 0)
+            if model.hasFilters {
+                Text(model.activeFilterTexts.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Button("Clear filters") { model.clearFilters() }.controlSize(.small)
+                    .accessibilityLabel("Clear all filters")
+            }
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 12).padding(.bottom, 8)
     }
 
     @ViewBuilder private var resultList: some View {

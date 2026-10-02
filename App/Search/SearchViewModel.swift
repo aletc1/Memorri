@@ -29,7 +29,7 @@ final class SearchViewModel {
 
     var query: SearchQuery { SearchQuery(text: text, kinds: kinds, context: context, dates: dates, includeDismissed: includeDismissed) }
     var rows: [SearchPanelModel.Row] { SearchPanelModel.rows(results) }
-    var message: String? { SearchPanelModel.message(for: query, results: results, state: state, contextName: nil) }
+    var message: String? { SearchPanelModel.message(for: query, results: results, state: state, contextName: contextName(contextID)) }
     func contextName(_ id: String?) -> String? { id.flatMap { id in contexts.first { $0.id == id }?.name } }
 
     /// The panel opens: a fresh field with the cursor in it. Filters stay as the user left them.
@@ -43,8 +43,16 @@ final class SearchViewModel {
 
     func close() { running?.cancel(); observing?.cancel(); observing = nil }
 
-    func clearFilters() { kinds = []; context = .any; dates = nil; includeDismissed = false }
-    var hasFilters: Bool { !kinds.isEmpty || context != .any || dates != nil || includeDismissed }
+    func clearFilters() {
+        var cleared = query
+        cleared.clearFilters()
+        kinds = cleared.kinds; context = cleared.context; dates = cleared.dates; includeDismissed = cleared.includeDismissed
+    }
+    var hasFilters: Bool { query.hasFilters }
+
+    func toggle(_ kind: SearchQuery.Kinds) { if kinds.contains(kind) { kinds.remove(kind) } else { kinds.insert(kind) } }
+    var activeFilterTexts: [String] { SearchPanelModel.filterTexts(query, contextName: contextName(contextID)) }
+    private var contextID: String? { if case .one(let id) = context { id } else { nil } }
 
     func move(_ delta: Int) { selection = SearchPanelModel.move(from: selection, by: delta, count: rows.count) }
 

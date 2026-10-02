@@ -70,17 +70,72 @@ public enum SearchPanelModel {
         return parts.joined(separator: ", ")
     }
 
+    /// The active filters as short phrases, in a fixed order: kind, context, dates, dismissed.
+    public static func filterTexts(_ query: SearchQuery, contextName: String?, timezone: TimeZone = .current, locale: Locale = .current) -> [String] {
+        var texts: [String] = []
+        if !query.kinds.isEmpty {
+            let order: [(SearchQuery.Kinds, String)] = [(.appointments, "Appointments"), (.tasks, "Tasks"), (.reminders, "Reminders"), (.captures, "Captures")]
+            texts.append("Kind: " + order.filter { query.kinds.contains($0.0) }.map(\.1).joined(separator: ", "))
+        }
+        switch query.context {
+        case .any: break
+        case .none: texts.append("No context")
+        case .one: texts.append("Context: " + (contextName ?? "unknown"))
+        }
+        if let dates = query.dates {
+            let formatter = DateFormatter()
+            formatter.locale = locale; formatter.timeZone = timezone; formatter.dateFormat = "d MMM"
+            texts.append("Dates: \(formatter.string(from: dates.lowerBound)) – \(formatter.string(from: dates.upperBound))")
+        }
+        if query.includeDismissed { texts.append("Including dismissed") }
+        return texts
+    }
+
     /// What the panel shows in place of results, or nil when there are results to show.
     public static func message(for query: SearchQuery, results: SearchResults, state: SearchState, contextName: String?) -> String? {
         if case .preparing(let done, let total) = state { return "Search is being prepared (\(done) of \(total))" }
         guard query.isSearchable else { return "Type at least two letters" }
         guard results.items.isEmpty, results.captures.isEmpty else { return nil }
-        var text = "Nothing found"
+        let filters = filterTexts(query, contextName: contextName)
+        var text = "Nothing found" + (filters.isEmpty ? "" : " with " + filters.joined(separator: ", "))
         if results.waitingToBeAnalysed > 0 {
             let n = results.waitingToBeAnalysed
             text += ". \(n) \(n == 1 ? "capture is" : "captures are") still waiting to be analysed."
+        } else if !filters.isEmpty {
+            text += "."
         }
         return text
+    }
+
+    // MARK: Date filter
+
+    /// The ready-made date ranges of the Date menu; each is whole days.
+    public enum DatePreset: String, Sendable, CaseIterable {
+        case today = "Today", last7Days = "Last 7 days", last30Days = "Last 30 days", thisMonth = "This month", next30Days = "Next 30 days"
+
+        public func range(now: Date, calendar: Calendar = .current) -> ClosedRange<Date> {
+            let today = calendar.startOfDay(for: now)
+            func end(of day: Date) -> Date { calendar.date(byAdding: DateComponents(day: 1, second: -1), to: calendar.startOfDay(for: day)) ?? day }
+            func days(_ n: Int) -> Date { calendar.date(byAdding: .day, value: n, to: today) ?? today }
+            switch self {
+            case .today: return today...end(of: today)
+            case .last7Days: return days(-6)...end(of: today)
+            case .last30Days: return days(-29)...end(of: today)
+            case .next30Days: return today...end(of: days(30))
+            case .thisMonth:
+                let start = calendar.date(from: calendar.dateComponents([.year, .month], from: today)) ?? today
+                let last = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start) ?? today
+                return start...end(of: last)
+            }
+        }
+    }
+
+    /// A range the user picked: the earlier date first, from the start of its day to the end of the later one.
+    public static func customRange(from: Date, to: Date, calendar: Calendar = .current) -> ClosedRange<Date> {
+        let first = min(from, to), last = max(from, to)
+        let start = calendar.startOfDay(for: first)
+        let end = calendar.date(byAdding: DateComponents(day: 1, second: -1), to: calendar.startOfDay(for: last)) ?? last
+        return start...end
     }
 
     // MARK: Rows and keys

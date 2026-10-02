@@ -32,6 +32,12 @@ public struct SearchQuery: Sendable, Equatable {
 
     public var terms: Terms { Self.parse(text) }
 
+    /// True when any filter is on (the text does not count).
+    public var hasFilters: Bool { !kinds.isEmpty || context != .any || dates != nil || includeDismissed }
+
+    /// Switches every filter off and keeps the text.
+    public mutating func clearFilters() { kinds = []; context = .any; dates = nil; includeDismissed = false }
+
     /// A positive term and at least two letters or digits among the positive terms.
     public var isSearchable: Bool {
         let terms = self.terms
