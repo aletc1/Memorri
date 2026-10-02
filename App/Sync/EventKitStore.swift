@@ -13,6 +13,9 @@ final class EventKitStore: EventStoring, @unchecked Sendable {
 
     private func type(_ kind: SyncEntryKind) -> EKEntityType { kind == .event ? .event : .reminder }
 
+    /// Asks the system to look for calendars and lists made since (in Calendar or Reminders, or on another device).
+    func refreshSources() { store.refreshSourcesIfNecessary() }
+
     // MARK: Access
 
     func access(for kind: SyncEntryKind) -> SyncAccess {

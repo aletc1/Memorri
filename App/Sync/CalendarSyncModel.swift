@@ -70,6 +70,12 @@ final class CalendarSyncModel {
         }
     }
 
+    /// The Refresh button, and what runs when Calendar changed or the app came back to the front: look for new calendars and lists again.
+    func refresh() {
+        services.eventKit.refreshSources()
+        reload()
+    }
+
     /// Listens for finished runs so the tab stays current while it is open.
     func follow() async {
         await services.coordinator.onOutcome { [weak self] outcome in

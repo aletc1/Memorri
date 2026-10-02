@@ -22,6 +22,13 @@ struct CalendarSyncView: View {
             model.reload()
             await model.follow()
         }
+        .task {
+            // A calendar made in Calendar shows up without pressing Refresh: when Calendar changes, and when Memorri comes to the front again.
+            for await _ in NotificationCenter.default.notifications(named: EventKitStore.changed) { model?.refresh() }
+        }
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) { model?.refresh() }
+        }
     }
 
     @ViewBuilder
@@ -37,6 +44,12 @@ struct CalendarSyncView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Where Memorri writes").font(.headline)
+                    Spacer()
+                    Button { model.refresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                        .help("Look for calendars and lists you made since. They also appear on their own when you come back to Memorri")
+                }
                 picker("Calendar for appointments", model.calendars, selection: model.calendarID, access: model.access(.event), missing: model.calendarMissing, notice: model.calendarNotice,
                        help: "Appointments are written only here. Create a calendar named Memorri in Calendar and it is chosen for you.") { model.chooseCalendar($0) }
                 picker("List for tasks and reminders", model.lists, selection: model.listID, access: model.access(.reminder), missing: model.listMissing, notice: model.listNotice,
