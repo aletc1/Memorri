@@ -60,8 +60,12 @@ New `FieldProvenance.reason` values, all with origin `inferred` (so ReviewRules 
 
 `library-reread-version`: the windows prompt version the library was last queued for; the one-off enqueue runs when it is lower than the current one.
 
+## evidence (geometry 3)
+
+For findings with a window, `region_json` is the window's frame, or a 1400 x 800 rectangle around the cited lines inside it (research R10a), and `geometry` is 3. Older rows (1, 2) are made again while their picture is stored.
+
 ## Rules
 
 - A finding's cited lines must belong to its window; others are discarded (`outside the window`).
 - `same-picture-different` applies to findings with the same `window_key` only.
-- Evidence regions are clamped to the window's frame.
+- Evidence regions never leave the window's frame.

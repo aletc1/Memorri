@@ -22,6 +22,11 @@
 - Q: How should window names (application and window title) stored with each sighting be kept? → A: Like capture data: kept with the sighting while its item exists, removed by "Delete everything", never logged or sent anywhere; capture retention does not remove them (the same rule as evidence cut-outs).
 - Q: How should the app decide which windows are worth reading? → A: The model decides for every visible window, in the one sorting call; there is no list of known applications.
 
+### Session 2026-10-02 (after the plan)
+
+- Q: What should an item's evidence cut-out show once windows are known? → A: The window the finding was read from; when that window is larger than a maximum size (1400 x 800 pixels of the capture), a rectangle of that size around the cited lines, kept inside the window. Captures without a recorded window keep the cut-out of spec 006.
+- Q: Does a second model help to identify windows? → A: No. Measured on drawn multi-window screens (see `research.md`, R11), the model already in use sorts windows better than the alternative; one model stays.
+
 ## Why this exists
 
 On 1 October 2026 a calendar left on February 2026 was analysed and every entry came out in October and November. The picture said February in two places; the code never looked at the right words, and nothing marked the date as a guess. A stop-gap already ships: the month title and a month label are read, the calendar's own window is used for the date context, and a month nobody names is flagged as a guess. That fixes the one failure. It does not change the way a picture is analysed: one classification and one extraction for the whole screen, the calendar found afterwards by its text. The same weakness will show again with two calendars on screen, a mail window beside a calendar, a remote desktop with its own clock, or a window half-covered by another. This spec makes the window the unit of analysis.
@@ -85,7 +90,7 @@ The user opens an item and sees, with each sighting, the window it was read from
 
 **Why this priority**: It is the visible trace of the change and helps checking an item, but nothing depends on it.
 
-**Independent Test**: Analyse a capture with two windows and check that each sighting names its window in the item detail.
+**Independent Test**: Analyse a capture with two windows and check that each sighting names its window in the item detail and that its cut-out shows that window.
 
 **Acceptance Scenarios**:
 
@@ -141,7 +146,7 @@ After the update, every stored capture whose picture is still kept is re-read wi
 - **FR-011**: The number of model calls for one capture MUST NOT exceed one (sorting the windows) plus the number of windows that can hold events and are not month grids; month grids read from their geometry MUST NOT need a model call, and results already stored (text, window sorting) MUST be reused.
 - **FR-011a**: After the update, the system MUST queue every stored capture whose picture is still kept for re-reading with the new analysis, at a priority below new captures, MUST reconcile its findings again, and MUST keep every value the user edited, locked, approved or dismissed. Captures whose picture is gone MUST be skipped and keep their sightings.
 - **FR-012**: The evaluation set MUST include captures with several windows, overlapping windows, a hidden window with misleading text, a remote window with its own clock, and calendar views on months other than the capture's, and the scores MUST be reported per case.
-- **FR-013**: Evidence cut-outs and the "show whole capture" view (spec 006) MUST keep working for sightings from any window, with the cut-out inside the window it was read from.
+- **FR-013**: Evidence cut-outs and the "show whole capture" view (spec 006) MUST keep working for sightings from any window. For a finding with a window, the cut-out MUST be that window (its visible part), or, when the window is larger than 1400 x 800 pixels of the capture, a rectangle of that size around the cited lines inside the window; it MUST never take in pixels of other windows beyond the window's own frame. Cut-outs of an older shape are made again while their picture is stored.
 - **FR-014**: Everything stays on the Mac: window frames, titles and clocks are read from the capture's stored data and the local model only.
 
 ### Key Entities

@@ -6,7 +6,7 @@
 
 ## Summary
 
-A capture is split into its visible windows from the stored stack and frames (`capture_windows`), with the text a window in front covers taken away. One model call ("windows", replacing "classify") sees every visible window and says, per window, whether it can hold events and what kind of view it is. Each relevant window is then read on its own: month grids by geometry (no call), everything else by one extraction call on the window's cut of the picture and its own lines. The date context (title, labels, headers, conflicts) and the reference clock come from the window and its surroundings only; a month or year nothing names, a conflict, or an unreadable or far-off clock flags the date as a guess. Findings carry their window; sightings and evidence copy its application and title. After the update the library is re-read once in the background, behind new captures, reusing the stored text. Reconciliation (spec 005) and evidence and review (spec 006) run unchanged on the findings of all windows of a picture.
+A capture is split into its visible windows from the stored stack and frames (`capture_windows`), with the text a window in front covers taken away. One model call ("windows", replacing "classify") sees every visible window and says, per window, whether it can hold events and what kind of view it is. Each relevant window is then read on its own: month grids by geometry (no call), everything else by one extraction call on the window's cut of the picture and its own lines. The date context (title, labels, headers, conflicts) and the reference clock come from the window and its surroundings only; a month or year nothing names, a conflict, or an unreadable or far-off clock flags the date as a guess. Findings carry their window; sightings and evidence copy its application and title. Evidence cut-outs show the finding's window (or, for a very large window, a 1400 x 800 area around the cited lines). One model (`qwen3-vl:8b-instruct`) does the sorting: it beat the alternative in a quick trial (research R11). After the update the library is re-read once in the background, behind new captures, reusing the stored text. Reconciliation (spec 005) and evidence and review (spec 006) run unchanged on the findings of all windows of a picture.
 
 ## Technical Context
 
@@ -81,7 +81,7 @@ Packages/MemorriCore/Sources/MemorriCore/
 │   └── LibraryReread.swift          # one-off enqueue after the update (FR-011a)
 ├── Storage/Migrations.swift         # v8
 ├── Reconciliation/                  # sightings copy window app/title; same-picture rule scoped to a window
-├── Evidence/                        # evidence copies window app/title; region clamped to the window
+├── Evidence/                        # evidence copies window app/title; cut-out = the window or a 1400x800 area of it (geometry 3)
 └── Evaluation/                      # multi-window synthetic cases, per-window scores
 
 App/Windows/EvidenceViews.swift      # window name on each card (US4)

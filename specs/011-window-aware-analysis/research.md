@@ -44,6 +44,24 @@
 
 - **Decision**: a retry (not forced) reuses the stored windows answer when the window list is the same (same keys and frames) and the prompt version matches, and the stored extraction run of each window by step name `extract:<key>`. Model calls: 1 (windows) + one per relevant window that is not a month grid.
 
+## R10a. Evidence cut-out from the window
+
+- **Decision**: for a finding with a window, the cut-out region is the window's frame clipped to the picture (not the whole screen, never other windows' pixels beyond the frame). When the frame is larger than 1400 x 800 pixels, the region is a 1400 x 800 rectangle centred on the union of the cited lines (with the margin of spec 006), shifted to stay inside the frame and always holding the cited lines when they fit. The saved file is still scaled to at most 1600 px wide. Evidence geometry version 3; version 2 cut-outs (context by share of the picture) are made again by the same remake pass as before. Findings without a window (captures before the stack) keep geometry 2.
+- **Rationale**: the user asked for the identified window, or a bounded subset of it; a window is what makes the calendar or mail recognisable. Windows in front are not removed from the picture, so a covered part of the cut-out may show another window: the frame is used as it is, and the cited lines are in its visible part by construction.
+
+## R11. One model or two for window sorting
+
+- **Experiment** (2026-10-02, not committed; drawn desktops with 3 to 5 overlapping windows of 9 kinds, 12 pictures, 47 windows, truth known; prompt of `windows-v1` with the window list and first lines, JSON-schema output, temperature 0, thinking off):
+
+  | Model | Relevant right | Kind right | Mean time per picture |
+  |---|---|---|---|
+  | `qwen3-vl:8b-instruct` (ADR 0019) | 47/47 (1.00) | 45/47 (0.96) | 5.2 s |
+  | `minicpm-v4.5` | 42/47 (0.89) | 40/47 (0.85) | 3.8 s |
+
+- **Decision**: one model. The default model sorts better; the alternative missed relevant windows (documents, a chat, a week view), which loses data, and is only 1.4 s faster. Its two kind errors are week/month/day confusions that the geometry check (`corrected`) already repairs.
+- **Limits of the result**: drawn windows with clean titles; 47 windows is small; real screens will be harder. The eval of FR-012 repeats it on the new cases, and the windows prompt is only accepted if it holds there (constitution VI). If it does not, the answer to try next is a better prompt, not a second model.
+- **Alternatives**: minicpm-v4.5 for sorting and qwen for extraction (two models loaded on a Mac, longer model swaps, worse sorting).
+
 ## R10. Evaluation
 
 - **Decision**: `SyntheticChrome` learns to draw several windows (with stack order and frames in `meta.json`, including a menu-bar clock): calendar + mail side by side; calendar half under a browser full of dates and numbers; two calendar windows sharing an event; a remote-desktop window with its own taskbar clock in another zone; a month view on another month with a menu-bar clock. `GoldenWindow` gains an optional `stack`. Scores per case as today, plus model calls per case in the report (SC-004).

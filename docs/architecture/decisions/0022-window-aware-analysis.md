@@ -18,4 +18,5 @@ Option 3. Windows come from the stored stack and frames, minus what windows in f
 ## Consequences
 - Easier: dates and entries cannot leak between windows; two calendars on one screen work; the window shows in the item detail.
 - Harder: more model calls on busy screens (bounded by relevant windows); two analysis paths to keep; window titles are stored (kept with the item, removed by "Delete everything", never logged).
+- Evidence cut-outs show the identified window (or a 1400 x 800 area of a larger one). One model is enough for sorting windows: `qwen3-vl:8b-instruct` beat `minicpm-v4.5` on drawn multi-window screens (spec 011 research R11).
 - Revisit: the cost per capture after a week of real use; whether remote desktops need their inner windows found from the picture.

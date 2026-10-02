@@ -61,6 +61,19 @@ public struct LibraryReread: Sendable {
 
 `AnalysisJobRecord` gains `priority`; `nextRunnable` orders by `priority, created_at, id`.
 
+## Evidence
+
+```swift
+extension EvidenceGeometry {
+    public static let version = 3
+    public static let maxWindowRegion = (width: 1400, height: 800)
+    /// The window's frame (clipped to the picture), or a maxWindowRegion rectangle around the cited lines inside it.
+    public static func region(lines: [PixelBox], window: PixelBox, pictureWidth: Int, pictureHeight: Int) -> PixelRegion?
+}
+```
+
+The picture-share rule of version 2 stays for findings without a window.
+
 ## Reconciliation and evidence
 
 `SightingRow` and `EvidenceRecord` gain `windowApp: String?`, `windowTitle: String?`. `ItemListModel.windowText(_:)` gives `"<app> — <title>"`, `"<app>"`, or nil.
