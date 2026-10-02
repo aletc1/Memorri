@@ -178,6 +178,50 @@ extension ItemOperations {
                 reconcileImage = image
                 didSomething = true
             }
+        case .applyTrial:
+            // The sightings the apply added go; the ones it removed come back, with their observations, under their old ids.
+            var blocked: Set<String> = []
+            func blockedItem(_ id: String) throws -> Bool {
+                if blocked.contains(id) { return true }
+                if try laterLive(id) { blocked.insert(id); skipped.append("a later change touched the same item"); return true }
+                return false
+            }
+            if case .array(let ids)? = op.detail["sightings"] {
+                for case .string(let sighting) in ids {
+                    guard let item = try String.fetchOne(db, sql: "SELECT item_id FROM sightings WHERE id = ?", arguments: [sighting]) else { continue }
+                    if try blockedItem(item) { continue }
+                    try db.execute(sql: "DELETE FROM sightings WHERE id = ?", arguments: [sighting])
+                    touch(item)
+                    didSomething = true
+                }
+            }
+            if case .array(let entries)? = op.detail["removed"] {
+                for entry in entries {
+                    guard case .string(let item)? = entry["item"], case .object(let sighting)? = entry["sighting"],
+                          try ItemStore.item(db, id: item) != nil else { continue }
+                    if try blockedItem(item) { continue }
+                    func insert(_ table: String, _ row: [String: JSONValue]) throws {
+                        let columns = row.keys.sorted()
+                        let values: [DatabaseValue] = columns.map { column in
+                            switch row[column]! {
+                            case .string(let text): text.databaseValue
+                            case .int(let n): n.databaseValue
+                            case .double(let x): x.databaseValue
+                            case .bool(let flag): (flag ? 1 : 0).databaseValue
+                            default: .null
+                            }
+                        }
+                        try db.execute(sql: "INSERT OR REPLACE INTO \(table) (\(columns.joined(separator: ", "))) VALUES (\(columns.map { _ in "?" }.joined(separator: ", ")))",
+                                       arguments: StatementArguments(values))
+                    }
+                    try insert("sightings", sighting)
+                    if case .array(let observations)? = entry["observations"] {
+                        for case .object(let row) in observations { try insert("observations", row) }
+                    }
+                    touch(item)
+                    didSomething = true
+                }
+            }
         default: break
         }
         // Items the operation made are removed once nothing is left in them.
