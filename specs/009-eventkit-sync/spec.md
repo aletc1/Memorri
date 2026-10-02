@@ -116,6 +116,7 @@ A `Preview` shows exactly what a sync would do (entries to create, update, remov
 - **FR-017**: A user who turns sync off MUST be able to keep or remove the entries Memorri made.
 - **FR-019**: Memorri MUST write to Calendar only in the calendar the user chose in Settings, and to Reminders only in the list the user chose. With no calendar chosen it MUST write no event at all (and with no list chosen, no reminder). Every create, update and delete MUST be refused if the entry is not in the chosen calendar or list, whatever the cause (a stale identifier, an entry moved by the user, a calendar deleted and made again).
 - **FR-020**: Changing the chosen calendar or list MUST show a preview of the move first (Memorri's entries are removed from the old one and written to the new one) and MUST NOT touch the old one until the user confirms; entries the user moved into another calendar MUST be left where they are and treated as removed by the user.
+- **FR-021**: The user's own calendars (for example Personal or Work, synced with mail and other tools) are left alone: the pickers list each calendar and list with its account, preselect one named `Memorri` when it exists and otherwise preselect nothing, and say plainly that Memorri works best in a calendar of its own, that it never creates calendars or lists, and that it never changes entries it did not make. Choosing a calendar that already holds other events MUST show a notice and MUST still never touch those events.
 - **FR-018**: Nothing but the fields of FR-005 and FR-006 MUST be written, and only to the chosen Calendar and Reminders list; capture pictures MUST NOT be attached.
 
 ### Key Entities
@@ -141,7 +142,7 @@ A `Preview` shows exactly what a sync would do (entries to create, update, remov
 
 - "Confident" means the Inbox rules already in place: an item is ready when it is active and does not need review, or when the user approved it.
 - The deep link uses a custom URL scheme (`memorri://item/<id>`) that opens the Items window on that item.
-- Only a calendar and a list the user can write to are offered; the app never creates calendars or lists itself.
+- The user creates a calendar (and a Reminders list) named `Memorri` themselves, for what Memorri provides; their Personal and Work calendars stay synced with mail and other tools and are never written to. Only calendars and lists the user can write to are offered; the app never creates calendars or lists itself.
 - Two-way sync is limited to the field edits, completion and deletion of FR-009 to FR-011; Memorri does not import events it did not create.
 - Past entries older than 90 days are not written (stated in the tab).
 - Cancellation detection (an event vanishing from a calendar screenshot) stays in spec 010.
