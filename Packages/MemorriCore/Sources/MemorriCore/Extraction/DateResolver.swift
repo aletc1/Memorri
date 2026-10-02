@@ -13,10 +13,17 @@ public struct DateHeader: Sendable, Equatable {
     /// True when nothing on the picture named the month (no title, no label with a month's name) and it was taken from the capture's
     /// date: the day numbers alone fit the same weekday grid in several months. Dates read from this header are only guesses.
     public let monthAssumed: Bool
+    /// True when two pieces of evidence in the same window disagree about the month or year (a title and a label that cannot both be right):
+    /// the date is then a guess too, and nothing is chosen silently (spec 011, FR-007).
+    public let monthConflict: Bool
 
-    public init(line: Int, midX: Double, midY: Double = 0, cellWidth: Double = 0, date: DateComponents, monthAssumed: Bool = false) {
+    public init(line: Int, midX: Double, midY: Double = 0, cellWidth: Double = 0, date: DateComponents, monthAssumed: Bool = false, monthConflict: Bool = false) {
         self.line = line; self.midX = midX; self.midY = midY; self.cellWidth = cellWidth; self.date = date; self.monthAssumed = monthAssumed
+        self.monthConflict = monthConflict
     }
+
+    /// Why a date read from this header is only a guess: the reason recorded with it, or nil when it is read.
+    var guessReason: String? { monthConflict ? "month-conflict" : (monthAssumed ? "month-assumed" : nil) }
 }
 
 /// What a date text is resolved against: when and where the picture was taken, what its headers say, and how its numbers are ordered.
@@ -31,14 +38,16 @@ public struct ResolutionContext: Sendable {
     public let locales: [Locale]
     /// When an email was sent: "tomorrow" in an email means tomorrow from then, not from the capture.
     public let sentReference: Date?
+    /// The moment "today" means in the window being read: its own clock, the screen's, or the capture time (spec 011). Nil reads "today" from `captureTime`.
+    public let clock: ReferenceClock?
 
     public init(captureTime: Date, timezone: TimeZone, headers: [DateHeader] = [], lines: [RecognisedLine] = [], dateOrder: DateOrder? = nil,
-                locales: [Locale], sentReference: Date? = nil, cells: [DateHeader] = []) {
+                locales: [Locale], sentReference: Date? = nil, cells: [DateHeader] = [], clock: ReferenceClock? = nil) {
         self.captureTime = captureTime; self.timezone = timezone; self.headers = headers; self.lines = lines; self.dateOrder = dateOrder
-        self.locales = locales; self.sentReference = sentReference; self.cells = cells
+        self.locales = locales; self.sentReference = sentReference; self.cells = cells; self.clock = clock
     }
 
-    var reference: Date { sentReference ?? captureTime }
+    var reference: Date { sentReference ?? clock?.instant ?? captureTime }
 }
 
 /// A date or time field after resolution. `date` is nil when the text could not be settled; the text is then kept as written.
@@ -105,8 +114,8 @@ public enum DateResolver {
             let calendarEntry = (!context.cells.isEmpty || !context.headers.isEmpty) && draft.allDay != false
             if field == "start", draft.allDay == true || calendarEntry, draft.startText.map(isBlank) ?? true, !nameDay(draft.dateText, context),
                let header = headerDay(draft: draft, context: context), let date = makeDate(header.day, hour: nil, minute: nil, zone: context.timezone) {
-                return ResolvedValue(date: date, allDay: true, provenance: FieldProvenance(origin: header.assumed ? .inferred : .read, rule: header.rule,
-                                                                                          reason: header.assumed ? "month-assumed" : nil), unresolvedText: nil)
+                return ResolvedValue(date: date, allDay: true, provenance: FieldProvenance(origin: header.reason == nil ? .read : .inferred, rule: header.rule,
+                                                                                          reason: header.reason), unresolvedText: nil)
             }
             return none
         }
@@ -133,6 +142,9 @@ public enum DateResolver {
         let zone = context.timezone
         let today = day(of: context.reference, zone: zone)
         let reasonForOrder = parsed.orderAssumed ? "date-order" : nil
+        // Words that count from "today" are guesses when the clock they count from was not read or not believed (an email's own date is no guess).
+        let referenceGuess = context.clock?.isGuess == true && context.sentReference == nil
+        func fromToday(_ day: Day, _ rule: String) -> Base { Base(day: day, rule: rule, reason: referenceGuess ? "reference-assumed" : nil) }
 
         if let month = parsed.month, let dayNumber = parsed.day {
             let year = parsed.year ?? nearestYear(month: month, day: dayNumber, weekday: parsed.weekday, reference: today, zone: zone)
@@ -141,17 +153,17 @@ public enum DateResolver {
         }
         if let relative = parsed.relative {
             switch relative {
-            case .today: return Base(day: today, rule: "relative-day", reason: nil)
-            case .tomorrow: return Base(day: adding(1, to: today, zone: zone), rule: "relative-day", reason: nil)
-            case .yesterday: return Base(day: adding(-1, to: today, zone: zone), rule: "relative-day", reason: nil)
-            case .inDays(let n): return Base(day: adding(n, to: today, zone: zone), rule: "relative-day", reason: nil)
+            case .today: return fromToday(today, "relative-day")
+            case .tomorrow: return fromToday(adding(1, to: today, zone: zone), "relative-day")
+            case .yesterday: return fromToday(adding(-1, to: today, zone: zone), "relative-day")
+            case .inDays(let n): return fromToday(adding(n, to: today, zone: zone), "relative-day")
             case .next(let weekday):
                 let ahead = (weekday - isoWeekday(today, zone: zone) + 6) % 7 + 1      // 1...7: strictly after today
-                return Base(day: adding(ahead, to: today, zone: zone), rule: "relative-day", reason: nil)
+                return fromToday(adding(ahead, to: today, zone: zone), "relative-day")
             case .endOfWeek:
                 let current = isoWeekday(today, zone: zone)
                 let ahead = current <= 5 ? 5 - current : 12 - current              // this Friday, or next Friday from the weekend
-                return Base(day: adding(ahead, to: today, zone: zone), rule: "end-of-week", reason: nil)
+                return fromToday(adding(ahead, to: today, zone: zone), "end-of-week")
             }
         }
         if let weekday = parsed.weekday {
@@ -160,7 +172,7 @@ public enum DateResolver {
                 return Base(day: chosen, rule: "explicit-date", reason: nil)
             }
             let ahead = (weekday - isoWeekday(today, zone: zone) + 7) % 7          // 0...6: today counts
-            return Base(day: adding(ahead, to: today, zone: zone), rule: "weekday-only", reason: nil)
+            return fromToday(adding(ahead, to: today, zone: zone), "weekday-only")
         }
 
         // A time alone: the day comes from the picture's headers, else from the finding's other texts, else it is the reference day.
@@ -172,7 +184,7 @@ public enum DateResolver {
             return baseDay(other, field: field, draft: draft, context: context, allowFallback: false)
         }
         if let explicit = written(draft.dateText) ?? (field == "end" || field == "remind" ? written(draft.startText) : nil) { return explicit }
-        if let header = headerDay(draft: draft, context: context) { return Base(day: header.day, rule: header.rule, reason: header.assumed ? "month-assumed" : nil) }
+        if let header = headerDay(draft: draft, context: context) { return Base(day: header.day, rule: header.rule, reason: header.reason) }
         var sources: [String?] = [draft.dateText]
         if field == "end" || field == "remind" { sources.append(draft.startText) }
         for source in sources {
@@ -181,7 +193,7 @@ public enum DateResolver {
                   let base = baseDay(other, field: field, draft: draft, context: context, allowFallback: false) else { continue }
             return base
         }
-        return Base(day: today, rule: "time-only", reason: nil)
+        return fromToday(today, "time-only")
     }
 
     private static let clockLabel = try! NSRegularExpression(pattern: #"^\d{1,2}(?::\d{2})?\s?(?:[ap]\.?m\.?)?$"#, options: .caseInsensitive)
@@ -203,7 +215,7 @@ public enum DateResolver {
     /// The header above the finding's column: the model's own `column_line` when it is a header, else the header whose
     /// horizontal centre is nearest to the centre of the first cited line. In a month view the headers are the day labels of
     /// the cells, and without the model's pick the nearest label above the line in its column is used.
-    private static func headerDay(draft: FindingDraft, context: ResolutionContext) -> (day: Day, rule: String, assumed: Bool)? {
+    private static func headerDay(draft: FindingDraft, context: ResolutionContext) -> (day: Day, rule: String, reason: String?)? {
         func day(_ header: DateHeader) -> Day? {
             guard let y = header.date.year, let m = header.date.month, let d = header.date.day else { return nil }
             return Day(year: y, month: m, day: d)
@@ -218,7 +230,7 @@ public enum DateResolver {
         if !context.cells.isEmpty {
             // The cell the line sits in decides the day; the model's pick is only used for a line that has no position.
             guard let line = first else {
-                return draft.columnLine.flatMap { column in context.cells.first { $0.line == column } }.flatMap { cell in day(cell).map { ($0, "month-cell", cell.monthAssumed) } }
+                return draft.columnLine.flatMap { column in context.cells.first { $0.line == column } }.flatMap { cell in day(cell).map { ($0, "month-cell", cell.guessReason) } }
             }
             func distance(_ cell: DateHeader) -> Double {
                 let sideways = abs(cell.midX - cell.cellWidth / 2 - Double(line.box.x))
@@ -226,14 +238,14 @@ public enum DateResolver {
                 return sideways * 3 + upwards
             }
             let nearest = context.cells.filter { $0.midY <= line.box.midY }.min { distance($0) < distance($1) }
-            return nearest.flatMap { cell in day(cell).map { ($0, "month-cell", cell.monthAssumed) } }
+            return nearest.flatMap { cell in day(cell).map { ($0, "month-cell", cell.guessReason) } }
         }
         let headers = context.headers
         guard !headers.isEmpty else { return nil }
-        if let column = draft.columnLine, let header = headers.first(where: { $0.line == column }) { return day(header).map { ($0, "header-column", header.monthAssumed) } }
-        if headers.count == 1 { return day(headers[0]).map { ($0, "header-column", headers[0].monthAssumed) } }
+        if let column = draft.columnLine, let header = headers.first(where: { $0.line == column }) { return day(header).map { ($0, "header-column", header.guessReason) } }
+        if headers.count == 1 { return day(headers[0]).map { ($0, "header-column", headers[0].guessReason) } }
         guard let line = first else { return nil }
-        return headers.min { abs($0.midX - line.box.midX) < abs($1.midX - line.box.midX) }.flatMap { header in day(header).map { ($0, "header-column", header.monthAssumed) } }
+        return headers.min { abs($0.midX - line.box.midX) < abs($1.midX - line.box.midX) }.flatMap { header in day(header).map { ($0, "header-column", header.guessReason) } }
     }
 
     // MARK: Deadline reminder
@@ -270,10 +282,11 @@ public enum DateResolver {
     public static func headers(in lines: [RecognisedLine], locales: [Locale], reference: Date, timezone: TimeZone) -> [DateHeader] {
         let today = day(of: reference, zone: timezone)
         var hintMonth: Int?, hintYear: Int?
+        var titleEvidence: (month: Int, year: Int?)?
         var candidates: [(line: RecognisedLine, parsed: ParsedDate)] = []
         for line in lines + stackedHeaders(in: lines, locales: locales) {
             // A title that only names the month and year (`Febrero de 2026`) is not a date by itself but says which month the days are in.
-            if hintMonth == nil, let title = monthTitle(line.text, locales: locales) { hintMonth = title.month; hintYear = title.year; continue }
+            if hintMonth == nil, let title = monthTitle(line.text, locales: locales) { hintMonth = title.month; hintYear = title.year; titleEvidence = title; continue }
             guard var parsed = DateParser.parse(line.text, locales: locales), parsed.hour == nil, parsed.relative == nil else { continue }
             // "mar 13" is March 13 in English and Tuesday 13 in Spanish; a header needs a weekday, so the other reading is tried too.
             if parsed.weekday == nil, locales.count > 1, let other = DateParser.parse(line.text, locales: Array(locales.reversed())),
@@ -283,8 +296,13 @@ public enum DateResolver {
             } else if parsed.weekday == nil, let month = parsed.month, hintMonth == nil {
                 hintMonth = month
                 hintYear = parsed.year ?? DateParser.match(#"\b((?:19|20)\d{2})\b"#, in: line.text).flatMap { Int($0[1]) }
+                titleEvidence = (month, hintYear)
             }
         }
+        // The title and the headers that write their own month must agree (a month and its neighbours are fine: a week can cross the month's edge).
+        var evidence: [(month: Int, year: Int?)] = titleEvidence.map { [$0] } ?? []
+        evidence += candidates.compactMap { item in item.parsed.month.map { ($0, item.parsed.year) } }
+        let conflict = Self.evidenceDisagrees(evidence)
         // A header that writes its month (a day view's `Wednesday, October 14, 2026`) says which month the others, which only carry a
         // weekday and a number (`Wed 14`), are in.
         if hintMonth == nil, let named = candidates.first(where: { $0.parsed.month != nil }) {
@@ -311,7 +329,7 @@ public enum DateResolver {
             if chosen == nil || !valid(chosen!, zone: timezone) { chosen = nearestDay(weekday: weekday, day: dayNumber, reference: today, zone: timezone); assumed = true }
             guard let day = chosen, valid(day, zone: timezone) else { return nil }
             return DateHeader(line: item.line.n, midX: item.line.box.midX, midY: item.line.box.midY, date: DateComponents(year: day.year, month: day.month, day: day.day),
-                              monthAssumed: assumed)
+                              monthAssumed: assumed, monthConflict: conflict)
         }
         return filled(found.sorted { $0.midX < $1.midX }, zone: timezone)
     }
@@ -331,7 +349,7 @@ public enum DateResolver {
             for step in 1..<days {
                 let date = adding(step, to: from, zone: zone)
                 result.append(DateHeader(line: 0, midX: header.midX + gap * Double(step) / Double(days), midY: header.midY,
-                                         date: DateComponents(year: date.year, month: date.month, day: date.day), monthAssumed: header.monthAssumed))
+                                         date: DateComponents(year: date.year, month: date.month, day: date.day), monthAssumed: header.monthAssumed, monthConflict: header.monthConflict))
             }
         }
         return result
@@ -392,6 +410,31 @@ public enum DateResolver {
             if let parsed = DateParser.parse(line.text, locales: locales), parsed.weekday == nil, parsed.hour == nil, parsed.day == 1, let month = parsed.month { return month }
         }
         return nil
+    }
+
+    /// Every month a cell label names (`1 feb`, `1 mar`): the first of a month is often labelled with its name.
+    static func labelMonths(in lines: [RecognisedLine], locales: [Locale]) -> [Int] {
+        lines.compactMap { line -> Int? in
+            guard isCellLabel(line.text, locales: locales), line.text.contains(where: \.isLetter),
+                  let parsed = DateParser.parse(line.text, locales: locales), parsed.weekday == nil, parsed.hour == nil, parsed.day == 1 else { return nil }
+            return parsed.month
+        }
+    }
+
+    /// True when two of the months (with their years, when written) cannot belong to one view: a month and the ones next to it can (a week or a
+    /// month grid shows the end of one and the start of the next); anything further apart, or a year that does not fit, cannot.
+    static func evidenceDisagrees(_ evidence: [(month: Int, year: Int?)]) -> Bool {
+        for (i, a) in evidence.enumerated() {
+            for b in evidence.dropFirst(i + 1) {
+                if let ya = a.year, let yb = b.year {
+                    if abs((ya * 12 + a.month) - (yb * 12 + b.month)) > 1 { return true }
+                } else {
+                    let d = abs(a.month - b.month)
+                    if min(d, 12 - d) > 1 { return true }
+                }
+            }
+        }
+        return false
     }
 
     /// The cells of a month view, each with the date it shows. The day labels (lines that are only a number from 1 to 31) fix
@@ -467,6 +510,7 @@ public enum DateResolver {
         let today = day(of: reference, zone: timezone)
         var month = today.month, year = today.year
         var assumed = true
+        var conflict = false
         let gridLeft = columnCentre(0) - width / 2, gridRight = columnCentre(6) + width / 2
         let titles = lines.compactMap { line -> (line: RecognisedLine, month: Int, year: Int?)? in
             guard line.box.midY < rowCentre(0), let title = monthTitle(line.text, locales: locales) else { return nil }
@@ -479,9 +523,12 @@ public enum DateResolver {
             month = title.month
             year = title.year ?? today.year
             assumed = false
+            // The title and a label that names a month (`1 abr`) must be able to be right together.
+            conflict = evidenceDisagrees([(title.month, title.year)] + labelMonths(in: lines, locales: locales).map { ($0, nil) })
         } else if let named = labelMonth(in: lines, locales: locales) {
             month = named
             assumed = false
+            conflict = evidenceDisagrees(labelMonths(in: lines, locales: locales).map { ($0, nil) })
         }
 
         // The date of the first cell: every label votes for the day that would put its number where it is, in the shown month
@@ -510,7 +557,8 @@ public enum DateResolver {
             let cell = adding(index, to: start, zone: timezone)
             let row = index / 7, column = index % 7
             return DateHeader(line: byPlace[index]?.line.n ?? -(index + 1), midX: columnCentre(column), midY: byPlace[index]?.line.box.midY ?? rowCentre(row),
-                              cellWidth: width, date: DateComponents(year: cell.year, month: cell.month, day: cell.day), monthAssumed: assumed)
+                              cellWidth: width, date: DateComponents(year: cell.year, month: cell.month, day: cell.day), monthAssumed: assumed,
+                              monthConflict: conflict)
         }
     }
 

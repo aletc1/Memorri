@@ -17,10 +17,13 @@ public struct FoundFinding: Sendable, Equatable, Codable {
     public let citedLines: [Int]
     /// The text of the cited lines, joined, for the title-versus-citation check.
     public let citedText: String?
+    /// The window it was read from, when the picture was read window by window.
+    public let windowKey: String?
 
     public init(kind: String, title: String, start: Date? = nil, end: Date? = nil, due: Date? = nil, remind: Date? = nil,
                 allDay: Bool = false, people: [String] = [], place: String? = nil, inferred: [String] = [],
-                confidence: Double = 1, citedLines: [Int] = [], citedText: String? = nil) {
+                confidence: Double = 1, citedLines: [Int] = [], citedText: String? = nil, windowKey: String? = nil) {
+        self.windowKey = windowKey
         self.kind = kind; self.title = title; self.start = start; self.end = end; self.due = due; self.remind = remind
         self.allDay = allDay; self.people = people; self.place = place; self.inferred = inferred
         self.confidence = confidence; self.citedLines = citedLines; self.citedText = citedText

@@ -80,6 +80,8 @@ public struct CaseScore: Sendable, Equatable, Codable {
     public let disagreements: [FoundFinding]
     public let foundDetails: [FoundDetail]
     public let seconds: Double
+    /// The model calls the analysis made for this case (nil in reports from before they were counted).
+    public var modelCalls: Int? = nil
     /// Each wrong or missing tag in words (`theme: expected dark, found light (0.93)`), for reading what went wrong.
     public var tagProblems: [String]? = nil
     /// Each field of a matched finding that differs, in words (`Design review: end expected 10-14 15:30Z, found 10-14 15:00Z`).
@@ -101,6 +103,7 @@ public struct Aggregate: Sendable, Equatable, Codable {
     public var equalFields = 0
     public var kindCorrect = 0
     public var seconds = 0.0
+    public var modelCalls = 0
     public var ocrExact = 0, ocrExpected = 0, ocrOverlap = 0, ocrBoxed = 0
 
     public var precision: Double { Metrics.ratio(matched, found) }
@@ -114,7 +117,7 @@ public struct Aggregate: Sendable, Equatable, Codable {
     mutating func add(_ s: CaseScore) {
         cases += 1; found += s.foundCount; expected += s.expectedCount; matched += s.matchedCount
         comparedFields += s.comparedFields; equalFields += s.equalFields; kindCorrect += s.kindCorrect ? 1 : 0
-        seconds += s.seconds
+        seconds += s.seconds; modelCalls += s.modelCalls ?? 0
         ocrExact += s.ocrExact; ocrExpected += s.ocrExpected; ocrOverlap += s.ocrOverlap; ocrBoxed += s.ocrBoxed
     }
 }
@@ -174,7 +177,8 @@ public enum Metrics {
                          contextCorrect: contextCorrect, tagResults: tagResults, wrongHighConfidenceTags: wrongHigh,
                          ocrExact: ocr.exact, ocrExpected: ocr.expected, ocrOverlap: ocr.overlap, ocrBoxed: ocr.boxed,
                          missed: match.unmatchedExpected.map { expected[$0] }, unexpected: unexpected,
-                         disagreements: disagreements, foundDetails: details, seconds: result.seconds, tagProblems: tagProblems.isEmpty ? nil : tagProblems,
+                         disagreements: disagreements, foundDetails: details, seconds: result.seconds, modelCalls: result.steps.count,
+                         tagProblems: tagProblems.isEmpty ? nil : tagProblems,
                          fieldProblems: fieldProblems.isEmpty ? nil : fieldProblems)
     }
 
@@ -231,6 +235,7 @@ public enum Metrics {
         if want.allDay != nil || got.allDay { note((want.allDay ?? false) == got.allDay, "all day", "\(want.allDay ?? false)", "\(got.allDay)") }
         let wantPeople = Set((want.people ?? []).map { $0.lowercased() }), gotPeople = Set(got.people.map { $0.lowercased() })
         if !wantPeople.isEmpty || !gotPeople.isEmpty { note(wantPeople == gotPeople, "people", wantPeople.sorted().joined(separator: "/"), gotPeople.sorted().joined(separator: "/")) }
+        if let window = want.window { note(window == got.windowKey, "window", window, got.windowKey ?? "none") }
         let wantPlace = Matcher.normalise(want.place ?? ""), gotPlace = Matcher.normalise(got.place ?? "")
         if !wantPlace.isEmpty || !gotPlace.isEmpty { note(wantPlace == gotPlace, "place", want.place ?? "none", got.place ?? "none") }
         return (compared, equal, problems)

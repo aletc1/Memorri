@@ -2,24 +2,32 @@ import CoreGraphics
 import Foundation
 import ImageIO
 
-/// Answers from an earlier run, given back in place of the model so a run can be scored again without calling it.
-struct ReplayModel: ModelChatting {
-    let answers: [String: String]
+/// Answers from an earlier run, given back in place of the model so a run can be scored again without calling it. A picture read window
+/// by window had one extraction per window: they are given back in the order they were made.
+final class ReplayModel: ModelChatting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var answers: [String: [String]] = [:]
+    private var used: [String: Int] = [:]
 
     init(steps: [EvalStepRecord]) {
-        var answers: [String: String] = [:]
         for step in steps {
             guard let raw = step.rawAnswer else { continue }
-            answers[step.step] = raw.components(separatedBy: ModelTestJob.thinkingMarker).first ?? raw
+            let kind = step.step.hasPrefix("extract") ? "extract" : step.step
+            answers[kind, default: []].append(raw.components(separatedBy: ModelTestJob.thinkingMarker).first ?? raw)
         }
-        self.answers = answers
     }
 
     func chat(_ request: ChatRequest) async throws -> ChatResponse {
         var keys: Set<String> = []
         if case .object(let root) = request.schema, case .object(let properties)? = root["properties"] { keys = Set(properties.keys) }
-        let step = keys.contains("screen_kind") ? "classify" : "extract"
-        guard let answer = answers[step] else { throw OllamaClientError.badResponse }
+        let step = keys.contains("screen_kind") ? "classify" : (keys.contains("windows") ? "windows" : "extract")
+        let answer: String? = lock.withLock {
+            let index = used[step, default: 0]
+            used[step] = index + 1
+            guard let all = answers[step], !all.isEmpty else { return nil }
+            return all[min(index, all.count - 1)]
+        }
+        guard let answer else { throw OllamaClientError.badResponse }
         return ChatResponse(content: answer, thinking: nil, doneReason: "stop", totalDurationNanoseconds: nil, loadDurationNanoseconds: nil,
                             promptEvalNanoseconds: nil, evalCount: nil)
     }
@@ -71,7 +79,7 @@ public struct PipelineCaseAnalyser: CaseAnalysing {
         let windows = golden.meta.windows.compactMap { w -> WindowInfo? in
             guard w.frame.count == 4 else { return nil }
             return WindowInfo(appName: w.app, bundleID: w.bundleID, title: w.title,
-                              frame: PixelBox(x: w.frame[0], y: w.frame[1], width: w.frame[2], height: w.frame[3]))
+                              frame: PixelBox(x: w.frame[0], y: w.frame[1], width: w.frame[2], height: w.frame[3]), stack: w.stack)
         }
         let input = PipelineInput(image: image, classificationJPEG: copies.classificationJPEG, classificationSize: copies.classificationSize,
                                   analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: zone,
@@ -101,7 +109,7 @@ public struct PipelineCaseAnalyser: CaseAnalysing {
             let cited = f.citedLines.compactMap { n in result.lines.first { $0.n == n }?.text }.joined(separator: " ")
             return FoundFinding(kind: f.kind.rawValue, title: f.title, start: f.start, end: f.end, due: f.due, remind: f.remind, allDay: f.allDay,
                                 people: f.people, place: f.place, inferred: f.provenance.filter { $0.value.origin == .inferred }.keys.sorted(),
-                                confidence: f.confidence, citedLines: f.citedLines, citedText: cited)
+                                confidence: f.confidence, citedLines: f.citedLines, citedText: cited, windowKey: f.windowKey)
         }
         return CaseResult(kind: result.classification.kind.rawValue, findings: findings,
                           tags: result.tags.map { FoundTag(key: $0.key, value: $0.value, confidence: $0.confidence) },

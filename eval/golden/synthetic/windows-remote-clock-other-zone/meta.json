@@ -1,0 +1,36 @@
+{
+  "capturedAt" : "2026-10-14T18:30:00Z",
+  "displaySize" : [
+    2200,
+    1200
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "Microsoft Remote Desktop",
+      "bundleID" : "com.microsoft.rdc.macos",
+      "frame" : [
+        520,
+        60,
+        1660,
+        1060
+      ],
+      "stack" : 0,
+      "title" : "Remote Desktop Connection - Customer A"
+    },
+    {
+      "app" : "Notes",
+      "bundleID" : "com.apple.Notes",
+      "frame" : [
+        20,
+        60,
+        480,
+        700
+      ],
+      "stack" : 1,
+      "title" : "Notes"
+    }
+  ]
+}

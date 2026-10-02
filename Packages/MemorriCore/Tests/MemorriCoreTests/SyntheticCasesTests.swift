@@ -34,7 +34,7 @@ import Testing
     }
 
     @Test func thereAreEnoughCasesWithUniqueNames() {
-        #expect(cases.count >= 26)
+        #expect(cases.count >= 33)
         #expect(Set(cases.map(\.name)).count == cases.count)
     }
 
@@ -113,5 +113,106 @@ import Testing
             }
             #expect(c.meta.context == nil || c.expected.context == c.meta.context?.name, "\(c.name)")
         }
+    }
+
+    // MARK: windows (spec 011)
+
+    private var windowCases: [GoldenCaseSummary] { cases.filter { $0.features.contains("multi-window") } }
+
+    @Test func theMultiWindowCasesAreThereWithTheirWindowsStackedAndNamed() {
+        let names = Set(windowCases.map(\.name))
+        #expect(names.isSuperset(of: ["windows-calendar-and-mail", "windows-calendar-under-browser", "windows-two-calendars-same-event",
+                                      "windows-month-other-month-menu-clock", "windows-remote-clock-other-zone"]))
+        for c in windowCases {
+            let stacks = c.meta.windows.compactMap(\.stack)
+            #expect(c.meta.windows.count >= 2 && stacks.count == c.meta.windows.count && Set(stacks).count == stacks.count, "\(c.name)")
+            #expect(c.meta.windows.allSatisfy { $0.frame.count == 4 && $0.frame[0] >= 0 && $0.frame[1] >= 0 && $0.frame[0] + $0.frame[2] <= c.meta.displaySize[0]
+                                                && $0.frame[1] + $0.frame[3] <= c.meta.displaySize[1] }, "\(c.name)")
+            #expect(!c.expected.findings.isEmpty, "\(c.name)")
+            for f in c.expected.findings { #expect(f.window.map { key in stacks.contains { "w\($0)" == key } } == true, "\(c.name): \(f.title) names no window") }
+        }
+    }
+
+    @Test func everyMultiWindowCaseHasAMenuBarClockAmongItsLines() {
+        for c in windowCases {
+            #expect((c.expected.lines ?? []).contains { $0.text.hasPrefix("Wed 14 Oct ") && ($0.box?[1] ?? 99) < 28 }, "\(c.name)")
+        }
+    }
+
+    @Test func noExpectedLineIsUnderAWindowInFrontOfTheOneThatDrewIt() {
+        // A reader sees only what is not covered: the text of the calendar behind the browser is not among the expected lines.
+        let under = windowCases.first { $0.name == "windows-calendar-under-browser" }!
+        let browser = under.meta.windows.first { $0.app == "Safari" }!
+        for line in under.expected.lines ?? [] where line.text.hasPrefix("Thu") || line.text.hasPrefix("Fri") {
+            let box = line.box!
+            #expect(!(box[0] >= browser.frame[0] && box[1] >= browser.frame[1]), "\(line.text) is covered by the browser and should not be expected")
+        }
+        #expect(!(under.expected.lines ?? []).contains { $0.text == "Thu 12" || $0.text == "Fri 13" })
+    }
+
+    @Test func theCalendarUnderTheBrowserIsOnAnotherMonthThanTheCapturesAndTheBrowserNamesTheCapturesMonth() {
+        let under = windowCases.first { $0.name == "windows-calendar-under-browser" }!
+        #expect(under.features.contains("other-month"))
+        #expect(under.expected.findings.allSatisfy { f in f.start.map { Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "Europe/Madrid")!, from: $0).month == 3 } == true })
+        #expect((under.expected.lines ?? []).contains { $0.text.contains("October 2026") })
+        #expect(under.meta.capturedAt > Date(timeIntervalSince1970: 1_790_000_000))      // October 2026
+    }
+
+    @Test func theSameEventInTwoWindowsIsExpectedOncePerWindow() {
+        let two = windowCases.first { $0.name == "windows-two-calendars-same-event" }!
+        let review = two.expected.findings.filter { $0.title == "Design review" }
+        #expect(review.count == 2 && Set(review.compactMap(\.window)).count == 2 && Set(review.compactMap(\.start)).count == 1)
+    }
+
+    @Test func theTrackedFolderHoldsTheWindowCasesAsTheGeneratorDrawsThem() throws {
+        let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("eval/golden/synthetic")
+        let temp = TempDirectory()
+        try SyntheticCases.generate(into: temp.url)
+        for name in windowCases.map(\.name) {
+            for file in ["meta.json", "expected.json", "screenshot.png"] {
+                let tracked = try Data(contentsOf: folder.appendingPathComponent(name).appendingPathComponent(file))
+                let drawn = try Data(contentsOf: temp.url.appendingPathComponent(name).appendingPathComponent(file))
+                #expect(tracked == drawn, "run memorri-eval generate-synthetic: \(name)/\(file) changed")
+            }
+        }
+    }
+
+    @Test func aWindowCaseRoundTripsItsStackAndWindowKeysThroughTheFiles() throws {
+        let temp = TempDirectory()
+        try SyntheticCases.generate(into: temp.url)
+        let loaded = try GoldenCase.loadAll(in: temp.url).cases.first { $0.name == "windows-calendar-and-mail" }!
+        #expect(loaded.meta.windows.map(\.stack) == [0, 1])
+        #expect(Set(loaded.expected.findings.compactMap(\.window)) == ["w0", "w1"])
+    }
+
+    @Test func oldCasesDoNotMentionStacksOrWindowsInTheirFiles() throws {
+        let temp = TempDirectory()
+        try SyntheticCases.generate(into: temp.url)
+        for name in ["calendar-week-outlook-24h-blocks", "email-apple-mail-invite"] {
+            let meta = try String(contentsOf: temp.url.appendingPathComponent(name).appendingPathComponent("meta.json"), encoding: .utf8)
+            let expected = try String(contentsOf: temp.url.appendingPathComponent(name).appendingPathComponent("expected.json"), encoding: .utf8)
+            #expect(!meta.contains("\"stack\"") && !expected.contains("\"window\""), "\(name)")
+        }
+    }
+
+    @Test func theMonthCaseIsOnFebruaryUnderAMenuBarClockOfOctober() {
+        let c = windowCases.first { $0.name == "windows-month-other-month-menu-clock" }!
+        #expect(c.features.contains("other-month") && c.expected.screenKind == "email")
+        let lines = (c.expected.lines ?? []).map(\.text)
+        #expect(lines.contains("February 2026") && lines.contains("Wed 14 Oct 09:12"))
+        let calendarFindings = c.expected.findings.filter { $0.window == "w1" }
+        #expect(calendarFindings.count == 3 && calendarFindings.allSatisfy { f in f.start.map { Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "Europe/Madrid")!, from: $0).month == 2 } == true })
+        #expect(c.expected.findings.contains { $0.window == "w0" && $0.title == "Contract review" })
+    }
+
+    @Test func theRemoteCaseHasItsOwnClockADayAheadOfTheMacsAndExpectsTomorrowFromIt() {
+        let c = windowCases.first { $0.name == "windows-remote-clock-other-zone" }!
+        let lines = (c.expected.lines ?? []).map(\.text)
+        #expect(lines.contains("Wed 14 Oct 20:30") && lines.contains("Thu 15 Oct 03:30"))
+        #expect(c.features.contains("remote-clock"))
+        let meeting = c.expected.findings.first { $0.title == "Meeting" }
+        #expect(meeting?.start == SyntheticTime.date(2026, 10, 16, 10, 0, zone: "Europe/Madrid"))      // tomorrow from Thursday 15, not from Wednesday 14
+        #expect(c.meta.capturedAt == SyntheticTime.date(2026, 10, 14, 20, 30, zone: "Europe/Madrid"))
     }
 }

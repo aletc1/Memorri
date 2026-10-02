@@ -1,0 +1,36 @@
+{
+  "capturedAt" : "2026-10-14T07:12:00Z",
+  "displaySize" : [
+    2200,
+    1200
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "Calendar",
+      "bundleID" : "com.apple.iCal",
+      "frame" : [
+        1280,
+        60,
+        900,
+        760
+      ],
+      "stack" : 0,
+      "title" : "Calendar - Day"
+    },
+    {
+      "app" : "Calendar",
+      "bundleID" : "com.apple.iCal",
+      "frame" : [
+        20,
+        60,
+        1240,
+        760
+      ],
+      "stack" : 1,
+      "title" : "Calendar - Week"
+    }
+  ]
+}

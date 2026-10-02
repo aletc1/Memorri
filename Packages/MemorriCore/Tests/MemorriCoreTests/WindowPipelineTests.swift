@@ -265,4 +265,128 @@ import Testing
         #expect(again.model.requests(whereSchemaHas: "windows").isEmpty && result.steps.map(\.step) == ["extract:w0"])
         #expect(result.windows.map(\.windowKey) == ["w0", "w1", "w2"])
     }
+
+    // MARK: dates come from the window being read (spec 011, US2)
+
+    /// A week view in a window at (x, y): an optional title, headers `days` (text, column), and the block "13:00 Design review" in the third column.
+    /// Returns its lines (numbered from `first`) and the number of the block's line.
+    private func weekWindow(first: Int, x: Int, y: Int, title: String?, days: [String]) -> (lines: [RecognisedLine], block: Int) {
+        var lines: [RecognisedLine] = [], n = first
+        if let title { lines.append(line(n, title, x: x + 20, y: y + 20, w: 300)); n += 1 }
+        for (i, day) in days.enumerated() { lines.append(line(n, day, x: x + 100 + i * 220, y: y + 80, w: 80)); n += 1 }
+        lines.append(line(n, "13:00 Design review", x: x + 100 + 2 * 220 + 10, y: y + 300, w: 200))
+        return (lines, n)
+    }
+
+    private func start(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 13) -> Date { SyntheticTime.date(y, m, d, h, 0, zone: "Europe/Madrid") }
+
+    @Test func aBrowserWindowThatNamesAnotherMonthDoesNotNameTheCalendarsMonth() async throws {
+        let calendar = weekWindow(first: 1, x: 0, y: 60, title: "March 9 – 13, 2026", days: ["Mon 9", "Tue 10", "Wed 11", "Thu 12", "Fri 13"])
+        let browser = texts(["Quarterly revenue report - October 2026", "Oct 14, 2026   Actual   1,287,950", "Oct 21, 2026   Forecast   1,402,300", "Nov 4, 2026   Forecast   1,512,750"],
+                            from: calendar.block + 1, x: 1400, y: 120)
+        let rig = makeRig(lines: calendar.lines + browser)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer([entry("w0", relevant: false, kind: .other), entry("w1", relevant: true, kind: .calendarWeek)]))
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Design review","cited_lines":[\#(calendar.block)],"start_text":"13:00"}]}"#)
+        let result = try await rig.pipeline.analyse(input(windows: [window("Safari", stack: 0, 1350, 60, 800, 600), window("Calendar", stack: 1, 0, 60, 1300, 700)]), settings: settings)
+        let finding = try #require(result.findings.first)
+        #expect(finding.start == start(2026, 3, 11))                      // Wednesday of the week the calendar's own title names
+        #expect(finding.provenance["start"]?.origin == .read && finding.windowKey == "w1")
+    }
+
+    @Test func aPartOfTheCalendarCoveredByAnotherWindowIsNotRead() async throws {
+        // The calendar's right columns (Thu, Fri) are under a browser: their headers are not in its visible text, and the browser's are not its own.
+        let calendar = weekWindow(first: 1, x: 0, y: 60, title: "March 9 – 13, 2026", days: ["Mon 9", "Tue 10", "Wed 11"])
+        let hidden = [line(calendar.block + 1, "Thu 12", x: 1050, y: 140, w: 80), line(calendar.block + 2, "Fri 13", x: 1270, y: 140, w: 80)]       // under the browser
+        let rig = makeRig(lines: calendar.lines + hidden + texts(["a", "b", "c"], from: calendar.block + 3, x: 1400, y: 300))
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer([entry("w0", relevant: false, kind: .other), entry("w1", relevant: true, kind: .calendarWeek)]))
+        let result = try await rig.pipeline.analyse(input(windows: [window("Safari", stack: 0, 1000, 60, 1100, 700), window("Calendar", stack: 1, 0, 60, 1500, 700)]), settings: settings)
+        let prompt = try #require(rig.model.requests(whereSchemaHas: "findings").first).prompt
+        #expect(!prompt.contains("Thu 12") && !prompt.contains("Fri 13") && prompt.contains("Wed 11"))
+        #expect(result.windows.first { $0.windowKey == "w1" }?.visibleShare ?? 1 < 0.5)
+    }
+
+    @Test func aCalendarWithTooLittleVisibleToNameAMonthGivesGuessedDates() async throws {
+        // No title and only weekday-and-number headers: nothing in the window says which month, so the capture's month is a guess.
+        let calendar = weekWindow(first: 1, x: 0, y: 60, title: nil, days: ["Mon 12", "Tue 13", "Wed 14", "Thu 15", "Fri 16"])
+        let rig = makeRig(lines: calendar.lines + texts(["x", "y", "z"], from: calendar.block + 1, x: 1400, y: 300))
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer([entry("w0", relevant: false, kind: .other), entry("w1", relevant: true, kind: .calendarWeek)]))
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Design review","cited_lines":[\#(calendar.block)],"start_text":"13:00"}]}"#)
+        let result = try await rig.pipeline.analyse(input(windows: [window("Browser", stack: 0, 1350, 60, 800, 600), window("Calendar", stack: 1, 0, 60, 1300, 700)]), settings: settings)
+        let finding = try #require(result.findings.first)
+        #expect(finding.provenance["start"]?.origin == .inferred && finding.provenance["start"]?.reason == "month-assumed")
+    }
+
+    @Test func twoCalendarWindowsOnDifferentMonthsAreEachReadInTheirOwn() async throws {
+        let left = weekWindow(first: 1, x: 0, y: 60, title: "March 9 – 13, 2026", days: ["Mon 9", "Tue 10", "Wed 11", "Thu 12", "Fri 13"])
+        let right = weekWindow(first: left.block + 1, x: 1250, y: 60, title: "October 12 – 16, 2026", days: ["Mon 12", "Tue 13", "Wed 14", "Thu 15", "Fri 16"])
+        let rig = makeRig(lines: left.lines + right.lines)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer([entry("w0", relevant: true, kind: .calendarWeek), entry("w1", relevant: true, kind: .calendarWeek)]))
+        // Both extractions get this answer; each keeps the finding that cites its own window's line, the other is outside its window.
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Design review","cited_lines":[\#(left.block)],"start_text":"13:00"},{"kind":"appointment","title":"Design review","cited_lines":[\#(right.block)],"start_text":"13:00"}]}"#)
+        let result = try await rig.pipeline.analyse(input(windows: [window("Calendar", stack: 0, 1200, 60, 1150, 700), window("Calendar", stack: 1, 0, 60, 1200, 700)]), settings: settings)
+        let byWindow = Dictionary(uniqueKeysWithValues: result.findings.map { ($0.windowKey ?? "", $0.start) })
+        #expect(result.findings.count == 2)
+        #expect(byWindow["w1"] == start(2026, 3, 11) && byWindow["w0"] == start(2026, 10, 14))
+        #expect(result.discards.filter { $0.reason == "outside the window" }.count == 2)
+    }
+
+    // MARK: the reference clock (spec 011, US3)
+
+    /// A remote desktop window (stack 0) with its own taskbar clock (06:00 behind the Mac) and a mail in it that says "tomorrow".
+    private func remoteDesktop(clock: String?) -> (lines: [RecognisedLine], windows: [WindowInfo]) {
+        var lines = texts(mailLines, from: 1, x: 300, y: 150)
+        lines.append(line(5, "Wed 14 Oct 09:12", x: 2200, y: 10))                                              // the Mac's menu bar
+        if let clock { lines.append(line(6, clock, x: 1900, y: 940, w: 200)) }                                  // the remote taskbar
+        lines += texts(["one", "two", "three"], from: lines.count + 1, x: 300, y: 600)
+        return (lines, [window("Citrix Viewer", stack: 0, 100, 60, 2000, 940)])
+    }
+
+    private func remoteRig(_ d: (lines: [RecognisedLine], windows: [WindowInfo])) -> Rig {
+        let rig = makeRig(lines: d.lines)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer([entry("w0", relevant: true, kind: .email, remote: true)]))
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Planning meeting","cited_lines":[3],"start_text":"10:00","date_text":"tomorrow"}]}"#)
+        return rig
+    }
+
+    @Test func aRemoteWindowsOwnClockIsTheReferenceForItsRelativeDates() async throws {
+        let d = remoteDesktop(clock: "Thu 15 Oct 03:30")                       // already the 15th there: tomorrow is the 16th
+        let rig = remoteRig(d)
+        let result = try await rig.pipeline.analyse(input(windows: d.windows + [window("Other", stack: 1, 0, 0, 10, 10)]), settings: settings)
+        let finding = try #require(result.findings.first)
+        #expect(finding.start == start(2026, 10, 16, 10))
+        #expect(finding.provenance["start"]?.origin == .read)
+        #expect(result.reference?.source == .windowClock && result.reference?.instant == SyntheticTime.date(2026, 10, 15, 3, 30, zone: "Europe/Madrid"))
+    }
+
+    @Test func aWindowThatIsNotRemoteUsesTheMenuBarClock() async throws {
+        let d = remoteDesktop(clock: "Thu 15 Oct 03:30")
+        let rig = makeRig(lines: d.lines)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer([entry("w0", relevant: true, kind: .email, remote: false)]))
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Planning meeting","cited_lines":[3],"start_text":"10:00","date_text":"tomorrow"}]}"#)
+        let result = try await rig.pipeline.analyse(input(windows: d.windows + [window("Other", stack: 1, 0, 0, 10, 10)]), settings: settings)
+        #expect(result.findings.first?.start == start(2026, 10, 15, 10))
+        #expect(result.reference?.source == .screenClock)
+    }
+
+    @Test func aFarClockResolvesFromTheCaptureTimeAndFlagsTheDatesThatDependOnIt() async throws {
+        let d = remoteDesktop(clock: "Sat 1 Aug 10:00")
+        let rig = remoteRig(d)
+        let result = try await rig.pipeline.analyse(input(windows: d.windows + [window("Other", stack: 1, 0, 0, 10, 10)]), settings: settings)
+        let finding = try #require(result.findings.first)
+        #expect(finding.start == start(2026, 10, 15, 10))
+        #expect(finding.provenance["start"] == FieldProvenance(origin: .inferred, rule: "relative-day", reason: "reference-assumed"))
+        #expect(result.reference?.source == .captureFarClock)
+    }
+
+    @Test func withWindowsAndNoClockAtAllRelativeDatesAreGuessesWithoutThemTheyAreNot() async throws {
+        var d = remoteDesktop(clock: nil)
+        d.lines = d.lines.filter { $0.text != "Wed 14 Oct 09:12" }
+        let rig = remoteRig(d)
+        let guessed = try await rig.pipeline.analyse(input(windows: d.windows + [window("Other", stack: 1, 0, 0, 10, 10)]), settings: settings)
+        #expect(guessed.findings.first?.provenance["start"]?.reason == "reference-assumed" && guessed.reference?.source == .capture)
+        // The same capture with no stack is read as one window, as before: the capture's time, no flag.
+        let again = remoteRig(d)
+        let plain = try await again.pipeline.analyse(input(windows: []), settings: settings)
+        #expect(plain.findings.first?.provenance["start"]?.reason == nil)
+    }
 }

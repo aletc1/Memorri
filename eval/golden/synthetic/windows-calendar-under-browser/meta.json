@@ -1,0 +1,36 @@
+{
+  "capturedAt" : "2026-10-14T07:12:00Z",
+  "displaySize" : [
+    2200,
+    1200
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "Safari",
+      "bundleID" : "com.apple.Safari",
+      "frame" : [
+        940,
+        100,
+        1240,
+        900
+      ],
+      "stack" : 0,
+      "title" : "Quarterly report"
+    },
+    {
+      "app" : "Calendar",
+      "bundleID" : "com.apple.iCal",
+      "frame" : [
+        20,
+        60,
+        1500,
+        760
+      ],
+      "stack" : 1,
+      "title" : "Calendar"
+    }
+  ]
+}

@@ -291,19 +291,26 @@ public struct AnalysisPipeline: Sendable {
 
         var findings: [Finding] = [], discards: [CitationCheck.Discard] = []
         var capped = false, modelReads = 0, geometryReads = 0, windowsRead = 0
+        var reference: ReferenceClock?
+        var frontKind: ScreenKind?            // what the frontmost relevant window turned out to be, after the geometry check
         for window in screen.windows {
             guard let judgement = answer.judgement(for: window.key), judgement.relevant else { continue }
             windowsRead += 1
             let ownClass = ClassificationResult(kind: judgement.kind ?? .other, confidence: judgement.confidence, application: first.application,
                                                 platformLook: first.platformLook, isRemote: first.isRemote, remoteClient: first.remoteClient,
                                                 theme: first.theme, calendarName: answer.calendarNames[window.key] ?? "").resolved()
-            let resolved = Self.corrected(ownClass, lines: window.lines, locales: locales, reference: input.captureTime, zone: zone)
+            // What "today" is for this window: the clock of its own surroundings (a remote desktop), else the screen's, else the capture's time.
+            let clock = ReferenceClock.find(window: window, remote: judgement.remote, screen: screen, captureTime: input.captureTime, timezone: zone,
+                                            pictureHeight: input.image.height, locales: locales)
+            reference = reference ?? clock
+            let resolved = Self.corrected(ownClass, lines: window.lines, locales: locales, reference: clock.instant, zone: zone, dayWithManyHeadersIsAWeek: true)
+            frontKind = frontKind ?? resolved.kind
             let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
             // The dates are read from this window's own text only.
-            let headers = calendarKind ? DateResolver.headers(in: window.lines, locales: locales, reference: input.captureTime, timezone: zone) : []
-            let cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: window.lines, locales: locales, reference: input.captureTime, timezone: zone) : []
+            let headers = calendarKind ? DateResolver.headers(in: window.lines, locales: locales, reference: clock.instant, timezone: zone) : []
+            let cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: window.lines, locales: locales, reference: clock.instant, timezone: zone) : []
             let base = ResolutionContext(captureTime: input.captureTime, timezone: zone, headers: headers, lines: window.lines, dateOrder: order,
-                                         locales: locales, cells: cells)
+                                         locales: locales, cells: cells, clock: clock)
             let shown = SubjectRegion.lines(window.lines, kind: resolved.kind, headers: headers, cells: cells)
             var drafts: [FindingDraft] = []
             var ownDiscards: [CitationCheck.Discard] = []
@@ -354,9 +361,13 @@ public struct AnalysisPipeline: Sendable {
                                        confidence: judgement?.confidence ?? 0, remote: judgement?.remote ?? false, runID: nil,
                                        promptVersion: ExtractionPrompts.windowsVersion, createdAt: now)
         }
-        return AnalysisResult(lines: lines, classification: first, tags: tags, findings: findings, discards: discards, decision: decision, timezone: zone,
+        return AnalysisResult(lines: lines, classification: frontKind.map { first.withKind($0) } ?? first, tags: tags, findings: findings, discards: discards,
+                              decision: decision, timezone: zone,
                               timezoneSource: zoneSource, lineCapApplied: capped, model: settings.model, pictureLongEdge: analysisLongEdge, steps: steps,
-                              readBy: modelReads == 0 && geometryReads > 0 ? MonthEntries.version : nil, windows: records, windowsRead: windowsRead)
+                              readBy: modelReads == 0 && geometryReads > 0 ? MonthEntries.version : nil, windows: records,
+                              reference: reference ?? ReferenceClock.find(window: nil, remote: false, screen: screen, captureTime: input.captureTime, timezone: zone,
+                                                                          pictureHeight: input.image.height, locales: locales),
+                              windowsRead: windowsRead)
     }
 
     /// The part of the full picture a window covers, as JPEG, at the pixel density of the analysis copy (never enlarged): what a window's
@@ -434,7 +445,11 @@ public struct AnalysisPipeline: Sendable {
 
     /// A week view with a month picker beside it reads as a month view to the model. When date headers (a weekday name with its day
     /// number) run across the picture, much wider than any grid of day labels, the picture is a week view (or a day view).
-    static func corrected(_ result: ClassificationResult, lines: [RecognisedLine], locales: [Locale], reference: Date, zone: TimeZone) -> ClassificationResult {
+    static func corrected(_ result: ClassificationResult, lines: [RecognisedLine], locales: [Locale], reference: Date, zone: TimeZone,
+                          dayWithManyHeadersIsAWeek: Bool = false) -> ClassificationResult {
+        // A window of a week view is often called a day view (spec 011): a day view has one header, so several headers across it are a week.
+        if dayWithManyHeadersIsAWeek, result.kind == .calendarDay,
+           DateResolver.headers(in: lines, locales: locales, reference: reference, timezone: zone).count >= 3 { return result.withKind(.calendarWeek) }
         guard result.kind == .calendarMonth else { return result }
         let headers = DateResolver.headers(in: lines, locales: locales, reference: reference, timezone: zone)
         guard headers.count >= 3, let left = headers.map(\.midX).min(), let right = headers.map(\.midX).max() else { return result }
@@ -482,7 +497,7 @@ public struct AnalysisPipeline: Sendable {
         // An email's own date is the reference for the words in it.
         let context = ResolutionContext(captureTime: base.captureTime, timezone: base.timezone, headers: base.headers, lines: base.lines,
                                         dateOrder: base.dateOrder, locales: base.locales,
-                                        sentReference: DateResolver.sentReference(for: draft, in: base), cells: base.cells)
+                                        sentReference: DateResolver.sentReference(for: draft, in: base), cells: base.cells, clock: base.clock)
         func resolve(_ field: String, _ texts: String?...) -> ResolvedValue {
             let text = texts.lazy.compactMap { $0 }.first ?? ""
             return DateResolver.resolve(text: text, field: field, draft: draft, in: context)

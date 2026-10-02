@@ -23,6 +23,8 @@ public struct OverallNumbers: Sendable, Equatable, Codable {
     public let ocrOverlapRate: Double?
     public let contextAccuracy: Double?
     public let wrongHighConfidenceTags: Int
+    /// Model calls over all cases (nil in reports from before they were counted).
+    public var modelCalls: Int? = nil
 }
 
 public struct MissedFinding: Sendable, Equatable, Codable {
@@ -68,10 +70,16 @@ public struct ReportComparison: Sendable, Equatable {
     public let classificationDelta: Double
     public let secondsDelta: Double
     public let changedCases: [Change]
+    /// Model calls over all cases in each report, when both were counted.
+    public var modelCallsBefore: Int? = nil
+    public var modelCallsAfter: Int? = nil
+    public var casesWithMoreCalls: [String] = []
 
     public var text: String {
         func signed(_ value: Double) -> String { String(format: "%+.2f", value) }
         var lines = ["precision \(signed(precisionDelta))  recall \(signed(recallDelta))  field accuracy \(fieldAccuracyDelta.map(signed) ?? "n/a")  classification \(signed(classificationDelta))  seconds/case \(String(format: "%+.1f", secondsDelta))"]
+        if let before = modelCallsBefore, let after = modelCallsAfter { lines.append("model calls \(before) -> \(after)") }
+        for name in casesWithMoreCalls { lines.append("more calls \(name)") }
         for c in changedCases {
             func f(_ x: (precision: Double, recall: Double, fieldAccuracy: Double?)) -> String {
                 String(format: "p %.2f r %.2f f ", x.precision, x.recall) + (x.fieldAccuracy.map { String(format: "%.2f", $0) } ?? "n/a")
@@ -104,7 +112,8 @@ public struct EvalReport: Sendable, Equatable, Codable {
         let overall = OverallNumbers(cases: o.cases, precision: o.precision, recall: o.recall, fieldAccuracy: o.fieldAccuracy,
                                      classificationAccuracy: o.classificationAccuracy, meanSeconds: o.meanSeconds,
                                      ocrExactRate: o.ocrExactRate, ocrOverlapRate: o.ocrOverlapRate,
-                                     contextAccuracy: summary.contextAccuracy, wrongHighConfidenceTags: summary.wrongHighConfidenceTags)
+                                     contextAccuracy: summary.contextAccuracy, wrongHighConfidenceTags: summary.wrongHighConfidenceTags,
+                                     modelCalls: o.modelCalls)
         let cases = zip(items, scored).map { item, pair -> CaseReport in
             let (golden, result) = item
             let missed = pair.1.missed.map { expected in
@@ -157,10 +166,16 @@ public struct EvalReport: Sendable, Equatable, Codable {
                                      after: (after.precision, after.recall, after.fieldAccuracy)))
             }
         }
-        return ReportComparison(precisionDelta: b.overall.precision - a.overall.precision, recallDelta: b.overall.recall - a.overall.recall,
-                                fieldAccuracyDelta: delta(a.overall.fieldAccuracy, b.overall.fieldAccuracy),
-                                classificationDelta: b.overall.classificationAccuracy - a.overall.classificationAccuracy,
-                                secondsDelta: b.overall.meanSeconds - a.overall.meanSeconds, changedCases: changes)
+        var comparison = ReportComparison(precisionDelta: b.overall.precision - a.overall.precision, recallDelta: b.overall.recall - a.overall.recall,
+                                          fieldAccuracyDelta: delta(a.overall.fieldAccuracy, b.overall.fieldAccuracy),
+                                          classificationDelta: b.overall.classificationAccuracy - a.overall.classificationAccuracy,
+                                          secondsDelta: b.overall.meanSeconds - a.overall.meanSeconds, changedCases: changes)
+        comparison.modelCallsBefore = a.overall.modelCalls; comparison.modelCallsAfter = b.overall.modelCalls
+        comparison.casesWithMoreCalls = b.cases.compactMap { after in
+            guard let old = before[after.name], let was = old.score.modelCalls, let now = after.score.modelCalls, now > was else { return nil }
+            return "\(after.name): \(was) -> \(now)"
+        }
+        return comparison
     }
 
     // MARK: Text
@@ -170,7 +185,8 @@ public struct EvalReport: Sendable, Equatable, Codable {
         let t = settings.thresholds
         var lines = ["memorri-eval  model \(settings.model)  size \(settings.size)  think \(settings.think)  (titles ≥ \(f(t.titleSimilarity)), ±\(Int(t.minutes)) min)"]
         let synthetic = cases.filter { $0.origin == "synthetic" }.count, local = cases.filter { $0.origin == "local" }.count
-        lines.append("cases \(overall.cases)  (synthetic \(synthetic), local \(local))   mean \(String(format: "%.1f", overall.meanSeconds)) s/case")
+        lines.append("cases \(overall.cases)  (synthetic \(synthetic), local \(local))   mean \(String(format: "%.1f", overall.meanSeconds)) s/case"
+            + (overall.modelCalls.map { "   model calls \($0)" } ?? ""))
         lines.append("findings   precision \(f(overall.precision))  recall \(f(overall.recall))  field accuracy \(overall.fieldAccuracy.map(f) ?? "n/a")")
         let kinds = summary.byKind.keys.sorted().map { "\($0) \(f(summary.byKind[$0]!.classificationAccuracy))" }.joined(separator: "  ")
         lines.append("kind       accuracy \(f(overall.classificationAccuracy))   \(kinds)")
