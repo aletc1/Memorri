@@ -847,6 +847,34 @@ import Testing
         }
     }
 
+    // MARK: migration "v11" (spec 009)
+
+    @Test func aV10DatabaseMigratesToV11KeepingItsItemsAndAddingTheSyncTables() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v10")
+            try pool.write { try self.insertItem($0, id: "i1", title: "Daily standup") }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.write { db in
+            #expect(try String.fetchAll(db, sql: "SELECT id FROM items") == ["i1"])
+            for table in ["sync_links", "sync_runs"] { #expect(try db.tableExists(table), "\(table) should exist") }
+            #expect(try db.columns(in: "sync_links").map(\.name) == ["item_id", "kind", "ek_id", "container_id", "hash", "hash_version", "fields_json", "state", "failure", "synced_at", "created_at"])
+            #expect(try db.indexes(on: "sync_links").contains { $0.name == "sync_links_ek_id" })
+            try db.execute(sql: """
+                INSERT INTO sync_links (item_id, kind, ek_id, container_id, hash, hash_version, fields_json, state, synced_at, created_at)
+                VALUES ('i1', 'event', 'E1', 'cal', 'h', 1, '{}', 'synced', datetime('now'), datetime('now'))
+                """)
+            // A link goes with its item.
+            try db.execute(sql: "DELETE FROM items WHERE id = 'i1'")
+            #expect(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM sync_links") == 0)
+        }
+    }
+
     // MARK: migration "v9" (spec 007)
 
     private func insertItem(_ db: Database, id: String, title: String, notes: String? = nil, place: String? = nil, people: String = "[]", status: String = "active") throws {
