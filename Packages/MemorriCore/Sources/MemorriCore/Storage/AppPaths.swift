@@ -21,6 +21,13 @@ public struct AppPaths: Sendable {
     /// Cut-outs of the pictures that prove an item (spec 006); they outlive their capture.
     public var evidence: URL { root.appendingPathComponent("evidence", isDirectory: true) }
 
+    /// A restore waiting for the next start (spec 010): the backup's files, finished before the database opens.
+    public var restorePending: URL { root.appendingPathComponent("restore-pending", isDirectory: true) }
+    /// The libraries a restore replaced, one folder each, kept until the user deletes them.
+    public var safetyCopies: URL { root.appendingPathComponent("safety-copies", isDirectory: true) }
+    /// What the last finished restore did, for the app to tell the user once.
+    public var restoreResult: URL { root.appendingPathComponent("restore-result.json") }
+
     /// Creates the folders (mode 0700) and excludes the root from backups. Safe to call again.
     public func prepare() throws {
         let manager = FileManager.default

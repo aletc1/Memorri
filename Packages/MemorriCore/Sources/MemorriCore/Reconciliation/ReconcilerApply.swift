@@ -101,6 +101,7 @@ extension Reconciler {
                                                   confidence: finding.confidence, firstSeen: capturedAt, lastSeen: capturedAt), at: date)
                     itemID = id
                     summary.created += 1
+                    summary.createdItemIDs.append(id)
                     if let possibleOf {
                         let pair = [id, possibleOf].sorted()
                         let scores = step.scores.flatMap { try? JSONEncoder().encode($0) }.map { String(decoding: $0, as: UTF8.self) } ?? "{}"

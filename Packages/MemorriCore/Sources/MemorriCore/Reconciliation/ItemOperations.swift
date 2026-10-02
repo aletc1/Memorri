@@ -89,15 +89,34 @@ public struct ItemOperations: Sendable {
     }
 
     /// The user checked the item: it leaves the Inbox and stays approved until a later sighting changes what was approved (FR-012).
+    ///
+    /// For an item that is possibly cancelled this is `Still happening` (spec 010): the absences are dropped and the suspicion stays off until the
+    /// item is seen in a later capture; Undo brings both back.
     @discardableResult
-    public func approve(_ itemID: String) throws -> OpID {
+    public func approve(_ itemID: String) throws -> OpID { try approve(itemID, requireSuspicion: false) }
+
+    /// `Still happening`: only for an item that is possibly cancelled.
+    @discardableResult
+    public func confirmStillHappening(_ itemID: String) throws -> OpID { try approve(itemID, requireSuspicion: true) }
+
+    private func approve(_ itemID: String, requireSuspicion: Bool) throws -> OpID {
         let date = now()
         return try database.pool.write { db in
             let item = try Self.live(db, itemID)
             guard item.status == .active else { throw ItemOperationError.wrongStatus }
+            let suspected = item.reviewReasons.contains(.possiblyCancelled)
+            if requireSuspicion && !suspected { throw ItemOperationError.wrongStatus }
             let before = try OperationLog.state(db, itemID: itemID)!
+            var detail: [String: JSONValue] = [:]
+            if suspected {
+                detail["absences"] = .array(try Row.fetchAll(db, sql: "SELECT image_id, event_id, captured_at FROM cancel_absences WHERE item_id = ?", arguments: [itemID]).map { row in
+                    JSONValue.object(["image": .string(row["image_id"]), "event": .string(row["event_id"]), "at": .date(row["captured_at"] as Date)])
+                })
+                try db.execute(sql: "DELETE FROM cancel_absences WHERE item_id = ?", arguments: [itemID])
+                try db.execute(sql: "UPDATE items SET cancel_cleared_at = ? WHERE id = ?", arguments: [date, itemID])
+            }
             try ItemStore.approve(db, itemID: itemID, at: date)
-            return try OperationLog.record(db, kind: .approve, byUser: true, items: [itemID], before: [itemID: before], at: date)
+            return try OperationLog.record(db, kind: suspected ? .stillHappening : .approve, byUser: true, items: [itemID], before: [itemID: before], detail: detail, at: date)
         }
     }
 

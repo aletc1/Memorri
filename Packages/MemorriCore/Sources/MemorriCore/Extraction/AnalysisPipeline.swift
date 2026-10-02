@@ -84,12 +84,15 @@ public struct AnalysisResult: Sendable {
     public let reference: ReferenceClock?
     /// How many windows were read; 1 for a picture read as one.
     public let windowsRead: Int
+    /// What the week and day calendar views of the picture showed (spec 010); empty when none was read for certain.
+    public let coverage: [CoverageDraft]
 
     public init(lines: [RecognisedLine], classification: ClassificationResult, tags: [CaptureTag] = [], findings: [Finding] = [],
                 discards: [CitationCheck.Discard] = [], decision: ContextDecision = .unassigned, timezone: TimeZone = .current,
                 timezoneSource: String = "mac", lineCapApplied: Bool = false, model: String = "", pictureLongEdge: Int = 0,
                 steps: [StepRecord] = [], readBy: String? = nil, windows: [WindowReadingRecord] = [], reference: ReferenceClock? = nil,
-                windowsRead: Int? = nil) {
+                windowsRead: Int? = nil, coverage: [CoverageDraft] = []) {
+        self.coverage = coverage
         self.windows = windows; self.reference = reference; self.windowsRead = windowsRead ?? 1
         self.readBy = readBy
         self.lines = lines; self.classification = classification; self.tags = tags; self.findings = findings; self.discards = discards
@@ -248,7 +251,10 @@ public struct AnalysisPipeline: Sendable {
         return AnalysisResult(lines: lines, classification: resolved, tags: tags, findings: findings, discards: discards, decision: decision,
                               timezone: zone, timezoneSource: zoneSource, lineCapApplied: capped, model: settings.model,
                               pictureLongEdge: max(input.analysisSize.width, input.analysisSize.height), steps: steps,
-                              readBy: byGeometry ? MonthEntries.version : nil)
+                              readBy: byGeometry ? MonthEntries.version : nil,
+                              coverage: CoverageReader.read(kind: resolved.kind, headers: headers, lines: lines,
+                                                            visible: [PixelBox(x: 0, y: 0, width: input.image.width, height: input.image.height)], zone: zone,
+                                                            windowKey: "").map { [$0] } ?? [])
     }
 
     // MARK: Windows (spec 011)
@@ -298,6 +304,7 @@ public struct AnalysisPipeline: Sendable {
         var reference: ReferenceClock?
         var frontKind: ScreenKind?            // what the frontmost relevant window turned out to be, after the geometry check
         var usedKinds: [String: ScreenKind] = [:]      // the kind each window was read as, after that check (the stored reading keeps it)
+        var coverage: [CoverageDraft] = []
         for window in screen.windows {
             guard let judgement = answer.judgement(for: window.key), judgement.relevant else { continue }
             windowsRead += 1
@@ -314,6 +321,9 @@ public struct AnalysisPipeline: Sendable {
             let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
             // The dates are read from this window's own text only.
             let headers = calendarKind ? DateResolver.headers(in: window.lines, locales: locales, reference: clock.instant, timezone: zone) : []
+            if let shown = CoverageReader.read(kind: resolved.kind, headers: headers, lines: window.lines, visible: window.visible, zone: zone, windowKey: window.key) {
+                coverage.append(shown)
+            }
             let cells = resolved.kind == .calendarMonth ? DateResolver.monthCells(in: window.lines, locales: locales, reference: clock.instant, timezone: zone) : []
             let base = ResolutionContext(captureTime: input.captureTime, timezone: zone, headers: headers, lines: window.lines, dateOrder: order,
                                          locales: locales, cells: cells, clock: clock)
@@ -378,7 +388,7 @@ public struct AnalysisPipeline: Sendable {
                               readBy: modelReads == 0 && geometryReads > 0 ? MonthEntries.version : nil, windows: records,
                               reference: reference ?? ReferenceClock.find(window: nil, remote: false, screen: screen, captureTime: input.captureTime, timezone: zone,
                                                                           pictureHeight: input.image.height, locales: locales),
-                              windowsRead: windowsRead)
+                              windowsRead: windowsRead, coverage: coverage)
     }
 
     /// A model sometimes lists one block twice, the second time for its place (a calendar block has a title, a time and a room): findings of

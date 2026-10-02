@@ -531,6 +531,44 @@ enum Migrations {
                 t.column("detail_json", .text).notNull().defaults(to: "[]")
             }
         }
+        // Spec 010: what calendar views showed, the captures that covered an item without showing it, and the user's `Still happening`.
+        migrator.registerMigration("v12") { db in
+            try db.create(table: "calendar_coverage") { t in
+                t.column("image_id", .text).notNull().references("capture_images", onDelete: .cascade)
+                t.column("window_key", .text).notNull().defaults(to: "")
+                t.column("kind", .text).notNull().check(sql: "kind IN ('calendar_week', 'calendar_day')")
+                t.column("spans_json", .text).notNull()
+                t.column("created_at", .datetime).notNull()
+                t.primaryKey(["image_id", "window_key"])
+            }
+            try db.create(table: "cancel_absences") { t in
+                t.column("item_id", .text).notNull().references("items", onDelete: .cascade)
+                t.column("image_id", .text).notNull().references("capture_images", onDelete: .cascade)
+                t.column("event_id", .text).notNull()
+                t.column("captured_at", .datetime).notNull()
+                t.primaryKey(["item_id", "image_id"])
+            }
+            try db.create(index: "cancel_absences_item", on: "cancel_absences", columns: ["item_id", "captured_at"])
+            try db.alter(table: "items") { t in t.add(column: "cancel_cleared_at", .datetime) }
+
+            // `Still happening` is an operation of its own (undoable), so the log accepts one more kind.
+            try db.create(table: "reconcile_ops_v12") { t in
+                t.primaryKey("id", .text)
+                t.column("kind", .text).notNull()
+                    .check(sql: "kind IN ('auto_merge', 'merge', 'split', 'dismiss', 'restore', 'edit', 'unlock', 'context', 'different', 'undo', 'approve', 'apply_trial', 'still_happening')")
+                t.column("by_user", .integer).notNull()
+                t.column("item_ids_json", .text).notNull()
+                t.column("moved_json", .text).notNull()
+                t.column("before_json", .text).notNull()
+                t.column("detail_json", .text).notNull()
+                t.column("undone_by", .text)
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.execute(sql: "INSERT INTO reconcile_ops_v12 SELECT id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at FROM reconcile_ops")
+            try db.drop(table: "reconcile_ops")
+            try db.rename(table: "reconcile_ops_v12", to: "reconcile_ops")
+            try db.create(index: "reconcile_ops_created_at", on: "reconcile_ops", columns: ["created_at"])
+        }
         return migrator
     }
 }

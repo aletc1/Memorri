@@ -256,6 +256,12 @@ final class ItemsViewModel {
         if let next { selection = next }
     }
 
+    /// `Still happening` on a possibly cancelled item (spec 010).
+    func stillHappening(_ id: String) async { await run { operations in _ = try operations.confirmStillHappening(id) } }
+
+    /// `Cancelled`: the item is dismissed like any other (sync removes its entry; Undo brings it back).
+    func cancelled(_ id: String) async { await run { operations in _ = try operations.dismiss(id) } }
+
     /// The item after the selected ones in the list, else the one before; nothing when the list would be empty.
     private func nextSelection(leaving ids: Set<String>) -> Set<String> {
         let list = visibleRows.map(\.item.id)

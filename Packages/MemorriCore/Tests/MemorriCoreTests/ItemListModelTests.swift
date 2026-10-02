@@ -233,8 +233,8 @@ import Testing
     }
 
     @Test func reasonsAreShownInWords() {
-        #expect(ItemListModel.reviewText([.lowConfidence, .guessedStart, .guessedEnd, .guessedDue, .possibleDuplicate, .changedAfterApproval])
-                == ["Low confidence", "Guessed time", "Guessed end", "Guessed due date", "Possible duplicate", "Changed after you approved it"])
+        #expect(ItemListModel.reviewText([.lowConfidence, .guessedStart, .guessedEnd, .guessedDue, .possibleDuplicate, .changedAfterApproval, .possiblyCancelled])
+                == ["Low confidence", "Guessed time", "Guessed end", "Guessed due date", "Possible duplicate", "Changed after you approved it", "Possibly cancelled"])
         #expect(ItemListModel.reviewText([]).isEmpty)
     }
 

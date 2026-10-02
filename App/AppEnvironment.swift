@@ -49,6 +49,10 @@ final class AppEnvironment {
     let searchIndex: SearchIndex?
     /// Calendar and Reminders sync (spec 009); `nil` when the storage is unavailable.
     let sync: SyncServices?
+    /// Export, backup, restore and safety copies (spec 010); `nil` when the storage is unavailable.
+    let library: LibraryServices?
+    /// The notice of new items and the notification setting (spec 010).
+    let notifications: NotificationServices?
     /// The floating quick-search panel.
     lazy var searchPanel = SearchPanelController(environment: self)
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
@@ -62,6 +66,9 @@ final class AppEnvironment {
         let windows = self.windows
         let state = self.state
         analysisSettings = AnalysisSettings(store: settingsStore)
+        // A restore staged before the last quit is finished before the library is opened (spec 010, ADR 0027).
+        let restored = (try? AppPaths.standard()).flatMap { StorageBootstrap.finishStagedRestore(paths: $0) }
+        if restored?.outcome == .restored { SyncStore.holdFirstSync(in: settingsStore) }
         let context = Self.openStorage()
         storage = context
         if let context, let store = context.store {
@@ -85,10 +92,19 @@ final class AppEnvironment {
             let evidence = EvidenceWriter(paths: context.paths, database: database, pictures: pictures)
             evidenceWriter = evidence
             evidenceStore = EvidenceStore(database: database, paths: context.paths, pictures: pictures)
+            let notificationSettings = NotificationSettings(store: settingsStore)
+            let centre = NotificationCentreAdapter(itemsAreInFront: { await MainActor.run { windows.isFrontmost(.items) } },
+                                                   open: { inbox in Task { @MainActor in
+                                                       state.itemsScopeRequest = AppState.ScopeRequest(scope: inbox ? .inbox : .all)
+                                                       windows.show(.items)
+                                                   } })
+            let notifier = NewItemsNotifier(database: database, enabled: { notificationSettings.enabled }, shower: centre)
+            notifications = NotificationServices(settings: notificationSettings, centre: centre)
             let analyseRunner = ImageAnalysisJobRunner(
                 service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                 results: AnalysisResultStore(database: database), jobs: jobs, settings: ollamaSettings, time: SystemTimeSource(),
-                contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler, evidence: evidence)
+                contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler, evidence: evidence,
+                cancellation: CancellationDetector(database: database), notifier: notifier)
             let trialStore = TrialStore(database: database, paths: context.paths)
             let trialRunner = TrialJobRunner(service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                                              store: trialStore, settings: ollamaSettings, time: SystemTimeSource(), windows: CaptureStore(database: database),
@@ -114,6 +130,10 @@ final class AppEnvironment {
             let eventKit = EventKitStore()
             let syncEngine = SyncEngine(database: database, store: syncStore, events: eventKit,
                                         operations: ItemOperations(database: database, reconciler: reconciler, evidence: evidence))
+            library = LibraryServices(exporter: ItemExporter(database: database),
+                                      backup: LibraryBackup(database: database, paths: context.paths,
+                                                            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"),
+                                      restore: LibraryRestore(paths: context.paths), safetyCopies: SafetyCopies(paths: context.paths))
             sync = SyncServices(store: syncStore, engine: syncEngine, coordinator: SyncCoordinator(engine: syncEngine, store: syncStore), eventKit: eventKit)
             search = SearchService(database: database)
             searchIndex = SearchIndex(database: database)
@@ -129,6 +149,8 @@ final class AppEnvironment {
             evidenceWriter = nil
             reprocessing = nil
             sync = nil
+            library = nil
+            notifications = nil
             search = nil
             searchIndex = nil
         }
@@ -178,7 +200,7 @@ final class AppEnvironment {
         prepareSearchIndex()
         // Sightings from before evidence existed get their cut-outs a few at a time, newest first.
         if let evidenceWriter { Task.detached(priority: .utility) { _ = await evidenceWriter.backfill(limit: 200) } }
-        if let storage { StartupAlerts.showIfNeeded(for: storage) }
+        if let storage { StartupAlerts.showIfNeeded(for: storage); StartupAlerts.showRestoreResult(paths: storage.paths) }
         startRetention()
     }
 
@@ -432,4 +454,10 @@ struct ReprocessServices {
 struct ReprocessError: Error {
     let message: String
     init(_ message: String) { self.message = message }
+}
+
+/// The notice of new items: its on/off setting and the adapter that shows it through macOS (spec 010).
+struct NotificationServices: Sendable {
+    let settings: NotificationSettings
+    let centre: NotificationCentreAdapter
 }

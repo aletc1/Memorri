@@ -41,6 +41,9 @@ public struct SyncStore: Sendable {
     public var firstSyncConfirmed: Bool { settings.bool(forKey: Self.confirmedKey, default: false) }
     public func setFirstSyncConfirmed(_ value: Bool) { settings.setBool(value, forKey: Self.confirmedKey) }
 
+    /// After a restore the links may no longer match what Calendar holds, so the next sync waits for a preview again (spec 010 FR-020).
+    public static func holdFirstSync(in settings: any SettingsStore) { settings.setBool(false, forKey: confirmedKey) }
+
     public func syncSettings(now: Date) -> SyncSettings { SyncSettings(calendarID: calendarID, listID: listID, now: now) }
 
     /// Fires after every change to the items (a fingerprint of the table changes), so the coordinator can schedule a run. The first value, the state at

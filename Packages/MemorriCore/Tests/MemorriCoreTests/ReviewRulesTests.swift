@@ -80,4 +80,45 @@ import Testing
         #expect(ReviewRules.decode(nil) == nil)
         #expect(ReviewRules.decode("not json") == nil)
     }
+
+    // MARK: Possibly cancelled (spec 010)
+
+    private let seen = Date(timeIntervalSince1970: 1_800_000_000)
+    private func absence(_ event: String, after hours: Double) -> CancelAbsence { CancelAbsence(eventID: event, capturedAt: seen.addingTimeInterval(hours * 3600)) }
+    private func cancelled(_ item: Item, absences: [CancelAbsence], last: Date? = nil, cleared: Date? = nil, approved: [ItemField: JSONValue]? = nil) -> [ReviewReason] {
+        ReviewRules.reasons(item: item, chosenSources: [:], locked: [], hasOpenPossibleDuplicate: false, approvedValues: approved,
+                            currentValues: ReviewRules.snapshot(of: item), absences: absences, lastSighting: last ?? seen, clearedAt: cleared)
+    }
+
+    @Test func twoAbsencesFromDifferentCapturesAfterTheLastSightingFlagTheItem() {
+        #expect(cancelled(item(), absences: [absence("e1", after: 5), absence("e2", after: 30)]) == [.possiblyCancelled])
+        #expect(cancelled(item(), absences: [absence("e1", after: 5)]).isEmpty)                                       // one is not enough
+        #expect(cancelled(item(), absences: [absence("e1", after: 5), absence("e1", after: 6)]).isEmpty)              // two displays of one capture are one
+        #expect(cancelled(item(), absences: [absence("e1", after: -2), absence("e2", after: 30)]).isEmpty)           // one was before the last sighting
+        #expect(cancelled(item(), absences: []).isEmpty)
+    }
+
+    @Test func aSightingAfterTheAbsencesClearsTheCount() {
+        let absences = [absence("e1", after: 5), absence("e2", after: 30)]
+        #expect(cancelled(item(), absences: absences, last: seen.addingTimeInterval(40 * 3600)).isEmpty)
+        #expect(ReviewRules.isPossiblyCancelled(absences: absences, lastSighting: nil, clearedAt: nil) == false)       // never seen: nothing to be absent from
+    }
+
+    @Test func stillHappeningStopsTheFlagUntilTheItemIsSeenAgain() {
+        let absences = [absence("e1", after: 5), absence("e2", after: 30)]
+        let decided = seen.addingTimeInterval(50 * 3600)
+        #expect(cancelled(item(), absences: absences, cleared: decided).isEmpty)                                          // not seen since the decision
+        let later = [absence("e3", after: 80), absence("e4", after: 90)]
+        #expect(cancelled(item(), absences: later, last: seen.addingTimeInterval(60 * 3600), cleared: decided) == [.possiblyCancelled])   // seen again, then missing twice
+    }
+
+    @Test func aSuspicionAppliesToApprovedItemsToo() {
+        let approved = ReviewRules.snapshot(of: item())
+        let absences = [absence("e1", after: 5), absence("e2", after: 30)]
+        #expect(cancelled(item(), absences: absences, approved: approved) == [.possiblyCancelled])
+        var changed = item(); changed.title = "New title"
+        #expect(cancelled(changed, absences: absences, approved: approved) == [.changedAfterApproval, .possiblyCancelled])
+        #expect(cancelled(item(status: .dismissed), absences: absences).isEmpty)                                        // dismissed items are never flagged
+        #expect(ReviewReason.allCases.last == .possiblyCancelled)
+    }
 }

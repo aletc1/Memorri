@@ -37,6 +37,14 @@ public struct ItemDetail: Sendable, Equatable {
     /// The other item of each open possible duplicate.
     public var possibleDuplicates: [String] = []
     public var operations: [OperationSummary] = []
+    /// Why the item may be gone, when it is possibly cancelled (spec 010).
+    public var suspicion: CancelSuspicion?
+}
+
+/// The evidence behind `Possibly cancelled`: the last capture that showed the item and the captures that covered it without it.
+public struct CancelSuspicion: Sendable, Equatable {
+    public let lastSeen: Date?
+    public let notShownIn: [Date]
 }
 
 /// One field with its current value and every observation behind it.
@@ -178,6 +186,12 @@ public struct ItemStore: Sendable {
             WHERE (p.item_a = ?1 OR p.item_b = ?1) AND o.status != 'merged' ORDER BY p.item_a, p.item_b
             """, arguments: [item.id]).map { ($0["item_a"] as String) == item.id ? $0["item_b"] : $0["item_a"] }
 
+        if item.reviewReasons.contains(.possiblyCancelled) {
+            let last = try Date.fetchOne(db, sql: "SELECT MAX(captured_at) FROM sightings WHERE item_id = ?", arguments: [item.id])
+            let missed = try Date.fetchAll(db, sql: "SELECT captured_at FROM cancel_absences WHERE item_id = ? AND captured_at > ? ORDER BY captured_at",
+                                           arguments: [item.id, last ?? .distantPast])
+            detail.suspicion = CancelSuspicion(lastSeen: last, notShownIn: missed)
+        }
         detail.operations = try Row.fetchAll(db, sql: """
             SELECT o.id, o.kind, o.by_user, o.created_at, o.undone_by, o.detail_json FROM reconcile_ops o JOIN reconcile_op_items oi ON oi.op_id = o.id
             WHERE oi.item_id = ? ORDER BY o.created_at DESC, o.rowid DESC

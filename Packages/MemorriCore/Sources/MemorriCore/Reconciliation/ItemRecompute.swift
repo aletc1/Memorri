@@ -128,9 +128,18 @@ extension ItemStore {
         if item.approvedAt != nil {
             approved = ReviewRules.decode(try String.fetchOne(db, sql: "SELECT approved_values_json FROM items WHERE id = ?", arguments: [item.id]))
         }
+        // Spec 010: what later calendar captures did not show (the tables do not exist yet while an old migration runs this pass).
+        var absences: [CancelAbsence] = [], lastSighting: Date?, clearedAt: Date?
+        if try db.tableExists("cancel_absences") {
+            absences = try Row.fetchAll(db, sql: "SELECT event_id, captured_at FROM cancel_absences WHERE item_id = ?", arguments: [item.id])
+                .map { CancelAbsence(eventID: $0["event_id"], capturedAt: $0["captured_at"]) }
+            lastSighting = try Date.fetchOne(db, sql: "SELECT MAX(captured_at) FROM sightings WHERE item_id = ?", arguments: [item.id])
+            clearedAt = try Date.fetchOne(db, sql: "SELECT cancel_cleared_at FROM items WHERE id = ?", arguments: [item.id])
+        }
         let reasons = ReviewRules.reasons(item: item, chosenSources: sources, locked: Set(locks.keys),
                                           hasOpenPossibleDuplicate: item.status == .active ? try hasOpenPossibleDuplicate(db, itemID: item.id) : false,
-                                          approvedValues: approved, currentValues: ReviewRules.snapshot(of: item))
+                                          approvedValues: approved, currentValues: ReviewRules.snapshot(of: item),
+                                          absences: absences, lastSighting: lastSighting, clearedAt: clearedAt)
         item.reviewReasons = reasons
         item.needsReview = !reasons.isEmpty
     }

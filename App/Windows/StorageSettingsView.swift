@@ -36,6 +36,8 @@ struct StorageSettingsView: View {
                 analysisSizeSection
                 Divider()
                 cleanUpSection
+                Divider()
+                BackupSection(environment: environment)
             }
         }
     }
@@ -150,6 +152,7 @@ struct StorageSettingsView: View {
             Text("Evidence: \(summary.map { Self.size($0.evidenceBytes) } ?? "…")")
                 .help("Cut-outs of the captures that show where each item's values were read. They stay while the item exists; Delete All removes them.")
             Text("Database: \(summary.map { Self.size($0.databaseBytes) } ?? "…")")
+            if let safety = summary?.safetyCopyBytes, safety > 0 { Text("Safety copies and a waiting restore: \(Self.size(safety))") }
         }
     }
 

@@ -17,12 +17,27 @@ public enum ReviewRules {
         [.title: .string(item.title), .start: .date(item.start), .end: .date(item.end), .allDay: .bool(item.allDay), .due: .date(item.due)]
     }
 
+    /// How many different capture events must have covered an item without showing it (spec 010, clarification of 2026-10-02).
+    public static let absencesForCancellation = 2
+
+    /// Whether later captures of the same calendar dates left the item out often enough: absences from at least two different capture events, all
+    /// taken after the item's latest sighting. After `Still happening` they count again only once the item was seen after that decision.
+    public static func isPossiblyCancelled(absences: [CancelAbsence], lastSighting: Date?, clearedAt: Date?) -> Bool {
+        guard let lastSighting else { return false }
+        if let clearedAt, lastSighting <= clearedAt { return false }
+        let later = absences.filter { $0.capturedAt > lastSighting }
+        return Set(later.map(\.eventID)).count >= absencesForCancellation
+    }
+
     public static func reasons(item: Item, chosenSources: [ItemField: ObservationSource], locked: Set<ItemField>, hasOpenPossibleDuplicate: Bool,
-                               approvedValues: [ItemField: JSONValue]?, currentValues: [ItemField: JSONValue]) -> [ReviewReason] {
+                               approvedValues: [ItemField: JSONValue]?, currentValues: [ItemField: JSONValue],
+                               absences: [CancelAbsence] = [], lastSighting: Date? = nil, clearedAt: Date? = nil) -> [ReviewReason] {
         guard item.status == .active else { return [] }
+        // A suspicion applies to every active item, approved or edited: it only asks the user to look.
+        let cancelled = isPossiblyCancelled(absences: absences, lastSighting: lastSighting, clearedAt: clearedAt) ? [ReviewReason.possiblyCancelled] : []
         if let approvedValues {
             let changed = approvedFields.contains { (approvedValues[$0] ?? .null) != (currentValues[$0] ?? .null) }
-            return changed ? [.changedAfterApproval] : []
+            return (changed ? [.changedAfterApproval] : []) + cancelled
         }
         var reasons: [ReviewReason] = []
         if item.confidence < level { reasons.append(.lowConfidence) }
@@ -31,7 +46,7 @@ public enum ReviewRules {
         if guessed(.end) { reasons.append(.guessedEnd) }
         if guessed(.due) { reasons.append(.guessedDue) }
         if hasOpenPossibleDuplicate { reasons.append(.possibleDuplicate) }
-        return reasons
+        return reasons + cancelled
     }
 
     // MARK: Stored form of a snapshot

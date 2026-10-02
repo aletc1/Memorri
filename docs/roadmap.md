@@ -14,7 +14,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 008 | reprocessing | Done |
 | 009 | eventkit-sync | Built; the run against a real calendar is pending |
 | 012 | items-calendar-view | Done |
-| 010 | hardening | Not started |
+| 010 | hardening | Built; the run on the real library is pending |
 | 011 | window-aware-analysis | Done |
 
 ## Prompts
