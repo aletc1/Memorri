@@ -89,3 +89,20 @@ Existing eval cases must score the same (precision, recall and field accuracy un
 ## Baseline (before the change)
 
 `memorri-eval run` on `main` (commit `2c2cd93`, before any 013 code), default model, 2026-10-02: 33 cases (synthetic 33, local 0), mean 11.8 s per case, 65 model calls; findings precision 0.88, recall 0.91, field accuracy 0.93. The full report is kept outside the repository. Task T040 compares the run after the change with these figures.
+
+## Results (after the change)
+
+`memorri-eval run` on the branch, same model and settings as the baseline, 2026-10-02: 38 cases (the 33 of the baseline and the five window-capture cases), mean 12.7 s per case, 74 model calls; findings precision 0.88, recall 0.92, field accuracy 0.93. `memorri-eval compare baseline after` reports **no case changed** among the 33 existing cases, and the model calls rose from 65 to 74, which is exactly the five new cases (2 + 1 + 2 + 2 + 2: a month grid needs no extraction call).
+
+| Case | Expected | Found | Matched | Fields equal | Model calls | Seconds |
+|---|---|---|---|---|---|---|
+| window-capture-covered | 3 | 4 | 3 | 18/19 | 2 | 10.6 |
+| window-capture-mail | 1 | 1 | 1 | 6/6 | 2 | 8.5 |
+| window-capture-month-other-month | 3 | 3 | 3 | 16/16 | 1 | 4.7 |
+| window-capture-remote-clock | 1 | 1 | 1 | 6/6 | 2 | 10.1 |
+| window-capture-terminal | 0 | 0 | 0 | 0/0 | 2 | 7.5 |
+
+- Kinds: all five found the kind expected (email, calendar month, chat, calendar week, other). Dates: every matched finding has the right start (the month grid in February, "tomorrow" against the remote taskbar clock, "tomorrow" against the mail's own date).
+- **window-capture-covered**: the panel drawn over a corner of the calendar gave one false finding, a reminder titled "Battery" cited from "Charged 84%" with confidence 1. The three calendar entries were all found. This is the weakness named in the spec edge case about something drawn over the window: its text is inside the picture and the model can read an item out of it. Nothing was changed to hide it (no prompt change in this spec, principle VI); it is left as a known limit and a follow-up.
+- The missing `place` on "Design review" (expected "Board room") also appears in the baseline for the multi-window calendar cases; it is the model, not the window capture.
+- The terminal case gave no finding although the window is read (relevance forced): no item and no error, as the spec asks.

@@ -10,7 +10,7 @@ enum SyntheticWindowCaptures {
     /// Draws the window's title bar and hands the rest of the picture to `draw`. `overlay` draws something over the window afterwards (a panel that
     /// floats over it); the expected lines leave out what the overlay covers.
     static func picture(name: String, setup s: SyntheticSetup, size: (width: Int, height: Int), app: String, bundle: String, title: String,
-                        features: Set<String>, draw: (SyntheticCanvas, CGRect) -> SyntheticDrawing,
+                        features: Set<String>, dark: Bool? = nil, draw: (SyntheticCanvas, CGRect) -> SyntheticDrawing,
                         overlay: ((SyntheticCanvas, CGRect) -> CGRect)? = nil) throws -> SyntheticCase {
         let p = s.palette
         let canvas = SyntheticCanvas(width: size.width, height: size.height, background: p.background)
@@ -33,7 +33,7 @@ enum SyntheticWindowCaptures {
             } + added
         }
 
-        let tags = [ExpectedTag(key: "language", value: s.language.rawValue), ExpectedTag(key: "theme", value: p.dark ? "dark" : "light")]
+        let tags = [ExpectedTag(key: "language", value: s.language.rawValue), ExpectedTag(key: "theme", value: (dark ?? p.dark) ? "dark" : "light")]
         let meta = GoldenMeta(capturedAt: s.capturedAt, macTimezone: s.macZone, context: s.context,
                               windows: [GoldenWindow(app: app, bundleID: bundle, title: title, frame: [0, 0, size.width, size.height], stack: 0)],
                               displaySize: [size.width, size.height], scale: 1.0, origin: .synthetic, scope: .window)
@@ -124,7 +124,7 @@ enum SyntheticWindowCaptures {
         // A terminal: nothing in it holds an appointment, a task or a reminder. It is read all the same and gives no item.
         let terminalSize = (width: 900, height: 600)
         s = setup("window-capture-terminal", size: terminalSize)
-        out.append(try picture(name: s.name, setup: s, size: terminalSize, app: "Terminal", bundle: "com.apple.Terminal", title: "zsh - 80x24", features: ["no-findings"]) { c, a in
+        out.append(try picture(name: s.name, setup: s, size: terminalSize, app: "Terminal", bundle: "com.apple.Terminal", title: "zsh - 80x24", features: ["no-findings"], dark: true) { c, a in
             c.fill(a, RGB(0x1E1E1E))
             let output = ["$ make build", "Compiling module Core", "Compiling module Storage", "Linking executable", "Build succeeded", "$ make test",
                           "Running 420 tests", "All tests passed", "$ git status", "On branch main", "nothing to commit, working tree clean"]

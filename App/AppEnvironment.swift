@@ -166,6 +166,8 @@ final class AppEnvironment {
         )
         shortcuts = ShortcutAdapter(onCapture: { [captureService] in
             Task { await captureService.request(.shortcut) }
+        }, onCaptureWindow: { [captureService] in
+            Task { await captureService.requestWindow(.shortcut) }
         })
         self.windows.contentProvider = { [unowned self] id in self.content(for: id) }
         shortcuts.onSearch = { [unowned self] in self.searchPanel.toggle() }

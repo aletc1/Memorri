@@ -85,7 +85,7 @@ description: "Task list for spec 013: capture only the active window"
 - [X] T027 [P] [US1] Add a `scope` argument (default `.displays`) to `PictureIngest.store(png:windows:capturedAt:)` in `Core/Capture/PictureIngest.swift` with a test in `Tests/PictureIngestTests.swift`; `App/DebugIngest.swift` `--ingest-case` reads `scope` from `meta.json` and stores a window case as a window capture (one window covering the picture)
 - [X] T028 [P] [US1] Add the optional `scope` to `GoldenMeta` in `Core/Evaluation/GoldenCase.swift` (decode default `displays`) and pass `chosenWindow` from it in `Core/Evaluation/PipelineCaseAnalyser.swift`, with tests in `Tests/GoldenCaseTests.swift` and `Tests/PipelineCaseAnalyserTests.swift`
 - [X] T029 [US1] Create `Core/Evaluation/SyntheticWindowCaptures.swift` with the five cases of `contracts/app-and-eval.md` (`window-capture-mail`, `window-capture-month-other-month`, `window-capture-remote-clock`, `window-capture-covered`, `window-capture-terminal`), each a drawn window picture with no menu bar and `meta.scope = "window"`, add them to `SyntheticCases.cases` and to `Tests/SyntheticCasesTests.swift`
-- [ ] T030 [US1] Generate the cases (`swift run --package-path Packages/MemorriCore memorri-eval generate-synthetic`), run the eval (`memorri-eval run`) and record the per-case scores and the seconds per case in `research.md` under R11 "Results" (SC-005: the window cases take no longer than a full-screen case showing the same window alone); the five new cases score 1.00 on dates and kinds; fix the cause (not the case) if not
+- [X] T030 [US1] Generate the cases (`swift run --package-path Packages/MemorriCore memorri-eval generate-synthetic`), run the eval (`memorri-eval run`) and record the per-case scores and the seconds per case in `research.md` under R11 "Results" (SC-005: the window cases take no longer than a full-screen case showing the same window alone); the five new cases score 1.00 on dates and kinds; fix the cause (not the case) if not
 
 **Checkpoint**: the menu item stores and analyses a window capture; the new eval cases pass; full-screen tests untouched.
 
@@ -117,7 +117,7 @@ description: "Task list for spec 013: capture only the active window"
 
 - [ ] T038 [P] [US3] Add regression tests in `Tests/CapturePipelineTests.swift`: `run(trigger:)` with a window capturer that fails the test if called; the stored event has `scope = displays`, `desktop_frame_json` null, no outline call; the shortcut and menu paths still call `run`
 - [ ] T039 [US3] Run `swift test --package-path Packages/MemorriCore` and confirm no existing test was edited except to compile (`git diff main -- Packages/MemorriCore/Tests` shows only additions and the `switch` updates of T009)
-- [ ] T040 [US3] Run `memorri-eval run` again and compare with the T001 baseline using `memorri-eval compare <baseline>.json <after>.json`: no existing case loses more than 0.02 on precision or recall and the model call counts are equal; record the comparison in `research.md` under R11 "Results"
+- [X] T040 [US3] Run `memorri-eval run` again and compare with the T001 baseline using `memorri-eval compare <baseline>.json <after>.json`: no existing case loses more than 0.02 on precision or recall and the model call counts are equal; record the comparison in `research.md` under R11 "Results"
 - [ ] T041 [US3] Press the existing shortcut and "Capture now" in the running app with two displays: both displays captured, usual flash and sound, no outline (`quickstart.md` section 3, item 3)
 
 **Checkpoint**: SC-004 holds.

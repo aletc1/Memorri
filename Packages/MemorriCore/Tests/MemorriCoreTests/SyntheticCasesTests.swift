@@ -248,5 +248,6 @@ import Testing
         #expect((covered.expected.lines ?? []).map(\.text).contains("Charged 84%"))
         let terminal = named("window-capture-terminal")
         #expect(terminal.expected.findings.isEmpty && terminal.expected.screenKind == "other")
+        #expect(terminal.expected.tags?.first { $0.key == "theme" }?.value == "dark")      // drawn on a dark background
     }
 }
