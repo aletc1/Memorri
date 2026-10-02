@@ -41,6 +41,12 @@ targets:
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"
         NSHumanReadableCopyright: "AGPL-3.0"
+        NSCalendarsFullAccessUsageDescription: "Memorri writes the appointments it finds into the calendar you choose in Settings, and only there. It never changes your other calendars."
+        NSRemindersFullAccessUsageDescription: "Memorri writes the tasks and reminders it finds into the Reminders list you choose in Settings, and only there. It never changes your other lists."
+        CFBundleURLTypes:
+          - CFBundleURLName: com.aletc1.memorri
+            CFBundleURLSchemes:
+              - memorri
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aletc1.memorri

@@ -18,13 +18,28 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.aletc1.memorri</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>memorri</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Memorri writes the appointments it finds into the calendar you choose in Settings, and only there. It never changes your other calendars.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>AGPL-3.0</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Memorri writes the tasks and reminders it finds into the Reminders list you choose in Settings, and only there. It never changes your other lists.</string>
 </dict>
 </plist>

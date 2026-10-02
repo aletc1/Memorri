@@ -47,6 +47,18 @@ struct ItemDetailView: View {
                 }
             }
             .font(.callout)
+            if let line = model.syncLine(for: detail.item) {
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.checkmark").foregroundStyle(.secondary).accessibilityHidden(true)
+                    Text(line.text).foregroundStyle(.secondary)
+                    if line.canSyncAgain {
+                        Button("Sync again") { model.syncAgain(detail.item) }
+                            .help("Write this item to Calendar or Reminders again")
+                    }
+                }
+                .font(.callout)
+                .id(model.syncRefresh)
+            }
         }
     }
 
@@ -124,7 +136,7 @@ struct ItemDetailView: View {
             if detail.operations.isEmpty { Text("Nothing yet.").foregroundStyle(.secondary) }
             ForEach(detail.operations, id: \.id) { operation in
                 HStack {
-                    Text("\(ItemListModel.operationText(operation.kind))\(operation.byUser ? "" : " (automatic)")")
+                    Text("\(ItemListModel.historyText(kind: operation.kind, detail: operation.detail))\(operation.byUser ? "" : " (automatic)")")
                         .strikethrough(operation.undone)
                     Text(operation.createdAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                     Spacer()
