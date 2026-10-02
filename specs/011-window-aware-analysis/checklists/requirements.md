@@ -32,4 +32,4 @@
 ## Notes
 
 - Validated 2026-10-01. No clarification markers: reasonable defaults are recorded under Assumptions (stack and frames are stored; month grids stay model-free; the clock is read from the picture's text; the Items window only names the window).
-- Questions worth asking in `/speckit-clarify`: how many model calls per capture the user will accept (SC-004 says one plus the windows that can hold events); whether the reference clock should override the capture time when they differ by hours (FR-005 only marks differences over a day as guesses); whether "Delete everything" and retention treat window names as capture data.
+- Clarified 2026-10-02 (5 questions): call budget, reference clock, automatic library re-read (FR-011a, SC-009), window names kept like capture data, model sorts every window.
