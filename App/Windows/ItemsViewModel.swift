@@ -72,8 +72,16 @@ final class ItemsViewModel {
         }
     }
 
+    /// Selects an item. When the list is not loaded yet (the window was just opened), the choice waits for it.
+    func select(_ id: String) {
+        if rows.contains(where: { $0.item.id == id }) { selection = [id]; pendingSelection = nil } else { pendingSelection = id }
+    }
+
+    private var pendingSelection: String?
+
     private func apply(_ rows: [ItemRow]) {
         self.rows = rows
+        if let pending = pendingSelection, rows.contains(where: { $0.item.id == pending }) { selection = [pending]; pendingSelection = nil }
         selection.formIntersection(Set(rows.map(\.item.id)))
         Task { await refresh() }
     }

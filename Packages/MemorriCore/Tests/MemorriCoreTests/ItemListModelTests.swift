@@ -420,4 +420,19 @@ import Testing
         var e = evidence("e", sighting: nil, at: 1); e.windowApp = "Mail"; e.windowTitle = "Inbox"
         #expect(ItemListModel.windowText(EvidenceEntry(sighting: nil, evidence: e)) == "Mail — Inbox")
     }
+
+    // MARK: opening an item from search (spec 007)
+
+    @Test func theFilterThatShowsAnItemIsTheWideOneAndShowsDismissedOnlyWhenNeeded() {
+        let active = item("Standup"), dismissed = item("Old", status: .dismissed, context: "a")
+        var review = item("Doubtful"); review.needsReview = true
+        let rows = [row(active), row(dismissed), row(review)]
+        for target in [active, dismissed, review] {
+            let filter = ItemListModel.filter(showing: target.status)
+            #expect(ItemListModel.visible(rows, filter: filter).contains { $0.item.id == target.id }, "\(target.title)")
+            #expect(filter.scope == .all && filter.kind == .all && filter.context == .all)
+        }
+        #expect(ItemListModel.filter(showing: active.status).showDismissed == false)
+        #expect(ItemListModel.filter(showing: dismissed.status).showDismissed == true)
+    }
 }

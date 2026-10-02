@@ -63,3 +63,17 @@ import Testing
         #expect(validator.validate(combo(keyK, [.command, .shift])) == nil)
     }
 }
+
+@Suite struct SearchShortcutValidatorTests {
+    @Test func aSearchShortcutEqualToTheCaptureShortcutIsRefusedWithTheActionsName() {
+        let capture = KeyCombo(keyCode: 46, modifiers: [.control, .option, .command])
+        let validator = ShortcutValidator(system: FakeSystemShortcuts(), otherActions: ["Capture now": capture])
+        #expect(validator.validate(capture) == .usedByMemorriAction("Capture now"))
+        #expect(validator.validate(KeyCombo(keyCode: 3, modifiers: [.control, .option, .command])) == nil)       // the default search shortcut
+    }
+
+    @Test func aSystemReservedSearchShortcutIsRefusedAndNoShortcutNeedsNoValidation() {
+        let reserved = KeyCombo(keyCode: 49, modifiers: [.command])
+        #expect(ShortcutValidator(system: FakeSystemShortcuts(reserved: [reserved]), otherActions: [:]).validate(reserved) == .reservedBySystem)
+    }
+}

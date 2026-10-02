@@ -42,6 +42,10 @@ final class AppEnvironment {
     /// The saved cut-outs that prove items, and the writer that makes them; `nil` when the storage is unavailable.
     let evidenceStore: EvidenceStore?
     let evidenceWriter: EvidenceWriter?
+    /// Search over items and captures (spec 007); `nil` when the storage is unavailable.
+    let search: SearchService?
+    /// The floating quick-search panel.
+    lazy var searchPanel = SearchPanelController(environment: self)
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
     init() {
@@ -94,6 +98,7 @@ final class AppEnvironment {
             items = ItemStore(database: database)
             itemOperations = ItemOperations(database: database, reconciler: reconciler)
             operationLog = OperationLog(database: database)
+            search = SearchService(database: database)
         } else {
             analysis = nil
             analysisJobs = nil
@@ -104,6 +109,7 @@ final class AppEnvironment {
             operationLog = nil
             evidenceStore = nil
             evidenceWriter = nil
+            search = nil
         }
         captureService = CaptureRequestService(
             runner: Self.makeCaptureRunner(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings),
@@ -117,6 +123,7 @@ final class AppEnvironment {
             Task { await captureService.request(.shortcut) }
         })
         self.windows.contentProvider = { [unowned self] id in self.content(for: id) }
+        shortcuts.onSearch = { [unowned self] in self.searchPanel.toggle() }
 
         Task { [state, permission] in
             for await status in await permission.statusUpdates() {
@@ -163,6 +170,12 @@ final class AppEnvironment {
     /// Opens the Items window on a scope (the menu's `Inbox` opens it on the Inbox).
     func showItems(scope: ItemScope) {
         state.itemsScopeRequest = AppState.ScopeRequest(scope: scope)
+        windows.show(.items)
+    }
+
+    /// Opens the Items window with `id` selected, on the filter that lists it (a search result was chosen).
+    func showItem(id: String, status: ItemStatus) {
+        state.itemsScopeRequest = AppState.ScopeRequest(scope: .all, itemID: id, status: status)
         windows.show(.items)
     }
 
@@ -308,7 +321,6 @@ final class AppEnvironment {
     private func content(for id: WindowID) -> AnyView {
         switch id {
         case .items: AnyView(ItemsView(environment: self))
-        case .search: AnyView(PlaceholderView.search)
         case .settings: AnyView(SettingsView(environment: self))
         case .onboarding: AnyView(OnboardingView(environment: self))
         }

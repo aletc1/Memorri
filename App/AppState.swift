@@ -13,7 +13,13 @@ final class AppState {
     var reviewCount = 0
 
     /// A request to open the Items window on a scope (the menu's `Inbox`). The id changes with every request so the window notices a repeat.
-    struct ScopeRequest: Equatable { let id = UUID(); let scope: ItemScope }
+    struct ScopeRequest: Equatable {
+        let id = UUID()
+        let scope: ItemScope
+        /// An item to select, and its status (a dismissed one needs the dismissed items shown); from a search result.
+        var itemID: String?
+        var status: ItemStatus?
+    }
     var itemsScopeRequest: ScopeRequest?
 
     /// The model queue: counts, pause flag and why it is holding (spec 003).
