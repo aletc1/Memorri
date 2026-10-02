@@ -52,3 +52,5 @@
 
 ## R12. What is logged
 - **Decision**: category `search`: `search items=<n> captures=<n> ms=<n>`, `search index prepare done=<n> total=<n>`, never text.
+
+**Checked (2026-10-02, task T001)**: through GRDB on the system SQLite (3.54, FTS5 compiled in), `unicode61 remove_diacritics 2` with `prefix = '2 3 4'` finds `Café - Pruebas` by `"cafe" AND "pru"*`, folds `ñ` to `n`, supports `a NOT b` and `bm25()` with column weights, and a trigger that deletes the row before inserting survives `INSERT OR REPLACE`.

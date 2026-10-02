@@ -392,6 +392,47 @@ enum Migrations {
             try db.drop(index: "analysis_jobs_state_created_at")
             try db.create(index: "analysis_jobs_state_priority_created_at", on: "analysis_jobs", columns: ["state", "priority", "created_at"])
         }
+
+        // Spec 007: the search indexes. Derived data (ADR 0023): item documents are replaced by triggers, capture documents are written with the
+        // text and removed with the capture; `search_meta.index_version` tells the app whether a rebuild is due.
+        migrator.registerMigration("v9") { db in
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE search_items USING fts5(
+                    item_id UNINDEXED, title, aliases, notes, place, people,
+                    tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3 4')
+                """)
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE search_captures USING fts5(
+                    image_id UNINDEXED, body,
+                    tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3 4')
+                """)
+            try db.create(table: "search_meta") { t in
+                t.primaryKey("key", .text)
+                t.column("value", .text)
+            }
+            /// Replaces the item's row: delete it, then insert it again unless the item is merged. `id` is a trigger column reference.
+            func document(_ id: String) -> String {
+                """
+                DELETE FROM search_items WHERE item_id = \(id);
+                INSERT INTO search_items (item_id, title, aliases, notes, place, people)
+                SELECT i.id, i.title,
+                       COALESCE((SELECT group_concat(a.title, ' ') FROM item_aliases a WHERE a.item_id = i.id AND a.title != i.title), ''),
+                       COALESCE(i.notes, ''), COALESCE(i.place, ''),
+                       CASE WHEN json_valid(i.people_json) THEN COALESCE((SELECT group_concat(value, ' ') FROM json_each(i.people_json)), '') ELSE '' END
+                FROM items i WHERE i.id = \(id) AND i.status != 'merged';
+                """
+            }
+            try db.execute(sql: "CREATE TRIGGER search_items_after_insert AFTER INSERT ON items BEGIN \(document("new.id")) END")
+            try db.execute(sql: """
+                CREATE TRIGGER search_items_after_update AFTER UPDATE OF title, notes, place, people_json, status ON items
+                BEGIN \(document("new.id")) END
+                """)
+            try db.execute(sql: "CREATE TRIGGER search_items_after_delete AFTER DELETE ON items BEGIN DELETE FROM search_items WHERE item_id = old.id; END")
+            try db.execute(sql: "CREATE TRIGGER search_aliases_after_insert AFTER INSERT ON item_aliases BEGIN \(document("new.item_id")) END")
+            try db.execute(sql: "CREATE TRIGGER search_aliases_after_update AFTER UPDATE ON item_aliases BEGIN \(document("new.item_id")) END")
+            try db.execute(sql: "CREATE TRIGGER search_aliases_after_delete AFTER DELETE ON item_aliases BEGIN \(document("old.item_id")) END")
+            try db.execute(sql: "CREATE TRIGGER search_captures_after_read_delete AFTER DELETE ON ocr_reads BEGIN DELETE FROM search_captures WHERE image_id = old.image_id; END")
+        }
         return migrator
     }
 }
