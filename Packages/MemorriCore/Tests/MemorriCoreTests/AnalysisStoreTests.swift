@@ -161,4 +161,51 @@ import Testing
         #expect(try store.latestSuccessfulRun(imageID: fixture.imageID, step: "classify", promptVersion: "classify-v3") == nil)
         #expect(try store.latestSuccessfulRun(imageID: "nobody", step: "classify", promptVersion: "classify-v1") == nil)
     }
+
+    // MARK: priority (spec 011)
+
+    private func job(_ id: String, at seconds: TimeInterval, priority: Int, kind: String = "analyse", image: String? = nil) -> AnalysisJobRecord {
+        AnalysisJobRecord(id: id, kind: kind, imageId: image, createdAt: Date(timeIntervalSince1970: 1_800_000_000 + seconds), priority: priority)
+    }
+
+    @Test func aJobOfPriorityOneNeverRunsBeforeAWaitingJobOfPriorityZeroWhateverItsAge() throws {
+        let h = try Harness(); defer { h.temp.cleanUp() }
+        try h.store.enqueue(job("old-reread", at: 1, priority: 1, kind: "reread"))
+        try h.store.enqueue(job("new-capture", at: 500, priority: 0))
+        #expect(try h.store.nextRunnable(now: t0.addingTimeInterval(1000))?.id == "new-capture")
+        try h.store.markFinished(id: "new-capture", now: t0)
+        #expect(try h.store.nextRunnable(now: t0.addingTimeInterval(1000))?.id == "old-reread")
+    }
+
+    @Test func jobsOfOnePriorityKeepTheirCreationOrderThenTheirId() throws {
+        let h = try Harness(); defer { h.temp.cleanUp() }
+        try h.store.enqueue(job("b", at: 5, priority: 1)); try h.store.enqueue(job("a", at: 5, priority: 1)); try h.store.enqueue(job("early", at: 2, priority: 1))
+        #expect(try h.store.nextRunnable(now: t0.addingTimeInterval(100))?.id == "early")
+        try h.store.markFinished(id: "early", now: t0)
+        #expect(try h.store.nextRunnable(now: t0.addingTimeInterval(100))?.id == "a")
+    }
+
+    @Test func thePriorityIsStoredAndDefaultsToZero() throws {
+        let h = try Harness(); defer { h.temp.cleanUp() }
+        try h.store.enqueue(job("plain", at: 1)); try h.store.enqueue(job("later", at: 2, priority: 1))
+        #expect(try h.store.job(id: "plain")?.priority == 0)
+        #expect(try h.store.job(id: "later")?.priority == 1)
+    }
+
+    @Test func aWaitingRereadJobCountsAsPendingForItsPictureAndAFinishedOneDoesNot() throws {
+        let h = try Harness(); defer { h.temp.cleanUp() }
+        let capture = try h.context.database!.pool.write { db -> String in
+            try db.execute(sql: "INSERT INTO capture_events VALUES ('ev-1', datetime('now'), 'menu', 'complete', NULL, 1)")
+            try db.execute(sql: """
+                INSERT INTO capture_images (id, event_id, display_id, display_name, pixel_width, pixel_height, scale, full_path, model_path,
+                                            model_width, model_height, full_bytes, model_bytes, missing)
+                VALUES ('img-1', 'ev-1', 1, 'D', 100, 50, 1, 'f', 'm', 100, 50, 1, 1, 0)
+                """)
+            return "img-1"
+        }
+        try h.store.enqueue(job("r", at: 1, priority: 1, kind: "reread", image: capture))
+        #expect(try h.store.hasPendingAnalysis(imageID: capture))
+        try h.store.markFinished(id: "r", now: t0)
+        #expect(try h.store.hasPendingAnalysis(imageID: capture) == false)
+    }
 }

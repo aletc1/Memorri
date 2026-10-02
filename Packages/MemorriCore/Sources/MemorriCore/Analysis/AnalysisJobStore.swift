@@ -18,9 +18,14 @@ public struct AnalysisJobRecord: Sendable, Equatable, Codable, FetchableRecord, 
     public var failureReason: String?
     public var createdAt: Date
     public var updatedAt: Date
+    /// 0 for new captures and what the user asked for, 1 for the background re-read of the library (migration v8): the queue never
+    /// starts a job while a waiting job of a lower number exists.
+    public var priority: Int
 
     public init(id: String = UUID().uuidString, kind: String = "test", imageId: String?, state: State = .waiting,
-                attempts: Int = 0, notBefore: Date? = nil, failureReason: String? = nil, createdAt: Date, updatedAt: Date? = nil) {
+                attempts: Int = 0, notBefore: Date? = nil, failureReason: String? = nil, createdAt: Date, updatedAt: Date? = nil,
+                priority: Int = 0) {
+        self.priority = priority
         self.id = id
         self.kind = kind
         self.imageId = imageId
@@ -40,6 +45,7 @@ public struct AnalysisJobRecord: Sendable, Equatable, Codable, FetchableRecord, 
         case failureReason = "failure_reason"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case priority
     }
 }
 
@@ -143,7 +149,7 @@ public protocol AnalysisJobStoring: Sendable {
     func latestRun(jobID: String) throws -> ModelRunRecord?
     /// The newest successful run of a step with this prompt version for a picture: a retry reuses it instead of asking again.
     func latestSuccessfulRun(imageID: String, step: String, promptVersion: String) throws -> ModelRunRecord?
-    /// True when a waiting or running `analyse` or `analyse-force` job exists for the picture.
+    /// True when a waiting or running `analyse`, `analyse-force` or `reread` job exists for the picture.
     func hasPendingAnalysis(imageID: String) throws -> Bool
     func counts() throws -> JobCounts
     func recentFailures(limit: Int) throws -> [AnalysisJobRecord]
@@ -181,7 +187,7 @@ public struct AnalysisStore: AnalysisJobStoring {
             try AnalysisJobRecord.fetchOne(db, sql: """
                 SELECT * FROM analysis_jobs
                 WHERE state = 'waiting' AND (not_before IS NULL OR not_before <= ?)
-                ORDER BY created_at, id LIMIT 1
+                ORDER BY priority, created_at, id LIMIT 1
                 """, arguments: [now])
         }
     }
@@ -244,7 +250,7 @@ public struct AnalysisStore: AnalysisJobStoring {
     public func hasPendingAnalysis(imageID: String) throws -> Bool {
         try database.pool.read { db in
             try Int.fetchOne(db, sql: """
-                SELECT COUNT(*) FROM analysis_jobs WHERE image_id = ? AND kind IN ('analyse', 'analyse-force') AND state IN ('waiting', 'running')
+                SELECT COUNT(*) FROM analysis_jobs WHERE image_id = ? AND kind IN ('analyse', 'analyse-force', 'reread') AND state IN ('waiting', 'running')
                 """, arguments: [imageID]) ?? 0
         } > 0
     }

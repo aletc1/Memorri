@@ -110,7 +110,7 @@ import Testing
         let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
         try db.pool.read { db in
             #expect(try db.columns(in: "analysis_jobs").map(\.name) ==
-                    ["id", "kind", "image_id", "state", "attempts", "not_before", "failure_reason", "created_at", "updated_at"])
+                    ["id", "kind", "image_id", "state", "attempts", "not_before", "failure_reason", "created_at", "updated_at", "priority"])   // priority: v8
             #expect(try db.columns(in: "model_runs").map(\.name) ==
                     ["id", "job_id", "image_id", "attempt", "model", "think", "temperature", "image_long_edge",
                      "prompt_version", "schema_version", "started_at", "duration_ms", "outcome", "failure_reason",
@@ -135,7 +135,7 @@ import Testing
             #expect(runKeys.count == 1 && runKeys[0].destinationTable == "capture_images")
             #expect(runKeys[0].originColumns == ["image_id"])
             let jobIndexes = try db.indexes(on: "analysis_jobs").map(\.columns)
-            #expect(jobIndexes.contains(["state", "created_at"]))
+            #expect(jobIndexes.contains(["state", "priority", "created_at"]))     // v8 replaced (state, created_at)
             let runIndexes = try db.indexes(on: "model_runs").map(\.columns)
             #expect(runIndexes.contains(["image_id"]) && runIndexes.contains(["job_id"]))
         }
@@ -220,12 +220,13 @@ import Testing
         ("ocr_lines", ["image_id", "n", "text", "x", "y", "width", "height", "confidence"]),
         ("image_analysis", ["image_id", "screen_kind", "kind_confidence", "classify_version", "prompt_version", "schema_version",
                             "model", "picture_long_edge", "timezone", "timezone_source", "finding_count", "line_cap_applied",
-                            "discarded_json", "extract_run_id", "analysed_at", "reconciled_at", "reconcile_error"]),   // the last two: migration v5
+                            "discarded_json", "extract_run_id", "analysed_at", "reconciled_at", "reconcile_error",
+                            "reference_at", "reference_source", "windows_read"]),   // reconciled_at, reconcile_error: v5; the last three: v8
         ("image_context", ["image_id", "context_id", "source", "score", "matched_json", "runner_up_json", "decided_at"]),
         ("capture_tags", ["image_id", "key", "value", "confidence", "source"]),
         ("findings", ["id", "image_id", "run_id", "kind", "title", "all_day", "start_at", "end_at", "due_at", "remind_at", "timezone",
                       "people_json", "place", "notes", "cited_lines_json", "confidence", "provenance_json", "unresolved_json",
-                      "tags_json", "created_at"]),
+                      "tags_json", "created_at", "window_key"]),     // window_key: migration v8
     ]
 
     @Test func v3CreatesTheTablesWithTheListedColumns() throws {
@@ -264,7 +265,9 @@ import Testing
         try db.execute(sql: "INSERT INTO image_context VALUES (?, NULL, 'none', 0, '[]', NULL, datetime('now'))", arguments: [image])
         try db.execute(sql: "INSERT INTO capture_tags VALUES (?, 'application', 'Outlook', 0.9, 'visual')", arguments: [image])
         try db.execute(sql: """
-            INSERT INTO findings VALUES ('f1', ?, NULL, 'task', 'T', 0, NULL, NULL, NULL, NULL, 'Europe/Madrid', '[]', NULL, NULL, '[1]', 0.9,
+            INSERT INTO findings (id, image_id, run_id, kind, title, all_day, start_at, end_at, due_at, remind_at, timezone, people_json, place, notes,
+                                  cited_lines_json, confidence, provenance_json, unresolved_json, tags_json, created_at)
+            VALUES ('f1', ?, NULL, 'task', 'T', 0, NULL, NULL, NULL, NULL, 'Europe/Madrid', '[]', NULL, NULL, '[1]', 0.9,
                                          '{}', '{}', '[]', datetime('now'))
             """, arguments: [image])
     }
@@ -387,7 +390,8 @@ import Testing
                    "timezone", "day_key", "people_json", "place", "notes", "confidence", "user_touched", "first_seen", "last_seen",
                    "created_at", "updated_at",
                    "needs_review", "review_reasons_json", "approved_at", "approved_values_json"]),      // the last four: migration v6
-        ("sightings", ["id", "item_id", "image_id", "finding_id", "captured_at", "title", "cited_lines_json", "confidence", "decision_json", "created_at"]),
+        ("sightings", ["id", "item_id", "image_id", "finding_id", "captured_at", "title", "cited_lines_json", "confidence", "decision_json", "created_at",
+                       "window_app", "window_title"]),       // the window names: migration v8
         ("observations", ["id", "item_id", "sighting_id", "field", "value_json", "source", "confidence", "observed_at"]),
         ("field_locks", ["item_id", "field", "observation_id", "locked_at"]),
         ("item_aliases", ["item_id", "normalised", "title"]),
@@ -421,7 +425,7 @@ import Testing
                 #expect(v1 == expected, "columns of \(table)")
             }
             let analysis = try db.columns(in: "image_analysis").map(\.name)
-            #expect(analysis.suffix(2) == ["reconciled_at", "reconcile_error"])
+            #expect(analysis.contains("reconciled_at") && analysis.contains("reconcile_error"))
             let v2 = try self.column("image_analysis", "reconciled_at", in: db).isNotNull
             #expect(v2 == false)
             let v3 = try self.column("image_analysis", "reconcile_error", in: db).isNotNull
@@ -574,7 +578,7 @@ import Testing
         try db.pool.read { db in
             let evidence = try db.columns(in: "evidence").map(\.name)
             #expect(evidence == ["id", "item_id", "sighting_id", "image_id", "captured_at", "display_name", "title", "cited_lines_json", "region_json",
-                                 "file_path", "reason", "bytes", "created_at", "geometry"])       // "geometry" arrived with v7
+                                 "file_path", "reason", "bytes", "created_at", "geometry", "window_app", "window_title"])       // "geometry" arrived with v7, the window names with v8
             let needs = try self.column("items", "needs_review", in: db), reasons = try self.column("items", "review_reasons_json", in: db)
             let approved = try self.column("items", "approved_at", in: db), values = try self.column("items", "approved_values_json", in: db)
             #expect(needs.isNotNull && reasons.isNotNull && !approved.isNotNull && !values.isNotNull)
@@ -706,6 +710,93 @@ import Testing
             #expect(fine == (0, "[]"))
             #expect(faint == (1, "[\"low-confidence\"]"))
             #expect(gone == (0, "[]") && dismissed == (0, "[]"))
+        }
+    }
+
+    // MARK: migration "v8" (spec 011)
+
+    @Test func v8CreatesTheWindowReadingsTable() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.read { db in
+            let columns = try db.columns(in: "window_readings")
+            #expect(columns.map(\.name) == ["image_id", "window_key", "app_name", "title", "frame_json", "visible_json", "visible_share", "relevant",
+                                           "kind", "confidence", "remote", "run_id", "prompt_version", "created_at"])
+            let notNull = Set(columns.filter(\.isNotNull).map(\.name))
+            #expect(notNull == ["image_id", "window_key", "frame_json", "visible_json", "visible_share", "relevant", "confidence", "remote",
+                                "prompt_version", "created_at"])
+            let remote = try self.column("window_readings", "remote", in: db)
+            #expect(remote.defaultValueSQL == "0")
+            #expect(try db.primaryKey("window_readings").columns == ["image_id", "window_key"])
+            let references = try Row.fetchAll(db, sql: "PRAGMA foreign_key_list(window_readings)")
+            #expect(references.contains { ($0["table"] as String) == "capture_images" && ($0["on_delete"] as String) == "CASCADE" })
+        }
+    }
+
+    @Test func v8AddsTheWindowColumnsToTheTablesItEdits() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.read { db in
+            let key = try self.column("findings", "window_key", in: db)
+            #expect(!key.isNotNull && key.type.uppercased() == "TEXT")
+            let reference = try self.column("image_analysis", "reference_at", in: db), source = try self.column("image_analysis", "reference_source", in: db)
+            let read = try self.column("image_analysis", "windows_read", in: db)
+            #expect(!reference.isNotNull && !source.isNotNull)
+            #expect(read.isNotNull && read.defaultValueSQL == "1")
+            for table in ["sightings", "evidence"] {
+                let app = try self.column(table, "window_app", in: db), title = try self.column(table, "window_title", in: db)
+                #expect(!app.isNotNull && !title.isNotNull, "\(table) window names can be null")
+            }
+            let priority = try self.column("analysis_jobs", "priority", in: db)
+            #expect(priority.isNotNull && priority.defaultValueSQL == "0")
+            let indexes = try Row.fetchAll(db, sql: "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'analysis_jobs' AND sql IS NOT NULL")
+            let names = indexes.map { $0["name"] as String }
+            #expect(!names.contains("analysis_jobs_state_created_at"))
+            #expect(indexes.contains { ($0["sql"] as String).hasSuffix("(\"state\", \"priority\", \"created_at\")") })
+        }
+    }
+
+    @Test func deletingACaptureRemovesItsWindowReadings() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.write { db in
+            try self.seedPicture(db)
+            try db.execute(sql: """
+                INSERT INTO window_readings (image_id, window_key, frame_json, visible_json, visible_share, relevant, confidence, prompt_version, created_at)
+                VALUES ('img-1', 'w0', '{}', '[]', 1, 1, 0.9, 'windows-v1', datetime('now'))
+                """)
+            let before = try self.count(db, "window_readings")
+            #expect(before == 1)
+            try db.execute(sql: "DELETE FROM capture_images WHERE id = 'img-1'")
+            let after = try self.count(db, "window_readings")
+            #expect(after == 0)
+        }
+    }
+
+    @Test func aV7DatabaseMigratesToV8WithItsRowsAndNoWindowKeys() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v7")
+            try pool.write { db in
+                try self.seedPicture(db)
+                try db.execute(sql: """
+                    INSERT INTO findings (id, image_id, run_id, kind, title, all_day, start_at, end_at, due_at, remind_at, timezone, people_json, place,
+                        notes, cited_lines_json, confidence, provenance_json, unresolved_json, tags_json, created_at)
+                    VALUES ('f1', 'img-1', NULL, 'task', 'T', 0, NULL, NULL, NULL, NULL, 'Europe/Madrid', '[]', NULL, NULL, '[1]', 0.9, '{}', '{}', '[]', datetime('now'))
+                    """)
+                try self.insertJob(db, id: "job-1", kind: "analyse", image: "img-1")
+            }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.read { db in
+            let key = try Row.fetchOne(db, sql: "SELECT window_key FROM findings WHERE id = 'f1'")?["window_key"] as String?
+            let priority = try Int.fetchOne(db, sql: "SELECT priority FROM analysis_jobs WHERE id = 'job-1'")
+            #expect(key == nil)
+            #expect(priority == 0)
         }
     }
 }
