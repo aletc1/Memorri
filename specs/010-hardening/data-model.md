@@ -5,12 +5,10 @@
 CREATE TABLE calendar_coverage (
   image_id TEXT NOT NULL REFERENCES capture_images(id) ON DELETE CASCADE,
   window_key TEXT NOT NULL DEFAULT '',          -- '' when the picture was read as one
-  context_id TEXT,                              -- the context decision of the capture; NULL = none
   kind TEXT NOT NULL CHECK (kind IN ('calendar_week','calendar_day')),
   spans_json TEXT NOT NULL,                     -- [{"from": epoch seconds, "to": epoch seconds}] one per visible day column
   created_at DATETIME NOT NULL,
   PRIMARY KEY (image_id, window_key));
-CREATE INDEX calendar_coverage_context ON calendar_coverage(context_id);
 
 CREATE TABLE cancel_absences (
   item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
@@ -25,7 +23,7 @@ ALTER TABLE items ADD COLUMN cancel_cleared_at DATETIME;   -- `Still happening`:
 Deleting a capture removes its coverage and absences (cascade); a suspicion that depended on it is recomputed by the next `recompute`.
 
 ## Types
-- `CalendarCoverage { imageID, windowKey, contextID?, kind, spans: [DateInterval] }`.
+- `CalendarCoverage { imageID, windowKey, kind, spans: [DateInterval] }`; the context is read from `image_context` when the detector runs, so it is never stale, and a capture with no context records no coverage and no absences.
 - `ReviewReason.possiblyCancelled = "possibly-cancelled"` with the words `Possibly cancelled`.
 - `ReviewRules.reasons(... cancelAbsences: Int, lastSighting: Date?, clearedAt: Date?)`: adds `.possiblyCancelled` for an active item with at least two absences from distinct events captured after `max(lastSighting, clearedAt)`; applied also to approved items.
 - `ReconcileSummary.createdItemIDs: [String]`.

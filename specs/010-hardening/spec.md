@@ -49,7 +49,7 @@ In Settings the user can export their items to a file they choose (every item wi
 **Acceptance Scenarios**:
 1. **Given** a library with items, **When** the user chooses `Export items…`, **Then** a single file with all items (including dismissed ones, marked as such) is written where they chose, and it contains no capture pictures.
 2. **Given** the user chooses `Back up library…`, **When** it finishes, **Then** the backup holds everything needed to restore (items, sightings, captures with their text and cut-outs, contexts, settings of the library, and the capture pictures unless the user turned `Include capture pictures` off), and both sizes were shown before it started.
-3. **Given** a backup, **When** the user chooses `Restore…` and confirms, **Then** the library becomes the backup's, the app shows the restored items, and the replaced library remains as a safety copy that Settings > Storage shows and can delete.
+3. **Given** a backup, **When** the user chooses `Restore…` and confirms, **Then** the restore is staged and finished when Memorri restarts (the app offers `Restore and restart`, and `Cancel restore` until then); after the restart the library is the backup's, the app shows the restored items, and the replaced library remains as a safety copy that Settings > Storage shows and can delete.
 4. **Given** a file that is damaged, not from Memorri, or from a newer version, **When** the user tries to restore it, **Then** nothing changes and the reason is shown.
 5. **Given** the backup is large, **When** it runs, **Then** it shows progress, can be cancelled with nothing left half written, and the app stays usable.
 6. **Given** a restored library that has Calendar sync links, **When** the app next runs sync, **Then** sync shows what it would do and writes nothing until the user confirms (the links may no longer match what Calendar holds).
@@ -124,10 +124,13 @@ Memorri shows a simple app icon of its own, the same brain as the menu-bar icon 
 - Cancellation: the same appointment shown in two calendar windows of the same context, one hiding it: it is flagged only if no covering view shows it.
 - Cancellation: items made from one capture only (never seen twice) are checked against later captures like any other; an item with sightings from non-calendar screens only is never flagged.
 - Cancellation: a view whose date range cannot be read records no coverage, so it can never flag anything.
+- Cancellation: a capture with no context never records coverage and never flags anything, so unrelated sessions without a context cannot flag each other's meetings; the context used is the capture's context when it is checked, so changing a capture's context later changes what it can flag.
+- Cancellation: only week and day views count; a month view cuts its cells off (`+3 more`), so it proves nothing about absence.
+- Cancellation: when the retention policy or the user deletes the captures that backed a suspicion, the flag may disappear with them; that is accepted, the evidence is gone.
 - Notifications: the user denied notifications in macOS; the settings say so and offer to open System Settings, and the rest of the app works.
 - Notifications: first launch after an update that re-reads the library: no flood.
 - Backup: not enough free space (checked before starting), a destination that disappears, the library changing while it is copied (the backup is consistent as of one moment).
-- Restore: the app is writing (queue running) when restore starts: it is paused first and resumed after, and a restore never starts while a trial is being applied.
+- Restore: it is staged while the app runs and finished at the next start, before the library is opened, so nothing is writing to it; a staged restore can be cancelled until then, and an interrupted restore at start moves everything back.
 - Diagnostics: the app's log lines are checked for content before they are included; lines that cannot be shown to hold none are dropped.
 - Privacy: backups and exports hold the user's real material and are not encrypted by Memorri; the screens say so in plain words and where the file is.
 
@@ -136,9 +139,9 @@ Memorri shows a simple app icon of its own, the same brain as the menu-bar icon 
 ### Functional Requirements
 
 **Cancellation detection**
-- **FR-001**: For every analysed capture of a calendar view, Memorri MUST record what that view covered: the context, the dates it showed, and which part of those dates was visible.
+- **FR-001**: For every analysed capture of a week or day calendar view that has a context, Memorri MUST record what that view covered: the dates it showed and which part of those dates was visible (month views and captures without a context record nothing).
 - **FR-002**: When two later captures (taken at different moments, after the last capture that showed the item) of a calendar view of the same context cover an item's day and time and hold no sighting of that item, Memorri MUST mark the item `Possibly cancelled` and put it in the Inbox with that reason. One such capture alone MUST NOT flag it; a capture that shows the item again resets the count.
-- **FR-003**: Captures that are not calendar views, views of another context, views whose dates do not cover the item, and views whose dates could not be read MUST NOT count as evidence of absence.
+- **FR-003**: Captures that are not week or day calendar views, captures without a context, views of another context, views whose dates do not cover the item, and views whose dates could not be read MUST NOT count as evidence of absence.
 - **FR-004**: Memorri MUST NOT dismiss, delete, change or unsync an item or its Calendar entry because of a suspected cancellation; only the user's decision does.
 - **FR-005**: `Cancelled` MUST dismiss the item exactly as `Dismiss` does (tombstone, sync removes the entry, undoable). `Still happening` MUST approve the item and MUST NOT flag it again until it has been seen in a later capture.
 - **FR-006**: If a later covering view shows the item again, the flag MUST be removed automatically unless the user already decided.
@@ -160,7 +163,7 @@ Memorri shows a simple app icon of its own, the same brain as the menu-bar icon 
 - **FR-016**: The user MUST be able to export all items, with fields, status, user edits and the text of their sightings (no pictures), to one file they choose, in a form readable outside Memorri.
 - **FR-017**: The user MUST be able to make a backup of the library (database, cut-outs and, when `Include capture pictures` is on, which it is by default, the capture pictures) to a location they choose, after being shown its size with and without pictures, with progress and cancel; a cancelled or failed backup MUST leave no partial file. A backup without pictures MUST say so when restored, and the restored captures MUST show as having no picture (they cannot be re-read or reprocessed).
 - **FR-018**: A backup MUST be consistent as of one moment even while the app keeps working.
-- **FR-019**: Restore MUST validate the file (is a Memorri backup, intact, not from a newer version), show what will be replaced, require confirmation, pause background work, keep the replaced library as a safety copy, and leave the current library untouched on any failure.
+- **FR-019**: Restore MUST validate the file (is a Memorri backup, intact, not from a newer version), show what will be replaced (and that a backup has no capture pictures, when so), require confirmation, be finishable only at the next start and cancellable until then, keep the replaced library as a safety copy, and leave the current library untouched on any failure.
 - **FR-020**: After a restore, sync MUST NOT write anything until the user has seen a preview and confirmed (links may be stale).
 - **FR-021**: Safety copies MUST be listed in Settings > Storage with their size and a way to delete them.
 - **FR-022**: Nothing in export, backup or restore MUST use the network; files go only where the user picks. The screens MUST say that files are not encrypted.
@@ -177,7 +180,7 @@ Memorri shows a simple app icon of its own, the same brain as the menu-bar icon 
 
 ### Key Entities
 
-- **Calendar coverage**: for one analysed capture of a calendar view: the context, the first and last day shown, the time range visible, and which days were hidden or cut off.
+- **Calendar coverage**: for one analysed week or day view: the stretches of time each visible day column showed (days hidden or cut off, and times scrolled out of view, are left out); its context is the capture's.
 - **Cancellation suspicion**: an item's review reason `Possibly cancelled`, with the last capture that showed it and the (at least two) captures that covered it without it; cleared by reappearance or by the user's decision.
 - **Notification setting and pending notice**: whether on, the counts waiting for the quiet period, when the last notice was shown.
 - **Library backup**: one file or folder holding the library at a moment, with a version, whether it includes pictures, a manifest of what it holds and a check value.
@@ -202,7 +205,7 @@ Memorri shows a simple app icon of its own, the same brain as the menu-bar icon 
 ## Assumptions
 
 - Coverage can only be recorded when the capture's analysis read the calendar window's dates from its headers; where it could not, no coverage is recorded and nothing is flagged (the detection errs toward silence).
-- A calendar view is what the analysis already classifies as a calendar screen (month, week or day); the visible part of a window comes from the windows analysis of spec 011.
+- A calendar view that can prove absence is a week or day screen as the analysis already classifies them; the visible part of a window comes from the windows analysis of spec 011.
 - `Possibly cancelled` is a new review reason of the existing Inbox; no new item status is added.
 - Export format is one JSON file; the full backup is one package the app can read back; the exact container is a planning choice.
 - Restore replaces the whole library; merging a backup into an existing library is out of scope.

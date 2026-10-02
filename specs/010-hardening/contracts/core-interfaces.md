@@ -2,7 +2,7 @@
 
 ```swift
 // Cancellation
-struct CalendarCoverage { imageID, windowKey, contextID?, kind, spans: [DateInterval] }
+struct CalendarCoverage { imageID, windowKey, kind, spans: [DateInterval] }   // context read from image_context when used
 enum CoverageReader { static func coverage(window/picture: lines, headers, visible: [PixelBox], kind, zone, reference) -> CalendarCoverage? }   // nil = silence
 struct CancellationDetector {
   func record(imageID: String) throws -> Int        // coverage + absences of a first analysis; returns items newly flagged
@@ -22,7 +22,7 @@ struct ItemExporter { func export(to url: URL) throws -> Int }                  
 struct LibraryBackup { func sizes() -> (withPictures: Int64, without: Int64)
   func make(to folder: URL, includePictures: Bool, progress: (Double) -> Void) async throws -> BackupManifest }  // cancellable, no partial package
 struct LibraryRestore { func validate(_ package: URL) throws -> BackupManifest
-  func stage(_ package: URL) throws }                                                            // writes restore-pending/
+  func stage(_ package: URL) throws; func cancelStaged() throws }                                                            // writes restore-pending/
 enum StorageBootstrap { static func finishStagedRestore(paths:) throws -> RestoreResult? }      // before the database opens; rolls back on failure
 struct SafetyCopies { func list() -> [SafetyCopy]; func delete(_ name: String) throws }
 
