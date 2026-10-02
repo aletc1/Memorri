@@ -103,7 +103,7 @@ public struct Aggregate: Sendable, Equatable, Codable {
     public var equalFields = 0
     public var kindCorrect = 0
     public var seconds = 0.0
-    public var modelCalls = 0
+    public var modelCalls: Int? = nil
     public var ocrExact = 0, ocrExpected = 0, ocrOverlap = 0, ocrBoxed = 0
 
     public var precision: Double { Metrics.ratio(matched, found) }
@@ -117,7 +117,7 @@ public struct Aggregate: Sendable, Equatable, Codable {
     mutating func add(_ s: CaseScore) {
         cases += 1; found += s.foundCount; expected += s.expectedCount; matched += s.matchedCount
         comparedFields += s.comparedFields; equalFields += s.equalFields; kindCorrect += s.kindCorrect ? 1 : 0
-        seconds += s.seconds; modelCalls += s.modelCalls ?? 0
+        seconds += s.seconds; modelCalls = (modelCalls ?? 0) + (s.modelCalls ?? 0)
         ocrExact += s.ocrExact; ocrExpected += s.ocrExpected; ocrOverlap += s.ocrOverlap; ocrBoxed += s.ocrBoxed
     }
 }

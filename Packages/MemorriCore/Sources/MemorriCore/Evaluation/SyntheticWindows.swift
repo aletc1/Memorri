@@ -62,9 +62,9 @@ enum SyntheticWindows {
             GoldenWindow(app: $0.app, bundleID: $0.bundle, title: $0.title,
                          frame: [Int($0.frame.minX), Int($0.frame.minY), Int($0.frame.width), Int($0.frame.height)], stack: $0.stack)
         }
-        let meta = GoldenMeta(capturedAt: s.capturedAt, macTimezone: s.macZone, context: nil, windows: goldenWindows,
+        let meta = GoldenMeta(capturedAt: s.capturedAt, macTimezone: s.macZone, context: s.context, windows: goldenWindows,
                               displaySize: [size.width, size.height], scale: 1.0, origin: .synthetic)
-        let expected = GoldenExpected(screenKind: frontKind.rawValue, tags: tags, context: nil, lines: lines, findings: findings)
+        let expected = GoldenExpected(screenKind: frontKind.rawValue, tags: tags, context: s.context?.name, lines: lines, findings: findings)
         return SyntheticCase(name: name, meta: meta, expected: expected, picture: try canvas.pngData(),
                              features: features.union(["multi-window", "lang-\(s.language.rawValue)"]))
     }
@@ -87,7 +87,7 @@ enum SyntheticWindows {
                 SyntheticMessages.email(c, a, s, others: [("Finance", "Invoice 4471", "Attached is the invoice for"), ("HR team", "Benefits update", "Open enrolment starts soon"),
                                                           ("IT support", "Password expiry", "Your password will expire")],
                                         from: "Laura Gómez", subject: "Planning meeting", dateLine: "Date: Wednesday, 14 October 2026 at 09:12",
-                                        body: ["Hi team,", "Planning meeting: tomorrow at 10:00.", "Please bring the budget.", "Laura"],
+                                        body: ["Hi team,", "Planning meeting: tomorrow at 10:00.", "See you there.", "Laura"],
                                         findings: [ExpectedFinding(kind: "appointment", title: "Planning meeting", start: SyntheticTime.date(2026, 10, 15, 10, 0, zone: mac),
                                                                    end: SyntheticTime.date(2026, 10, 15, 11, 0, zone: mac), allDay: false, people: [], inferred: ["end"])])
             }),
@@ -156,7 +156,7 @@ enum SyntheticWindows {
                 SyntheticMessages.email(c, a, s, others: [("Finance", "Invoice 4471", "Attached is the invoice for"), ("HR team", "Benefits update", "Open enrolment starts soon"),
                                                           ("IT support", "Password expiry", "Your password will expire")],
                                         from: "Laura Gómez", subject: "Contract review", dateLine: "Date: Wednesday, 14 October 2026 at 09:12",
-                                        body: ["Hi team,", "Contract review: Friday 16 October at 14:00.", "Please read it before.", "Laura"],
+                                        body: ["Hi team,", "Contract review: Friday 16 October at 14:00.", "See you there.", "Laura"],
                                         findings: [ExpectedFinding(kind: "appointment", title: "Contract review", start: SyntheticTime.date(2026, 10, 16, 14, 0, zone: mac),
                                                                    end: SyntheticTime.date(2026, 10, 16, 15, 0, zone: mac), allDay: false, people: [], inferred: ["end"])])
             }),
@@ -173,6 +173,8 @@ enum SyntheticWindows {
         // the day after the Mac's date. The Mac's menu bar clock is the capture's.
         s = setup("windows-remote-clock-other-zone")
         s.capturedAt = SyntheticTime.date(2026, 10, 14, 20, 30, zone: mac)
+        s.context = SyntheticChrome.customerA            // the window's title names the customer, whose zone dates are read in
+        s.zone = "America/New_York"
         out.append(try desktop(name: s.name, setup: s, clock: "Wed 14 Oct 20:30", features: ["relative-date", "remote-frame", "remote-clock", "text-only-no-end"], windows: [
             DesktopWindow(app: "Microsoft Remote Desktop", bundle: "com.microsoft.rdc.macos", title: "Remote Desktop Connection - Customer A",
                           frame: CGRect(x: 520, y: 60, width: 1660, height: 1060), stack: 0, draw: { c, a in
@@ -180,10 +182,10 @@ enum SyntheticWindows {
                 let desk = CGRect(x: a.minX, y: a.minY, width: a.width, height: a.height - 40)
                 let drawing = SyntheticMessages.chat(c, desk, s, contact: "Anna Schmidt", separator: "Today",
                                                      messages: [SyntheticMessage(name: "Anna Schmidt", time: "03:12", text: "Morning! Did you see the notes?"),
-                                                                SyntheticMessage(name: "Ben Ortiz", time: "03:28", text: "Can we meet tomorrow at 10:00?"),
+                                                                SyntheticMessage(name: "Ben Ortiz", time: "03:28", text: "Planning meeting tomorrow at 10:00, can you join?"),
                                                                 SyntheticMessage(name: "Anna Schmidt", time: "03:29", text: "Sounds good, thanks.")],
-                                                     findings: [ExpectedFinding(kind: "appointment", title: "Meeting", start: SyntheticTime.date(2026, 10, 16, 10, 0, zone: mac),
-                                                                                end: SyntheticTime.date(2026, 10, 16, 11, 0, zone: mac), allDay: false, people: [], inferred: ["end"])])
+                                                     findings: [ExpectedFinding(kind: "appointment", title: "Planning meeting", start: SyntheticTime.date(2026, 10, 16, 10, 0, zone: "America/New_York"),
+                                                                                end: SyntheticTime.date(2026, 10, 16, 11, 0, zone: "America/New_York"), allDay: false, people: [], inferred: ["end"])])
                 c.fill(taskbar, RGB(0x1B1B1B))
                 let remoteClock = "Thu 15 Oct 03:30"
                 c.text(remoteClock, x: taskbar.maxX - 24 - c.textWidth(remoteClock, size: 16), y: taskbar.minY + 11, size: 16, color: RGB(0xFFFFFF))
@@ -192,7 +194,7 @@ enum SyntheticWindows {
             // A note beside it, that says nothing the remote desktop's clock should be read for.
             DesktopWindow(app: "Notes", bundle: "com.apple.Notes", title: "Notes", frame: CGRect(x: 20, y: 60, width: 480, height: 700), stack: 1, draw: { c, a in
                 let p = s.palette
-                for (i, text) in ["Shopping list", "milk", "bread", "coffee", "Plumber was here Friday"].enumerated() {
+                for (i, text) in ["Shopping list", "milk", "bread", "coffee", "Plumber came by"].enumerated() {
                     c.text(text, x: a.minX + 24, y: a.minY + 24 + Double(i) * 36, size: 18, color: p.text, bold: i == 0)
                 }
                 return SyntheticDrawing(kind: .other, findings: [])

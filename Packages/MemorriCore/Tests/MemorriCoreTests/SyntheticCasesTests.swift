@@ -211,8 +211,9 @@ import Testing
         let lines = (c.expected.lines ?? []).map(\.text)
         #expect(lines.contains("Wed 14 Oct 20:30") && lines.contains("Thu 15 Oct 03:30"))
         #expect(c.features.contains("remote-clock"))
-        let meeting = c.expected.findings.first { $0.title == "Meeting" }
-        #expect(meeting?.start == SyntheticTime.date(2026, 10, 16, 10, 0, zone: "Europe/Madrid"))      // tomorrow from Thursday 15, not from Wednesday 14
+        let meeting = c.expected.findings.first { $0.title == "Planning meeting" }
+        #expect(meeting?.start == SyntheticTime.date(2026, 10, 16, 10, 0, zone: "America/New_York"))      // tomorrow from Thursday 15, not from Wednesday 14
+        #expect(c.meta.context?.name == "Customer A" && c.expected.context == "Customer A")
         #expect(c.meta.capturedAt == SyntheticTime.date(2026, 10, 14, 20, 30, zone: "Europe/Madrid"))
     }
 }

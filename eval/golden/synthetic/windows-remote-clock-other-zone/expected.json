@@ -1,8 +1,9 @@
 {
+  "context" : "Customer A",
   "findings" : [
     {
       "allDay" : false,
-      "end" : "2026-10-16T09:00:00Z",
+      "end" : "2026-10-16T15:00:00Z",
       "inferred" : [
         "end"
       ],
@@ -10,8 +11,8 @@
       "people" : [
 
       ],
-      "start" : "2026-10-16T08:00:00Z",
-      "title" : "Meeting",
+      "start" : "2026-10-16T14:00:00Z",
+      "title" : "Planning meeting",
       "window" : "w0"
     }
   ],
@@ -146,10 +147,10 @@
       "box" : [
         936,
         350,
-        266,
+        404,
         22
       ],
-      "text" : "Can we meet tomorrow at 10:00?"
+      "text" : "Planning meeting tomorrow at 10:00, can you join?"
     },
     {
       "box" : [
@@ -236,10 +237,10 @@
       "box" : [
         44,
         264,
-        198,
+        140,
         22
       ],
-      "text" : "Plumber was here Friday"
+      "text" : "Plumber came by"
     }
   ],
   "screenKind" : "chat",

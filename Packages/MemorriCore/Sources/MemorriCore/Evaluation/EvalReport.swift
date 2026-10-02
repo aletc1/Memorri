@@ -170,10 +170,13 @@ public struct EvalReport: Sendable, Equatable, Codable {
                                           fieldAccuracyDelta: delta(a.overall.fieldAccuracy, b.overall.fieldAccuracy),
                                           classificationDelta: b.overall.classificationAccuracy - a.overall.classificationAccuracy,
                                           secondsDelta: b.overall.meanSeconds - a.overall.meanSeconds, changedCases: changes)
-        comparison.modelCallsBefore = a.overall.modelCalls; comparison.modelCallsAfter = b.overall.modelCalls
+        // A report from before calls were counted still has the steps of every case, one per call.
+        func calls(_ report: CaseReport) -> Int { report.score.modelCalls ?? report.steps.count }
+        comparison.modelCallsBefore = a.overall.modelCalls ?? a.cases.map(calls).reduce(0, +)
+        comparison.modelCallsAfter = b.overall.modelCalls ?? b.cases.map(calls).reduce(0, +)
         comparison.casesWithMoreCalls = b.cases.compactMap { after in
-            guard let old = before[after.name], let was = old.score.modelCalls, let now = after.score.modelCalls, now > was else { return nil }
-            return "\(after.name): \(was) -> \(now)"
+            guard let old = before[after.name], calls(after) > calls(old) else { return nil }
+            return "\(after.name): \(calls(old)) -> \(calls(after))"
         }
         return comparison
     }

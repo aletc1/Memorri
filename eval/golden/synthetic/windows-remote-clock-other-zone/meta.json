@@ -1,5 +1,19 @@
 {
   "capturedAt" : "2026-10-14T18:30:00Z",
+  "context" : {
+    "hints" : [
+      {
+        "kind" : "domain",
+        "value" : "customer-a.example"
+      },
+      {
+        "kind" : "window_title",
+        "value" : "Customer A"
+      }
+    ],
+    "name" : "Customer A",
+    "timezone" : "America/New_York"
+  },
   "displaySize" : [
     2200,
     1200

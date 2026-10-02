@@ -102,6 +102,15 @@ public struct FindingDraft: Sendable, Equatable {
                      columnLine: columnLine, sentText: sentText, messageTimeText: messageTimeText)
     }
 
+    /// This finding with every field it lacks taken from `other` (the same block listed twice), and the lines of both.
+    func filling(from other: FindingDraft) -> FindingDraft {
+        FindingDraft(kind: kind, title: title, citedLines: Array(Set(citedLines + other.citedLines)).sorted(), startText: startText ?? other.startText,
+                     endText: endText ?? other.endText, dateText: dateText ?? other.dateText, dueText: dueText ?? other.dueText,
+                     remindText: remindText ?? other.remindText, allDay: allDay ?? other.allDay, people: people.isEmpty ? other.people : people,
+                     place: place ?? other.place, notes: notes ?? other.notes, columnLine: columnLine ?? other.columnLine,
+                     sentText: sentText ?? other.sentText, messageTimeText: messageTimeText ?? other.messageTimeText)
+    }
+
     func withCitedLines(_ lines: [Int]) -> FindingDraft {
         FindingDraft(kind: kind, title: title, citedLines: lines, startText: startText, endText: endText, dateText: dateText,
                      dueText: dueText, remindText: remindText, allDay: allDay, people: people, place: place, notes: notes,

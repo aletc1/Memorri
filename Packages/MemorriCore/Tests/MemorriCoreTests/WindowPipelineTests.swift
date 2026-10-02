@@ -1,4 +1,5 @@
 import CoreGraphics
+import ImageIO
 import Foundation
 import Testing
 @testable import MemorriCore
@@ -388,5 +389,42 @@ import Testing
         let again = remoteRig(d)
         let plain = try await again.pipeline.analyse(input(windows: []), settings: settings)
         #expect(plain.findings.first?.provenance["start"]?.reason == nil)
+    }
+
+    // MARK: one block listed twice
+
+    @Test func aBlockListedTwiceIsOneFindingWithWhatEachEntryGave() {
+        let timed = FindingDraft(kind: .appointment, title: "Design review", citedLines: [28, 30], startText: "13:00")
+        let place = FindingDraft(kind: .appointment, title: "design  review", citedLines: [30, 31], place: "Board room")
+        let other = FindingDraft(kind: .appointment, title: "Team sync", citedLines: [40], startText: "10:00")
+        let sameTitleElsewhere = FindingDraft(kind: .appointment, title: "Design review", citedLines: [99], startText: "09:00")
+        let merged = AnalysisPipeline.mergingRepeats([timed, place, other, sameTitleElsewhere])
+        #expect(merged.map(\.title) == ["Design review", "Team sync", "Design review"])
+        #expect(merged[0].startText == "13:00" && merged[0].place == "Board room" && merged[0].citedLines == [28, 30, 31])
+        #expect(merged[2].citedLines == [99])                        // a block of the same name that cites other lines is another block
+    }
+
+    @Test func aBlocksLengthIsMeasuredOnTheWindowsOwnPageNotTheDesktopsColour() {
+        // The block is a 90-minute one in a white window on a dark desktop: measured against the desktop, its pastel fill would run into the white page.
+        let canvas = SyntheticCanvas(width: 1200, height: 900, background: RGB(0x3B5B7F))
+        canvas.fill(CGRect(x: 100, y: 100, width: 900, height: 700), RGB(0xFFFFFF))
+        for h in 0..<9 { canvas.fill(CGRect(x: 160, y: 200 + Double(h) * 64, width: 800, height: 1), RGB(0xD0D0D0)) }
+        canvas.fill(CGRect(x: 360, y: 200 + 5 * 64 + 2, width: 260, height: 94), RGB(0xFBE3C6))
+        let title = canvas.text("13:00 Design review", x: 372, y: 200 + 5 * 64 + 8, size: 16, color: RGB(0x1C1C1C))
+        var hours: [RecognisedLine] = []
+        for h in 0..<9 {
+            let box = canvas.text(String(format: "%02d:00", 8 + h), x: 112, y: 200 + Double(h) * 64 - 8, size: 14, color: RGB(0x707070), record: false)
+            hours.append(RecognisedLine(n: h + 1, text: String(format: "%02d:00", 8 + h), box: PixelBox(x: Int(box.minX), y: Int(box.minY), width: Int(box.width), height: Int(box.height)), confidence: 0.9))
+        }
+        guard let data = try? canvas.pngData(), let source = CGImageSourceCreateWithData(data as CFData, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            Issue.record("no picture"); return
+        }
+        let box = PixelBox(x: Int(title.minX), y: Int(title.minY), width: Int(title.width), height: Int(title.height))
+        let whole = BlockGeometry.duration(titleBox: box, lines: hours, image: image, columnWidth: 280)
+        let geometry = AnalysisPipeline.Geometry.cut(of: image, frame: PixelBox(x: 100, y: 100, width: 900, height: 700), columnWidth: 280)
+        let cut = BlockGeometry.duration(titleBox: PixelBox(x: box.x - geometry.origin.x, y: box.y - geometry.origin.y, width: box.width, height: box.height),
+                                         lines: hours, image: geometry.image, columnWidth: 280)
+        #expect(whole != 90)                                          // the desktop's colour as the page makes the fill look like part of the page
+        #expect(cut == 90)
     }
 }
