@@ -120,8 +120,12 @@ public struct Reconciler: ImageReconciling {
         var keepApart: Set<[String]>
     }
 
-    public func plan(imageID: String) async throws -> ReconcilePlan {
-        let snapshot = try await database.pool.read { try Self.snapshot($0, imageID: imageID) }
+    public func plan(imageID: String) async throws -> ReconcilePlan { try await plan(imageID: imageID, findings: nil) }
+
+    /// The plan for `findings` instead of the picture's stored ones (a dry run over a reprocessing trial's proposals, spec 008): the same
+    /// matching against the items and against what this picture already shows, and nothing written.
+    public func plan(imageID: String, findings proposals: [Finding]?) async throws -> ReconcilePlan {
+        let snapshot = try await database.pool.read { try Self.snapshot($0, imageID: imageID, findings: proposals) }
         let canEmbed = await judge.canEmbed
         let canJudge = await judge.canJudge
         var steps: [ReconcilePlan.Step] = []

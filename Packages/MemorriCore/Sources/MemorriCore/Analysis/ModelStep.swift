@@ -80,8 +80,11 @@ public enum ModelStep {
     /// that is missing or cannot read images means the server is unavailable.
     public static func settings(service: OllamaService, settings: OllamaSettings) async -> Result<ModelStepSettings, PipelineError> {
         guard let model = settings.model else { return .failure(.serverUnavailable) }
-        let think = settings.think
-        let timeout = TimeInterval(settings.timeoutSeconds)
+        return await ModelStep.settings(service: service, model: model, think: settings.think, timeout: TimeInterval(settings.timeoutSeconds))
+    }
+
+    /// The same for a model named by the caller (a reprocessing trial, spec 008).
+    public static func settings(service: OllamaService, model: String, think: ThinkSetting, timeout: TimeInterval) async -> Result<ModelStepSettings, PipelineError> {
         let client = await service.client()
         do {
             guard let installed = try await client.models().first(where: { $0.name == model }), installed.readsImages else {

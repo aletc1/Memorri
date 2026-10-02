@@ -433,6 +433,74 @@ enum Migrations {
             try db.execute(sql: "CREATE TRIGGER search_aliases_after_delete AFTER DELETE ON item_aliases BEGIN \(document("old.item_id")) END")
             try db.execute(sql: "CREATE TRIGGER search_captures_after_read_delete AFTER DELETE ON ocr_reads BEGIN DELETE FROM search_captures WHERE image_id = old.image_id; END")
         }
+
+        // Spec 008: reprocessing trials (ADR 0025). A trial reads stored captures with another model into tables of its own; nothing of it is
+        // read back by live analysis or by items. A trial job carries the trial it belongs to, and `apply_trial` joins the operation kinds.
+        migrator.registerMigration("v10") { db in
+            try db.create(table: "trials") { t in
+                t.primaryKey("id", .text)
+                t.column("model", .text).notNull()
+                t.column("prompt_version", .text).notNull()
+                t.column("think", .text).notNull()
+                t.column("state", .text).notNull().check(sql: "state IN ('running', 'finished', 'cancelled')")
+                t.column("created_at", .datetime).notNull()
+                t.column("finished_at", .datetime)
+            }
+            try db.create(table: "trial_images") { t in
+                t.column("trial_id", .text).notNull().references("trials", onDelete: .cascade)
+                t.column("image_id", .text).notNull().references("capture_images", onDelete: .cascade)
+                t.column("state", .text).notNull().check(sql: "state IN ('waiting', 'read', 'skipped', 'failed')")
+                t.column("reason", .text)
+                t.column("finding_count", .integer).notNull().defaults(to: 0)
+                t.column("duration_ms", .integer)
+                t.primaryKey(["trial_id", "image_id"])
+            }
+            try db.create(table: "trial_findings") { t in
+                t.primaryKey("id", .text)
+                t.column("trial_id", .text).notNull().references("trials", onDelete: .cascade)
+                t.column("image_id", .text).notNull().references("capture_images", onDelete: .cascade)
+                t.column("kind", .text).notNull()
+                t.column("title", .text).notNull()
+                t.column("all_day", .integer).notNull().defaults(to: 0)
+                t.column("start_at", .datetime)
+                t.column("end_at", .datetime)
+                t.column("due_at", .datetime)
+                t.column("remind_at", .datetime)
+                t.column("timezone", .text).notNull()
+                t.column("people_json", .text).notNull().defaults(to: "[]")
+                t.column("place", .text)
+                t.column("notes", .text)
+                t.column("cited_lines_json", .text).notNull()
+                t.column("confidence", .double).notNull()
+                t.column("provenance_json", .text).notNull()
+                t.column("unresolved_json", .text).notNull().defaults(to: "{}")
+                t.column("tags_json", .text).notNull()
+                t.column("window_key", .text)
+                t.column("window_app", .text)
+                t.column("window_title", .text)
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.create(index: "trial_findings_trial_image", on: "trial_findings", columns: ["trial_id", "image_id"])
+            try db.alter(table: "analysis_jobs") { t in t.add(column: "trial_id", .text) }
+            try db.create(index: "analysis_jobs_trial", on: "analysis_jobs", columns: ["trial_id"])
+
+            try db.create(table: "reconcile_ops_v10") { t in
+                t.primaryKey("id", .text)
+                t.column("kind", .text).notNull()
+                    .check(sql: "kind IN ('auto_merge', 'merge', 'split', 'dismiss', 'restore', 'edit', 'unlock', 'context', 'different', 'undo', 'approve', 'apply_trial')")
+                t.column("by_user", .integer).notNull()
+                t.column("item_ids_json", .text).notNull()
+                t.column("moved_json", .text).notNull()
+                t.column("before_json", .text).notNull()
+                t.column("detail_json", .text).notNull()
+                t.column("undone_by", .text)
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.execute(sql: "INSERT INTO reconcile_ops_v10 SELECT id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at FROM reconcile_ops")
+            try db.drop(table: "reconcile_ops")
+            try db.rename(table: "reconcile_ops_v10", to: "reconcile_ops")
+            try db.create(index: "reconcile_ops_created_at", on: "reconcile_ops", columns: ["created_at"])
+        }
         return migrator
     }
 }

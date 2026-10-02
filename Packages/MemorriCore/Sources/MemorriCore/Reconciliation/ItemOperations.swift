@@ -31,10 +31,13 @@ public struct ItemOperations: Sendable {
     let database: StorageDatabase
     let now: @Sendable () -> Date
     let reconciler: (any ImageReconciling)?
+    let evidence: (any ImageEvidenceWriting)?
 
-    /// `reconciler` is needed only by `changeContext` and by the undo of a context change.
-    public init(database: StorageDatabase, reconciler: (any ImageReconciling)? = nil, now: @escaping @Sendable () -> Date = { Date() }) {
-        self.database = database; self.reconciler = reconciler; self.now = now
+    /// `reconciler` is needed only by `changeContext` and by the undo of a context change; `evidence` only to make the cut-outs of a capture
+    /// again after the undo of a reprocessing apply.
+    public init(database: StorageDatabase, reconciler: (any ImageReconciling)? = nil, evidence: (any ImageEvidenceWriting)? = nil,
+                now: @escaping @Sendable () -> Date = { Date() }) {
+        self.database = database; self.reconciler = reconciler; self.evidence = evidence; self.now = now
     }
 
     /// Sets a field to the user's value and locks it: later sightings are recorded but never change it.

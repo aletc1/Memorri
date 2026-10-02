@@ -110,7 +110,7 @@ import Testing
         let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
         try db.pool.read { db in
             #expect(try db.columns(in: "analysis_jobs").map(\.name) ==
-                    ["id", "kind", "image_id", "state", "attempts", "not_before", "failure_reason", "created_at", "updated_at", "priority"])   // priority: v8
+                    ["id", "kind", "image_id", "state", "attempts", "not_before", "failure_reason", "created_at", "updated_at", "priority", "trial_id"])   // priority: v8, trial_id: v10
             #expect(try db.columns(in: "model_runs").map(\.name) ==
                     ["id", "job_id", "image_id", "attempt", "model", "think", "temperature", "image_long_edge",
                      "prompt_version", "schema_version", "started_at", "duration_ms", "outcome", "failure_reason",
@@ -797,6 +797,53 @@ import Testing
             let priority = try Int.fetchOne(db, sql: "SELECT priority FROM analysis_jobs WHERE id = 'job-1'")
             #expect(key == nil)
             #expect(priority == 0)
+        }
+    }
+
+    // MARK: migration "v10" (spec 008)
+
+    @Test func aV9DatabaseMigratesToV10KeepingItsOperationLogAndItemHistory() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v9")
+            try pool.write { db in
+                try self.insertItem(db, id: "i1", title: "Daily standup")
+                try db.execute(sql: """
+                    INSERT INTO reconcile_ops (id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at)
+                    VALUES ('op1', 'approve', 1, '["i1"]', '[]', '{}', '{"note":"kept"}', NULL, '2026-10-01 10:00:00.000'),
+                           ('op2', 'edit', 1, '["i1"]', '[]', '{}', '{}', 'op3', '2026-10-01 11:00:00.000')
+                    """)
+                try db.execute(sql: "INSERT INTO reconcile_op_items (op_id, item_id) VALUES ('op1', 'i1'), ('op2', 'i1')")
+            }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.read { db in
+            let ops = try Row.fetchAll(db, sql: "SELECT id, kind, detail_json, undone_by FROM reconcile_ops ORDER BY id")
+            #expect(ops.map { $0["id"] as String } == ["op1", "op2"] && ops[0]["detail_json"] as String == "{\"note\":\"kept\"}" && ops[1]["undone_by"] as String? == "op3")
+            let links = try Row.fetchAll(db, sql: "SELECT op_id, item_id FROM reconcile_op_items ORDER BY op_id")
+            #expect(links.map { $0["op_id"] as String } == ["op1", "op2"])
+            #expect(try db.indexes(on: "reconcile_ops").contains { $0.name == "reconcile_ops_created_at" })
+            let foreign = try db.foreignKeys(on: "reconcile_op_items").map(\.destinationTable)
+            #expect(foreign.contains("reconcile_ops"))
+        }
+        let history = try OperationLog(database: db).ops(forItem: "i1")
+        #expect(history.map(\.id) == ["op2", "op1"])
+    }
+
+    @Test func v10CreatesTheTrialTablesAndKeepsTheOperationLog() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.read { db in
+            for table in ["trials", "trial_images", "trial_findings"] { #expect(try db.tableExists(table), "\(table) should exist") }
+            #expect(try db.columns(in: "trials").map(\.name) == ["id", "model", "prompt_version", "think", "state", "created_at", "finished_at"])
+            #expect(try db.columns(in: "trial_images").map(\.name) == ["trial_id", "image_id", "state", "reason", "finding_count", "duration_ms"])
+            let findings = try db.columns(in: "findings").map(\.name).filter { $0 != "run_id" }
+            let proposals = try db.columns(in: "trial_findings").map(\.name)
+            #expect(Set(findings).isSubset(of: Set(proposals)))          // a proposal keeps every column of a finding
         }
     }
 

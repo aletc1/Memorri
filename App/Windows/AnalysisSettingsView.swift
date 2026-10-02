@@ -18,6 +18,8 @@ struct AnalysisSettingsView: View {
                 Divider()
                 storedSection
                 Divider()
+                ReprocessSection(environment: environment)
+                Divider()
                 recentSection
                 Divider()
                 ContextsBlock(environment: environment, onChange: reload)
