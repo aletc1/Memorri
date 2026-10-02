@@ -21,11 +21,14 @@ public struct AnalysisJobRecord: Sendable, Equatable, Codable, FetchableRecord, 
     /// 0 for new captures and what the user asked for, 1 for the background re-read of the library (migration v8): the queue never
     /// starts a job while a waiting job of a lower number exists.
     public var priority: Int
+    /// The reprocessing trial a `trial` job belongs to (migration v10, spec 008); nil for every other kind.
+    public var trialId: String?
 
     public init(id: String = UUID().uuidString, kind: String = "test", imageId: String?, state: State = .waiting,
                 attempts: Int = 0, notBefore: Date? = nil, failureReason: String? = nil, createdAt: Date, updatedAt: Date? = nil,
-                priority: Int = 0) {
+                priority: Int = 0, trialId: String? = nil) {
         self.priority = priority
+        self.trialId = trialId
         self.id = id
         self.kind = kind
         self.imageId = imageId
@@ -46,6 +49,7 @@ public struct AnalysisJobRecord: Sendable, Equatable, Codable, FetchableRecord, 
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case priority
+        case trialId = "trial_id"
     }
 }
 
@@ -269,7 +273,7 @@ public struct AnalysisStore: AnalysisJobStoring {
     public func counts() throws -> JobCounts {
         try database.pool.read { db in
             func count(_ state: String) throws -> Int {
-                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM analysis_jobs WHERE state = ?", arguments: [state]) ?? 0
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM analysis_jobs WHERE state = ? AND kind != 'trial'", arguments: [state]) ?? 0
             }
             return JobCounts(waiting: try count("waiting"), running: try count("running"),
                              finished: try count("finished"), failed: try count("failed"))
