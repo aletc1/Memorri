@@ -20,12 +20,10 @@ struct ItemsView: View {
                 Text("The capture storage is not available, so there are no items to show.")
                     .foregroundStyle(.secondary).padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                HSplitView {
-                    Group {
-                        if model.viewMode == .calendar { CalendarMonthView(model: model) } else { list(model: model) }
-                    }
-                    .frame(minWidth: model.viewMode == .calendar ? 480 : 340, idealWidth: model.viewMode == .calendar ? 560 : 400)
-                    detailPane.frame(minWidth: 340)
+                ItemsSplit(minLeading: model.viewMode == .calendar ? 480 : 340) {
+                    if model.viewMode == .calendar { CalendarMonthView(model: model) } else { list(model: model) }
+                } trailing: {
+                    detailPane
                 }
             }
             if let message = model.message {
@@ -245,5 +243,46 @@ private struct LockChoiceSheet: View {
             }
         }
         .padding(20).frame(minWidth: 380)
+    }
+}
+
+/// The list (or calendar) and the detail pane. The detail keeps its width while the user clicks and navigates; only dragging the divider
+/// changes it, and the width is remembered.
+private struct ItemsSplit<Leading: View, Trailing: View>: View {
+    static var defaultWidth: Double { 520 }
+    static var minTrailing: Double { 340 }
+
+    let minLeading: Double
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
+    @AppStorage("items.detailWidth") private var storedWidth = ItemsSplit.defaultWidth
+    @State private var dragStart: Double?
+    @State private var dragWidth: Double?
+
+    private func clamped(_ width: Double, total: Double) -> Double {
+        max(Self.minTrailing, min(width, max(Self.minTrailing, total - minLeading)))
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = clamped(dragWidth ?? storedWidth, total: proxy.size.width)
+            HStack(spacing: 0) {
+                leading.frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider()
+                    .overlay(Color.clear.frame(width: 9).contentShape(Rectangle())
+                        .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                        .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { value in
+                                let start = dragStart ?? width
+                                dragStart = start
+                                dragWidth = clamped(start - value.translation.width, total: proxy.size.width)
+                            }
+                            .onEnded { _ in
+                                if let dragWidth { storedWidth = dragWidth }
+                                dragStart = nil; dragWidth = nil
+                            }))
+                trailing.frame(width: width).frame(maxHeight: .infinity)
+            }
+        }
     }
 }
