@@ -54,3 +54,12 @@
 - **Decision**: category `search`: `search items=<n> captures=<n> ms=<n>`, `search index prepare done=<n> total=<n>`, never text.
 
 **Checked (2026-10-02, task T001)**: through GRDB on the system SQLite (3.54, FTS5 compiled in), `unicode61 remove_diacritics 2` with `prefix = '2 3 4'` finds `Café - Pruebas` by `"cafe" AND "pru"*`, folds `ñ` to `n`, supports `a NOT b` and `bm25()` with column weights, and a trigger that deletes the row before inserting survives `INSERT OR REPLACE`.
+
+## As built (differences from the decisions above)
+
+- **R6**: captures are listed newest first (not by bm25), as the acceptance scenarios say; bm25 ranks items only. Items are ranked by bm25 with the weights above, then newest `last_seen`.
+- **R4**: the lines of a capture are read with an SQL filter (the word as a substring, ASCII, any case, plus every line with a non-ASCII character), then matched in Swift; a result's window is the first matching line's frontmost visible window.
+- **R8**: the rebuild probe also compares the capture rows with the pictures that have non-blank text, so a missing or left-over row is noticed at launch.
+- **R9**: the panel calls `NSApp.activate()` but the app can stay inactive when the shortcut is pressed in another app; the non-activating panel still takes the keys (checked with the shortcut and typing over another app).
+- **Names in tests** are generic (a real project name from a screenshot was replaced everywhere before the branch was pushed).
+

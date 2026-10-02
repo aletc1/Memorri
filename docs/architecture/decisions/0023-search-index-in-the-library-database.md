@@ -1,6 +1,6 @@
 # 23. Search index in the library database
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-02
 - Related: spec 007 (`specs/007-search/`), ADR 0003 (SQLite and GRDB), ADR 0020, ADR 0022
 
@@ -19,3 +19,16 @@ Option 1. Two derived FTS5 tables (`search_items`, `search_captures`) with case 
 - Easier: freshness is part of every write, including future ones; one file to back up or delete; "Delete everything" cannot leave text behind.
 - Harder: triggers must be kept in step with the searchable columns of `items`; a capture document is rewritten whole when its text is read again; the index adds disk (about the size of the text).
 - Revisit: result quality on real libraries (typo tolerance, stemming); the size of `search_captures` after months of use.
+
+## Results (2026-10-02)
+Measured on a library of 5,000 items (with one alias each) and 200 captures of 1,000 lines (200,000 lines), best of three, `SearchScaleTests`:
+
+| Query | Release | Debug |
+|---|---|---|
+| two words, one a prefix, among items | 0.9 ms | 1.4 ms |
+| two common words, a page of captures with their lines | 24 ms | 28 ms |
+| one rare word, a page of captures | 18 ms | 21 ms |
+| first results with a kind filter | 1.0 ms | 1.6 ms |
+
+The limits (200 ms, 300 ms) hold with a wide margin. Writing a capture's document for 1,000 lines costs under 50 ms (an analysis takes seconds). A full rebuild equals the index the triggers kept (rows of both tables compared). The first version of capture results read every line of each of the 20 captures and took 0.45 s in a debug build; filtering the lines in SQL (the word as a substring, plus every line with an accent) and a cheap ASCII test before folding brought it to the figures above.
+

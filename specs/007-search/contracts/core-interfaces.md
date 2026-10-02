@@ -60,3 +60,13 @@ public struct SearchIndex: Sendable {
 - `itemIDs` honours kinds (items only), context, dates and `includeDismissed`.
 - Items window: `ItemsViewModel` takes `searchText`; the matching ids restrict `ItemListModel.visible`.
 - Logging: category `search`, counts and milliseconds only.
+
+## As built
+
+- `SearchQuery.Terms` also has `prefixLast` (the last thing typed was a bare word, so it is matched by its beginning); `SearchQuery.hasFilters` and `clearFilters()`; `matchExpression` has the shape `("a" AND "b"* AND "a phrase") NOT "x"`.
+- `SearchService.changes() -> AsyncStream<Void>` fires after changes to items, aliases and read text (an open panel asks again).
+- `SearchIndex.writeCapture` is internal (called by `OCRStore.save`); `state()` is `ready` for an empty library; `prepare` reports `preparing(done:total:)` after the start, the items and each batch of 100 pictures, then `ready`.
+- Pure helpers for the UI: `SearchPanelModel` (row text, filter text, messages, rows, keyboard, `DatePreset`, `customRange`), `CaptureViewerModel`, `ItemListModel.filter(showing:)` and `ItemListModel.restrict(_:to:)`.
+- `SightingRow` is untouched; the app opens an item through `AppState.ScopeRequest(itemID:status:)`.
+- Search logs `search items=<n> captures=<n> ms=<n>` and `search index prepare done=<n> total=<n> ms=<n>` only (tested against the process log).
+

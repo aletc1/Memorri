@@ -10,7 +10,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 004 | ocr-extraction-and-eval | Done |
 | 005 | reconciliation | Done |
 | 006 | items-ui-evidence | Done |
-| 007 | search | Specified |
+| 007 | search | Done |
 | 008 | reprocessing | Not started |
 | 009 | eventkit-sync | Not started |
 | 010 | hardening | Not started |

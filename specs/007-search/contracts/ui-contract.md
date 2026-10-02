@@ -19,3 +19,13 @@ A resizable window: the whole capture with the matching lines outlined (spec 006
 
 ## Settings
 Under the capture shortcut: `Search shortcut:` recorder (default ⌃⌥⌘F), `Reset to default`, the reason when refused (conflict with the capture shortcut or a system shortcut); clearing it leaves the menu item working.
+
+## As built
+
+- The panel is 640 × 420 pt, a non-activating floating panel; the shortcut opens it over another app and the keys reach it (checked with Control-Option-Command-F and typing). Escape, clicking another window and opening a result close it.
+- Filters are three menus (`Kind` with checkmarks, `Context`, `Date` with Today, Last 7 days, Last 30 days, This month, Next 30 days and `Custom range…`) and a `Dismissed` checkbox; when any is on, the panel names them next to `Clear filters`. Clearing one is choosing `Any kind`, `Any context` or `Any date`.
+- Capture rows show `time · display · window` and up to three marked lines. Return on a capture opens the `Memorri Capture` window (picture with the matching lines outlined, the text of the capture with the matches marked and scrolled into view; text only and a note when the picture is gone).
+- The Items window search field is at the right of the first toolbar row.
+- Debug builds: `--open-search <text>` opens the panel with that text at launch.
+- Not checked by hand: VoiceOver, the panel over a full-screen app, the timing of SC-004 with a stopwatch.
+
