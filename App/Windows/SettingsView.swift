@@ -3,7 +3,7 @@ import ServiceManagement
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, permissions, ollama, analysis, storage, calendarSync
+    case general, permissions, ollama, analysis, storage, calendarSync, diagnostics
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .analysis: "Analysis"
         case .storage: "Storage"
         case .calendarSync: "Calendar sync"
+        case .diagnostics: "Diagnostics"
         }
     }
 
@@ -26,6 +27,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .analysis: "text.magnifyingglass"
         case .storage: "internaldrive"
         case .calendarSync: "calendar"
+        case .diagnostics: "stethoscope"
         }
     }
 
@@ -67,6 +69,8 @@ struct SettingsView: View {
             AnalysisSettingsView(environment: environment)
         case .calendarSync:
             CalendarSyncView(environment: environment)
+        case .diagnostics:
+            DiagnosticsView(environment: environment)
         }
     }
 }
