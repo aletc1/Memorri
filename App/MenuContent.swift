@@ -20,6 +20,7 @@ struct MenuContent: View {
         Text(environment.state.lastCaptureLine)
         Text(environment.state.analysisLine)
         Button(captureTitle) { environment.requestCapture(.menu) }
+        Button("Capture window") { environment.requestWindowCapture(.menu) }
         if environment.analysis != nil {
             let paused = environment.state.analysisProgress.paused
             Button(paused ? "Resume analysis" : "Pause analysis") {

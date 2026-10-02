@@ -26,6 +26,12 @@ Facts about the code come from reading the repository on 2026-10-02. Items marke
 
 **Verify (S1)**: the pixel size and scale that `captureImage(in:)` returns when the displays have different scales, and that a source rectangle on a Retina display returns native pixels. If the spanning case cannot be made right, the plan falls back to the part of the window on the display that holds most of it, with the border drawn on that part only, and the spec edge case is amended.
 
+**Result (S1, 2026-10-02)**: checked through the real adapter in a Debug build on three 1x displays side by side (no mixed-scale hardware was available).
+- One display: a display filter with `sourceRect` and the display's `pointPixelScale` gave a picture of exactly the window (a 673 x 439 point window gave 673 x 439 pixels at scale 1).
+- Across two displays: `SCScreenshotManager.captureImage(in:)` returned 700 x 400 pixels for a 700 x 400 point rectangle, so native pixels and the scale `image width / frame width` hold on equal-scale displays.
+- With "Displays have separate Spaces" on, macOS draws a window that straddles two displays on one of them only. The rectangle picture then shows what is on the screen: the window on that display and, on the other, whatever is under it. That is the behaviour the spec asks for (the screen inside the outline), and the stored `desktop_frame_json` keeps the window's own frame.
+- Not checked: displays with different scales. The stored scale for a spanning picture is derived from the image, so the analysis copy size does not depend on it; revisit if a mixed-scale setup shows a wrongly sized picture.
+
 **Known cost**: the rectangle-across-displays call cannot exclude Memorri's own windows. Memorri's search panel could appear in that rare picture. Accepted; the single-display path, which is nearly every capture, excludes them.
 
 ## R4. How the window capture is stored
