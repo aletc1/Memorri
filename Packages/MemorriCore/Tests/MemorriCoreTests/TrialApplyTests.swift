@@ -148,6 +148,47 @@ import Testing
         #expect(try item(rig, "Renamed").end == ReconcileFixture.minutes(60))                // left as the user last had it
     }
 
+    @Test func undoDoesNotCountTheSameReadingTwiceWhenTheCaptureWasReadAgainMeanwhile() async throws {
+        let rig = try makeRig(); defer { rig.f.cleanUp() }
+        try await live(rig, [rig.f.finding("Daily standup", end: ReconcileFixture.minutes(30))])
+        let t = try trial(rig, [rig.f.finding("Daily standup", end: ReconcileFixture.minutes(60))])
+        let d = try #require(try await report(rig, t).differences.first)
+        let op = try #require(try await rig.applier.apply(trialID: t.id, differenceIDs: [d.id]).operationID)
+        _ = await rig.reconciler.reconcile(imageID: rig.f.base.imageID)               // a reanalysis, a context change or the library re-read
+        let sightings = try rig.f.count("sightings")
+        let result = try await rig.operations.undo(op)
+        if case .undone = result { Issue.record("the old sighting must not be put back next to the new one") }
+        let after = try rig.f.count("sightings"), perItem = try rig.f.read { try Int.fetchAll($0, sql: "SELECT COUNT(*) FROM sightings GROUP BY item_id") }
+        #expect(after == sightings && perItem.allSatisfy { $0 == 1 })
+    }
+
+    private final class RecordingEvidence: ImageEvidenceWriting, @unchecked Sendable {
+        private let lock = NSLock()
+        private var seen: [String] = []
+        var images: [String] { lock.withLock { seen } }
+        func write(imageID: String) async -> Int { lock.withLock { seen.append(imageID) }; return 0 }
+    }
+
+    @Test func cutOutsAreMadeAgainAfterAnApplyAndAfterItsUndo() async throws {
+        let f = try ReconcileFixture(); defer { f.cleanUp() }
+        let recording = RecordingEvidence()
+        let reconciler = Reconciler(database: f.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+        let store = TrialStore(database: f.database, paths: f.base.paths)
+        let applier = TrialApplier(database: f.database, reconciler: reconciler, store: store, evidence: recording, now: { Date(timeIntervalSince1970: 1_800_200_000) })
+        let operations = ItemOperations(database: f.database, reconciler: reconciler, evidence: recording, now: { Date(timeIntervalSince1970: 1_800_200_000) })
+        try f.save([f.finding("Daily standup", end: ReconcileFixture.minutes(30))])
+        _ = await reconciler.reconcile(imageID: f.base.imageID)
+        let trial = try store.create(model: "other", promptVersion: "p", think: "off", now: clock)
+        let result = AnalysisResult(lines: [], classification: ClassificationResult(kind: .email, confidence: 0.9, application: "", platformLook: "", isRemote: false, remoteClient: "", theme: "", calendarName: ""),
+                                    findings: [f.finding("Daily standup", end: ReconcileFixture.minutes(60))], timezone: TimeZone(identifier: "UTC")!, model: "other", pictureLongEdge: 2048)
+        try store.saveProposal(trialID: trial.id, imageID: f.base.imageID, result: result, durationMs: 1, at: clock)
+        let d = try #require(try await TrialComparison(database: f.database, reconciler: reconciler, store: store).report(trialID: trial.id).differences.first)
+        let op = try #require(try await applier.apply(trialID: trial.id, differenceIDs: [d.id]).operationID)
+        #expect(recording.images == [f.base.imageID])
+        _ = try await operations.undo(op)
+        #expect(recording.images == [f.base.imageID, f.base.imageID])
+    }
+
     @Test func theOperationShowsInTheItemsHistoryAndIsWhatUndoLastWouldUndo() async throws {
         let rig = try makeRig(); defer { rig.f.cleanUp() }
         try await live(rig, [rig.f.finding("Daily standup", end: ReconcileFixture.minutes(30))])

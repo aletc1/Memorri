@@ -89,7 +89,8 @@ final class AppEnvironment {
                 contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler, evidence: evidence)
             let trialStore = TrialStore(database: database, paths: context.paths)
             let trialRunner = TrialJobRunner(service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
-                                             store: trialStore, settings: ollamaSettings, time: SystemTimeSource(), windows: CaptureStore(database: database))
+                                             store: trialStore, settings: ollamaSettings, time: SystemTimeSource(), windows: CaptureStore(database: database),
+                                             contexts: ContextStore(database: database))
             reprocessing = ReprocessServices(store: trialStore, comparison: TrialComparison(database: database, reconciler: reconciler, store: trialStore),
                                              applier: TrialApplier(database: database, reconciler: reconciler, store: trialStore, evidence: evidence))
             let runner = CompositeJobRunner(runners: [
@@ -105,7 +106,7 @@ final class AppEnvironment {
             captureOverview = CaptureOverview(database: database)
             contexts = ContextStore(database: database)
             items = ItemStore(database: database)
-            itemOperations = ItemOperations(database: database, reconciler: reconciler)
+            itemOperations = ItemOperations(database: database, reconciler: reconciler, evidence: evidence)
             operationLog = OperationLog(database: database)
             search = SearchService(database: database)
             searchIndex = SearchIndex(database: database)

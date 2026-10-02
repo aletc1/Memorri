@@ -123,6 +123,14 @@ import Testing
         #expect(fresh == 0 && otherModel == 2)
     }
 
+    @Test func aMonthGridReadByCodeIsNotOutOfDate() throws {
+        let f = try ReconcileFixture(); defer { f.cleanUp() }
+        try f.save([f.finding("A")])
+        try f.write { try $0.execute(sql: "UPDATE image_analysis SET prompt_version = ?, classify_version = ?", arguments: [MonthEntries.version, ExtractionPrompts.windowsVersion]) }
+        let count = try store(f).outOfDateCount(model: "fake", currentPromptVersions: ExtractionPrompts.currentVersions)
+        #expect(count == 0)
+    }
+
     @Test func theMigrationAcceptsTheNewOperationKind() throws {
         let f = try ReconcileFixture(); defer { f.cleanUp() }
         try f.write { try $0.execute(sql: """

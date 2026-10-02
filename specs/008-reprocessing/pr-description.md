@@ -15,7 +15,7 @@ Trial tables (`trials`, `trial_images`, `trial_findings`, migration v10) and a `
 Spec: `specs/008-reprocessing/`. ADR: 0025.
 
 ## Verification
-- `swift test --package-path Packages/MemorriCore`: 1355 tests pass; new suites for the store, runner (the library is identical before and after), comparison (protections, totals, two trials), apply (idempotent, exact undo, locks untouched, later edit stops undo) and scale (1,000 captures compared in 1.3 s in a debug build).
+- `swift test --package-path Packages/MemorriCore`: 1360 tests pass; new suites for the store, runner (the library is identical before and after), comparison (protections, totals, two trials), apply (idempotent, exact undo, locks untouched, later edit stops undo) and scale (1,000 captures compared in 1.3 s in a debug build).
 - The app builds. The UI was not run: the author's own copy was running on the real library.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

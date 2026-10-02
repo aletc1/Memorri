@@ -38,10 +38,11 @@ extension ItemOperations {
     public func undo(_ opID: OpID) async throws -> UndoResult {
         let outcome = try await database.pool.write { db in try self.undoInside(db, opID) }
         if let followUp = outcome.reconcile, let reconciler { _ = await reconciler.reconcile(imageID: followUp) }
+        for imageID in outcome.evidence { _ = await evidence?.write(imageID: imageID) }
         return outcome.result
     }
 
-    struct UndoOutcome { var result: UndoResult; var reconcile: String? }
+    struct UndoOutcome { var result: UndoResult; var reconcile: String?; var evidence: [String] = [] }
 
     private func undoInside(_ db: Database, _ opID: OpID) throws -> UndoOutcome {
         guard let op = try OperationLog.fetch(db, id: opID) else { return UndoOutcome(result: .impossible(reason: "operation not found")) }
@@ -137,6 +138,7 @@ extension ItemOperations {
 
         // 3. What is particular to the kind.
         var reconcileImage: String?
+        var evidenceImages: [String] = []
         switch op.kind {
         case .edit:
             if case .string(let observation)? = op.detail["observation"], let item = op.itemIDs.first, restored.contains(item) {
@@ -195,11 +197,19 @@ extension ItemOperations {
                     didSomething = true
                 }
             }
+            if case .array(let images)? = op.detail["images"] { evidenceImages = images.compactMap(\.asString) }
             if case .array(let entries)? = op.detail["removed"] {
                 for entry in entries {
                     guard case .string(let item)? = entry["item"], case .object(let sighting)? = entry["sighting"],
                           try ItemStore.item(db, id: item) != nil else { continue }
                     if try blockedItem(item) { continue }
+                    // A capture read again since (a context change, a reanalysis, the library re-read) shows this item with sightings of its own:
+                    // putting the old one back next to them would count the same reading twice.
+                    if case .string(let image)? = sighting["image_id"],
+                       try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM sightings WHERE image_id = ? AND item_id = ?)", arguments: [image, item]) == true {
+                        skipped.append("the capture was read again since")
+                        continue
+                    }
                     func insert(_ table: String, _ row: [String: JSONValue]) throws {
                         let columns = row.keys.sorted()
                         let values: [DatabaseValue] = columns.map { column in
@@ -243,6 +253,6 @@ extension ItemOperations {
         let undoID = try OperationLog.record(db, kind: .undo, byUser: true, items: existing, moved: undoMoves,
                                              before: before.filter { touched.contains($0.key) }, detail: detail, at: date)
         try db.execute(sql: "UPDATE reconcile_ops SET undone_by = ? WHERE id = ?", arguments: [undoID, opID])
-        return UndoOutcome(result: reasons.isEmpty ? .undone(undoID) : .partly(undoID, reason: reasons.joined(separator: "; ")), reconcile: reconcileImage)
+        return UndoOutcome(result: reasons.isEmpty ? .undone(undoID) : .partly(undoID, reason: reasons.joined(separator: "; ")), reconcile: reconcileImage, evidence: evidenceImages)
     }
 }

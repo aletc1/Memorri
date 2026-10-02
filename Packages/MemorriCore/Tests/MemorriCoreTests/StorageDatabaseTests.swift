@@ -802,6 +802,38 @@ import Testing
 
     // MARK: migration "v10" (spec 008)
 
+    @Test func aV9DatabaseMigratesToV10KeepingItsOperationLogAndItemHistory() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v9")
+            try pool.write { db in
+                try self.insertItem(db, id: "i1", title: "Daily standup")
+                try db.execute(sql: """
+                    INSERT INTO reconcile_ops (id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at)
+                    VALUES ('op1', 'approve', 1, '["i1"]', '[]', '{}', '{"note":"kept"}', NULL, '2026-10-01 10:00:00.000'),
+                           ('op2', 'edit', 1, '["i1"]', '[]', '{}', '{}', 'op3', '2026-10-01 11:00:00.000')
+                    """)
+                try db.execute(sql: "INSERT INTO reconcile_op_items (op_id, item_id) VALUES ('op1', 'i1'), ('op2', 'i1')")
+            }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.read { db in
+            let ops = try Row.fetchAll(db, sql: "SELECT id, kind, detail_json, undone_by FROM reconcile_ops ORDER BY id")
+            #expect(ops.map { $0["id"] as String } == ["op1", "op2"] && ops[0]["detail_json"] as String == "{\"note\":\"kept\"}" && ops[1]["undone_by"] as String? == "op3")
+            let links = try Row.fetchAll(db, sql: "SELECT op_id, item_id FROM reconcile_op_items ORDER BY op_id")
+            #expect(links.map { $0["op_id"] as String } == ["op1", "op2"])
+            #expect(try db.indexes(on: "reconcile_ops").contains { $0.name == "reconcile_ops_created_at" })
+            let foreign = try db.foreignKeys(on: "reconcile_op_items").map(\.destinationTable)
+            #expect(foreign.contains("reconcile_ops"))
+        }
+        let history = try OperationLog(database: db).ops(forItem: "i1")
+        #expect(history.map(\.id) == ["op2", "op1"])
+    }
+
     @Test func v10CreatesTheTrialTablesAndKeepsTheOperationLog() throws {
         let temp = TempDirectory(); defer { temp.cleanUp() }
         let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))

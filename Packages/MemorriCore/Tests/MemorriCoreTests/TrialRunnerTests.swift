@@ -22,7 +22,7 @@ import Testing
         model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Team sync","cited_lines":[1,2],"start_text":"10:00"}]}"#)
         let transport = FakeOllamaTransport()
         transport.set("/api/version", .json(#"{"version":"0.34.4"}"#))
-        transport.set("/api/tags", .json(#"{"models":[{"name":"\#(installed)","capabilities":["completion","vision"]}]}"#))
+        transport.set("/api/tags", .json(#"{"models":[{"name":"live:model","capabilities":["completion","vision"]},{"name":"\#(installed)","capabilities":["completion","vision"]}]}"#))
         let settings = OllamaSettings(store: FakeSettingsStore())
         settings.setModel("live:model")                                                  // the trial's model is another one
         let time = FakeTimeSource(1000)
@@ -31,7 +31,7 @@ import Testing
         let store = TrialStore(database: fixture.database, paths: fixture.base.paths)
         let runner = TrialJobRunner(service: service, pipeline: AnalysisPipeline(recogniser: recogniser, model: model, time: time), pictures: provider,
                                     fullPictures: provider, ocr: OCRStore(database: fixture.database), store: store, settings: settings, time: time,
-                                    windows: fixture.base.captures)
+                                    windows: fixture.base.captures, contexts: ContextStore(database: fixture.database))
         return Rig(fixture: fixture, model: model, recogniser: recogniser, runner: runner, store: store)
     }
 
@@ -90,12 +90,25 @@ import Testing
         #expect(outcome == .success && state == .skipped)
     }
 
-    @Test func aModelThatIsNotInstalledMakesTheServerUnavailableAndChangesNothing() async throws {
+    @Test func aTrialModelThatIsNotInstalledFailsThatCaptureInsteadOfStallingTheQueue() async throws {
         let rig = try makeRig(installed: "something:else"); defer { rig.fixture.cleanUp() }
         let (trial, job) = try start(rig)
         let outcome = await rig.runner.run(job, attempt: 1)
         let state = try rig.store.state(trialID: trial.id, imageID: rig.fixture.base.imageID)
-        #expect(outcome == .serverUnavailable && state == .waiting)
+        guard case .permanent(let reason) = outcome else { Issue.record("expected permanent, got \(outcome)"); return }
+        #expect(state == .failed && reason.contains("other:vl"))
+        #expect(rig.model.requests(whereSchemaHas: "screen_kind").isEmpty)
+    }
+
+    @Test func theUsersChoiceOfContextDecidesTheZoneDatesAreReadInAsInLiveAnalysis() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        let (trial, job) = try start(rig)
+        let contexts = ContextStore(database: rig.fixture.database)
+        let tokyo = try contexts.add(name: "Tokyo office", timezone: "Asia/Tokyo", hints: [])
+        try contexts.setUserChoice(imageID: rig.fixture.base.imageID, contextID: tokyo.id, at: Date())
+        _ = await rig.runner.run(job, attempt: 1)
+        let proposals = try rig.store.findings(trialID: trial.id, imageID: rig.fixture.base.imageID)
+        #expect(proposals.first?.timezone == "Asia/Tokyo")
     }
 
     @Test func trialJobsAreNotCountedWithTheCapturesOfTheMenu() throws {

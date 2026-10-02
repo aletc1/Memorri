@@ -263,9 +263,9 @@ public struct TrialStore: Sendable {
 
 extension ExtractionPrompts {
     /// Every prompt version the current code can write to `image_analysis`: classification, windows, and the extraction of each screen kind
-    /// (read as one picture or window by window), plus `none` for kinds read by code.
+    /// (read as one picture or window by window), and the version of the code that reads a month grid.
     public static var currentVersions: Set<String> {
-        var versions: Set<String> = [classifyVersion, windowsVersion]
+        var versions: Set<String> = [classifyVersion, windowsVersion, MonthEntries.version]   // the month grid read by code is written as its own version
         for kind in ScreenKind.allCases { versions.insert(version(for: kind)); versions.insert(version(for: kind, windowed: true)) }
         return versions
     }
