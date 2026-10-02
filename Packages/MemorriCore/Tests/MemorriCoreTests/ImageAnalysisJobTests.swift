@@ -16,6 +16,8 @@ import Testing
         let contexts: ContextStore
         let reconciler: FakeReconciler
         let evidence: FakeEvidenceWriter
+        /// The real reconciler, when the rig was made with one (the fake is then not wired in).
+        let real: Reconciler?
     }
 
     private func sampleLines() -> [RecognisedLine] {
@@ -24,7 +26,7 @@ import Testing
     }
 
     private func makeRig(lines: [RecognisedLine]? = nil, failWith error: Error? = nil, model modelName: String? = "qwen3.8:27b-mlx",
-                         windows: [WindowInfo] = [], reconcileSummary: ReconcileSummary = ReconcileSummary()) throws -> Rig {
+                         windows: [WindowInfo] = [], reconcileSummary: ReconcileSummary = ReconcileSummary(), realReconciler: Bool = false) throws -> Rig {
         let fixture = try makePipelineFixture(windows: windows)
         let recogniser = FakeTextRecogniser(lines: lines ?? sampleLines(), failWith: error)
         let model = FakeModelChatting()
@@ -46,12 +48,13 @@ import Testing
         reconciler.database = fixture.database
         let evidence = FakeEvidenceWriter()
         evidence.reconciler = reconciler
+        let real = realReconciler ? Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date() }) : nil
         let runner = ImageAnalysisJobRunner(service: service, pipeline: pipeline, pictures: provider, fullPictures: provider, ocr: ocr,
                                             results: results, jobs: jobs, settings: settings, time: time,
                                             contexts: ContextStore(database: fixture.database), windows: fixture.captures,
-                                            reconciler: reconciler, evidence: evidence)
+                                            reconciler: real ?? reconciler, evidence: real == nil ? evidence : nil)
         return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, results: results, jobs: jobs, settings: settings,
-                   contexts: ContextStore(database: fixture.database), reconciler: reconciler, evidence: evidence)
+                   contexts: ContextStore(database: fixture.database), reconciler: reconciler, evidence: evidence, real: real)
     }
 
     private func job(_ rig: Rig, kind: String = "analyse", imageID: String? = nil, nilImage: Bool = false) throws -> AnalysisJobRecord {
@@ -399,6 +402,87 @@ import Testing
         #expect(try readings(rig).isEmpty)
         #expect(try runs(rig).map(\.step) == ["classify", "extract"])
         #expect(try rig.results.analysis(imageID: rig.fixture.imageID)?.classifyVersion == "classify-v2")
+    }
+
+    // MARK: re-read and reuse (spec 011)
+
+    @Test func aRereadReusesTheStoredTextButAsksTheModelAgainEvenWhenItsAnswersAreStored() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let callsBefore = rig.model.callCount, readsBefore = rig.recogniser.callCount
+        let outcome = await rig.runner.run(try job(rig, kind: "reread"), attempt: 1)
+        #expect(outcome == .success)
+        #expect(rig.recogniser.callCount == readsBefore)                                // the stored text is reused
+        #expect(rig.model.callCount == callsBefore * 2)                                 // the windows call and the extractions are made afresh
+        #expect(try readings(rig).count == 2 && rig.results.findings(imageID: rig.fixture.imageID).count == 1)
+        #expect(rig.reconciler.imageIDs.count == 2 && rig.evidence.imageIDs.count == 2)       // saved, reconciled and evidence written like analyse
+    }
+
+    @Test func aRereadOfAPictureThatIsGoneEndsWithNothingChanged() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let before = try rig.results.analysis(imageID: rig.fixture.imageID)
+        try rig.fixture.captures.markMissing(imageID: rig.fixture.imageID)
+        let calls = rig.model.callCount
+        let outcome = await rig.runner.run(try job(rig, kind: "reread"), attempt: 1)
+        #expect(outcome == .success && rig.model.callCount == calls)
+        #expect(try rig.results.analysis(imageID: rig.fixture.imageID) == before && rig.results.findings(imageID: rig.fixture.imageID).count == 1)
+    }
+
+    @Test func aRereadKeepsWhatTheUserEditedApprovedOrDismissed() async throws {
+        let rig = try makeRig(realReconciler: true); defer { rig.fixture.cleanUp() }
+        let three = #"{"findings":[{"kind":"appointment","title":"Team sync","cited_lines":[1,2],"start_text":"10:00"},{"kind":"appointment","title":"Budget review","cited_lines":[1,2],"start_text":"11:00"},{"kind":"appointment","title":"Quarterly plan","cited_lines":[1,2],"start_text":"12:00","place":"Room 4"}]}"#
+        rig.model.answer(whenSchemaHas: "findings", three)
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let store = ItemStore(database: rig.fixture.database)
+        let items = try store.items(status: [.active], kinds: nil, contextID: nil).map(\.item)
+        let byTitle = Dictionary(uniqueKeysWithValues: items.map { ($0.title, $0.id) })
+        #expect(byTitle.count == 3)
+        let operations = ItemOperations(database: rig.fixture.database, reconciler: rig.real)
+        _ = try operations.edit(try #require(byTitle["Team sync"]), field: .title, value: .string("My own title"))
+        _ = try operations.dismiss(try #require(byTitle["Budget review"]))
+        _ = try operations.approve(try #require(byTitle["Quarterly plan"]))
+        // The model now reads the same picture differently.
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Team sync","cited_lines":[1,2],"start_text":"10:00","place":"Room 9"},{"kind":"appointment","title":"Budget review","cited_lines":[1,2],"start_text":"11:00"},{"kind":"appointment","title":"Quarterly plan","cited_lines":[1,2],"start_text":"12:00","place":"Room 5"}]}"#)
+        #expect(await rig.runner.run(try job(rig, kind: "reread"), attempt: 1) == .success)
+        let after = try store.items(status: [.active, .dismissed], kinds: nil, contextID: nil).map(\.item)
+        let edited = try #require(after.first { $0.id == byTitle["Team sync"] }), dismissed = try #require(after.first { $0.id == byTitle["Budget review"] })
+        let approved = try #require(after.first { $0.id == byTitle["Quarterly plan"] })
+        #expect(edited.title == "My own title" && edited.status == .active)
+        #expect(dismissed.status == .dismissed)                                          // not brought back
+        #expect(approved.approvedAt != nil && approved.status == .active)
+        #expect(after.filter { $0.status == .active }.count == 2 && after.count == 3)    // nothing was duplicated
+    }
+
+    @Test func aRetryReusesTheWindowsAnswerAndEachWindowsExtractionAndAForcedJobRedoesAll() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(rig.model.callCount == 2)                                                // windows + the mail
+        let again = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(again == .success && rig.model.callCount == 2)                           // no model call is repeated for an unchanged capture
+        #expect(try rig.results.findings(imageID: rig.fixture.imageID).map(\.title) == ["Planning meeting"] && readings(rig).count == 2)
+        _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
+        #expect(rig.model.callCount == 4)
+    }
+
+    @Test func aRetryAfterAFailedExtractionDoesNotAskForTheWindowsAgain() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        rig.model.answer(whenSchemaHas: "findings", "this is not json")
+        let first = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(first != .success)
+        #expect(rig.model.requests(whereSchemaHas: "windows").count == 1)
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Planning meeting","cited_lines":[3],"start_text":"10:00","date_text":"tomorrow"}]}"#)
+        #expect(await rig.runner.run(try job(rig), attempt: 2) == .success)
+        #expect(rig.model.requests(whereSchemaHas: "windows").count == 1)                // the stored answer was reused
+        #expect(rig.model.requests(whereSchemaHas: "findings").count == 2)
+    }
+
+    @Test func aStoredWindowsAnswerOfAnotherModelIsNotReused() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        try await rig.fixture.database.pool.write { try $0.execute(sql: "UPDATE model_runs SET model = 'another-model'") }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(rig.model.requests(whereSchemaHas: "windows").count == 2)
     }
 }
 

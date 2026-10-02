@@ -8,6 +8,8 @@ import os
 public struct ImageAnalysisJobRunner: AnalysisJobRunning {
     public static let analyseKind = "analyse"
     public static let forceKind = "analyse-force"
+    /// The library's one-off re-read after an update (spec 011): the stored text is reused, every model step is made again.
+    public static let rereadKind = "reread"
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "extraction")
 
     private let service: OllamaService
@@ -48,9 +50,12 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
     private static let gone = JobOutcome.permanent("picture no longer stored")
 
     public func run(_ job: AnalysisJobRecord, attempt: Int) async -> JobOutcome {
+        let reread = job.kind == Self.rereadKind
+        // A re-read of a picture that is gone ends with nothing changed: its sightings stay as they are.
         guard let imageID = job.imageId, let analysisCopy = try? pictures.analysisPicture(imageID: imageID),
-              let full = try? fullPictures.fullPicture(imageID: imageID) else { return Self.gone }
+              let full = try? fullPictures.fullPicture(imageID: imageID) else { return reread ? .success : Self.gone }
         let forced = job.kind == Self.forceKind
+        let redoModel = forced || reread
 
         let stepSettings: ModelStepSettings
         switch await ModelStep.settings(service: service, settings: settings) {
@@ -67,17 +72,24 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         // Classify and extract
         let copies: PictureCopies
         do { copies = try PictureCopies(analysisCopy: analysisCopy.data, width: analysisCopy.width, height: analysisCopy.height) }
-        catch { return Self.gone }
+        catch { return reread ? .success : Self.gone }
         let size = copies.classificationSize
 
         var reuse = PipelineInput.Reuse(lines: lines)
-        if !forced, let run = try? jobs.latestSuccessfulRun(imageID: imageID, step: "classify", promptVersion: ExtractionPrompts.classifyVersion),
+        if !redoModel, let run = try? jobs.latestSuccessfulRun(imageID: imageID, step: "classify", promptVersion: ExtractionPrompts.classifyVersion),
            let stored = run.rawAnswer.flatMap({ ClassificationResult.parse(storedAnswer: $0) }) {
             reuse.classification = stored
         }
-        if !forced, let run = try? jobs.latestSuccessfulRun(imageID: imageID, step: "windows", promptVersion: ExtractionPrompts.windowsVersion),
-           let stored = run.rawAnswer.flatMap({ WindowsAnswer.parse(storedAnswer: $0) }) {
+        // A retry reuses what an earlier attempt of the same picture and model already answered: the windows call and each window's extraction.
+        if !redoModel, let run = try? jobs.latestSuccessfulRun(imageID: imageID, step: "windows", promptVersion: ExtractionPrompts.windowsVersion),
+           run.model == stepSettings.model, let stored = run.rawAnswer.flatMap({ WindowsAnswer.parse(storedAnswer: $0) }) {
             reuse.windows = stored
+            for judgement in stored.judgements where judgement.relevant {
+                if let extraction = try? jobs.latestSuccessfulRun(imageID: imageID, step: "extract:\(judgement.key)"), extraction.model == stepSettings.model,
+                   extraction.promptVersion.hasSuffix("-v13"), let findings = extraction.rawAnswer.flatMap({ Self.storedFindings($0) }) {
+                    reuse.extractions[judgement.key] = findings
+                }
+            }
         }
         // The context step's inputs: the user's contexts, the windows seen with the picture and what the user chose for it.
         let knownContexts = (try? contexts?.all()) ?? []
@@ -146,6 +158,13 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         // The proof of each sighting is cut out of the full picture; it never fails the job either (ADR 0021).
         _ = await evidence?.write(imageID: imageID)
         return .success
+    }
+
+    /// The `findings` of a stored extraction answer (which may carry the thinking text after a marker), or nil when it cannot be read.
+    static func storedFindings(_ stored: String) -> [JSONValue]? {
+        let answer = stored.components(separatedBy: ModelTestJob.thinkingMarker).first ?? stored
+        guard let value = try? JSONDecoder().decode(JSONValue.self, from: Data(answer.utf8)) else { return nil }
+        return value["findings"]?.arrayValue
     }
 
     private func readStep(imageID: String, image: CGImage, forced: Bool) async throws -> [RecognisedLine] {
