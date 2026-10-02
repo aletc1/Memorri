@@ -501,6 +501,36 @@ enum Migrations {
             try db.rename(table: "reconcile_ops_v10", to: "reconcile_ops")
             try db.create(index: "reconcile_ops_created_at", on: "reconcile_ops", columns: ["created_at"])
         }
+        // Spec 009: the entries Memorri wrote to Calendar and Reminders (ADR 0026) and the runs that wrote them.
+        migrator.registerMigration("v11") { db in
+            try db.create(table: "sync_links") { t in
+                t.primaryKey("item_id", .text).references("items", onDelete: .cascade)
+                t.column("kind", .text).notNull().check(sql: "kind IN ('event', 'reminder')")
+                t.column("ek_id", .text).notNull()
+                t.column("container_id", .text).notNull()
+                t.column("hash", .text).notNull()
+                t.column("hash_version", .integer).notNull()
+                t.column("fields_json", .text).notNull()
+                t.column("state", .text).notNull().check(sql: "state IN ('synced', 'completed', 'removed_by_user', 'removed', 'failed')")
+                t.column("failure", .text)
+                t.column("synced_at", .datetime).notNull()
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.create(index: "sync_links_ek_id", on: "sync_links", columns: ["ek_id"])
+            try db.create(table: "sync_runs") { t in
+                t.primaryKey("id", .text)
+                t.column("started_at", .datetime).notNull()
+                t.column("finished_at", .datetime).notNull()
+                t.column("preview", .integer).notNull()
+                t.column("created", .integer).notNull().defaults(to: 0)
+                t.column("updated", .integer).notNull().defaults(to: 0)
+                t.column("removed", .integer).notNull().defaults(to: 0)
+                t.column("adopted", .integer).notNull().defaults(to: 0)
+                t.column("skipped", .integer).notNull().defaults(to: 0)
+                t.column("failed", .integer).notNull().defaults(to: 0)
+                t.column("detail_json", .text).notNull().defaults(to: "[]")
+            }
+        }
         return migrator
     }
 }
