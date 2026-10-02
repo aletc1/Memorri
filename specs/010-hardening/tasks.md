@@ -42,8 +42,8 @@ Paths are relative to `Packages/MemorriCore/Sources/MemorriCore/` (Sources), `Pa
 ## Phase 5: US4 Launch at login (FR-014, FR-015)
 **Goal**: Memorri starts with the Mac when the user says so.
 **Independent test**: switch on and see it in Login Items; remove it there and the switch shows off.
-- [ ] T024 [P] [US4] Tests first with a fake `LoginItemControlling`: status mapping (enabled, requires approval, not registered), register and unregister, off by default (Tests/LoginItemTests.swift)
-- [ ] T025 [US4] `LoginItem` and the `SMAppService.mainApp` adapter; General section row with the approval note and the System Settings button (Sources/Lifecycle/LoginItem.swift, App/Login/ServiceManagementLoginItem.swift, App/Windows/SettingsView.swift)
+- [x] T024 [P] [US4] Tests first with a fake `LoginItemControlling`: status mapping (enabled, requires approval, not registered), register and unregister, off by default (Tests/LoginItemTests.swift)
+- [x] T025 [US4] `LoginItem` and the `SMAppService.mainApp` adapter; General section row with the approval note and the System Settings button (Sources/Lifecycle/LoginItem.swift, App/Login/ServiceManagementLoginItem.swift, App/Windows/SettingsView.swift)
 
 ## Phase 6: US5 Diagnostics (FR-023 to FR-026)
 **Goal**: figures and recent log lines the user can share without exposing the library.

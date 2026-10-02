@@ -1,4 +1,5 @@
 import MemorriCore
+import ServiceManagement
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
@@ -85,6 +86,8 @@ private struct GeneralSettings: View {
                 Toggle("Play a sound", isOn: $playSound)
             }
 
+            LoginItemRow()
+
             NotificationsRow(environment: environment)
         }
         .padding(24)
@@ -129,5 +132,31 @@ private struct NotificationsRow: View {
     private func load() async {
         enabled = environment.notifications?.settings.enabled ?? true
         permission = await environment.notifications?.centre.permission() ?? .notDetermined
+    }
+}
+
+/// `Open Memorri at login`: the switch shows what macOS says, so removing the item in System Settings turns it off (spec 010 FR-014).
+private struct LoginItemRow: View {
+    private let item = LoginItem(controller: ServiceManagementLoginItem())
+    @State private var status = LoginItemStatus.off
+    @State private var message: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Start").font(.headline)
+            Toggle("Open Memorri at login", isOn: Binding(get: { status != .off }, set: { value in
+                do { status = try item.setOn(value); message = nil } catch { status = item.status; message = "macOS did not allow it: \(error.localizedDescription)" }
+            }))
+            .help("Starts the menu-bar app when you log in, so the capture shortcut works without opening anything")
+            if let note = item.note, status == .requiresApproval {
+                HStack {
+                    Text(note).font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                    Button("Open System Settings") { SMAppService.openSystemSettingsLoginItems() }
+                }
+            }
+            if let message { Text(message).font(.callout).foregroundStyle(.red) }
+        }
+        .onAppear { status = item.status }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in status = item.status }
     }
 }
