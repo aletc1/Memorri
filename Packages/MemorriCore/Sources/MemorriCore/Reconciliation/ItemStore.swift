@@ -18,6 +18,12 @@ public struct OperationSummary: Sendable, Equatable {
     public let byUser: Bool
     public let createdAt: Date
     public let undone: Bool
+    /// What the operation recorded about itself (the field an edit changed, where the change was made).
+    public var detail: [String: JSONValue] = [:]
+
+    static func decodeDetail(_ json: String?) -> [String: JSONValue] {
+        json.flatMap { try? JSONDecoder().decode([String: JSONValue].self, from: Data($0.utf8)) } ?? [:]
+    }
 }
 
 /// Everything known about one item (research R9, contracts/core-interfaces.md).
@@ -173,11 +179,11 @@ public struct ItemStore: Sendable {
             """, arguments: [item.id]).map { ($0["item_a"] as String) == item.id ? $0["item_b"] : $0["item_a"] }
 
         detail.operations = try Row.fetchAll(db, sql: """
-            SELECT o.id, o.kind, o.by_user, o.created_at, o.undone_by FROM reconcile_ops o JOIN reconcile_op_items oi ON oi.op_id = o.id
+            SELECT o.id, o.kind, o.by_user, o.created_at, o.undone_by, o.detail_json FROM reconcile_ops o JOIN reconcile_op_items oi ON oi.op_id = o.id
             WHERE oi.item_id = ? ORDER BY o.created_at DESC, o.rowid DESC
             """, arguments: [item.id]).map { row in
             OperationSummary(id: row["id"], kind: row["kind"], byUser: (row["by_user"] as Int) != 0, createdAt: row["created_at"],
-                             undone: (row["undone_by"] as String?) != nil)
+                             undone: (row["undone_by"] as String?) != nil, detail: OperationSummary.decodeDetail(row["detail_json"]))
         }
         return detail
     }

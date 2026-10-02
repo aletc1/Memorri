@@ -136,7 +136,7 @@ struct ItemDetailView: View {
             if detail.operations.isEmpty { Text("Nothing yet.").foregroundStyle(.secondary) }
             ForEach(detail.operations, id: \.id) { operation in
                 HStack {
-                    Text("\(ItemListModel.operationText(operation.kind))\(operation.byUser ? "" : " (automatic)")")
+                    Text("\(ItemListModel.historyText(kind: operation.kind, detail: operation.detail))\(operation.byUser ? "" : " (automatic)")")
                         .strikethrough(operation.undone)
                     Text(operation.createdAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                     Spacer()

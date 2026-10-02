@@ -208,6 +208,43 @@ import Testing
         #expect(s.events.entries.count == 3)
     }
 
+    @Test func aStoreThatKeepsAFieldDifferentlyIsNotMistakenForAnOutsideEditNorLocksAnything() async throws {
+        let s = try await setup(); defer { s.fixture.cleanUp() }
+        // The store shifts every event's end by a day less a second and drops a reminder's due seconds.
+        s.events.normalise = { entry in
+            if entry.kind == .event { entry.end = entry.end?.addingTimeInterval(-86_399) } else { entry.due = entry.due.map { Date(timeIntervalSince1970: ($0.timeIntervalSince1970 / 60).rounded(.down) * 60 + 7) } }
+        }
+        let locks = (try? s.fixture.count("field_locks")) ?? -1
+        let first = await s.engine.run()
+        #expect(first.run.created == 3 && first.run.adopted == 0)
+        s.events.clearWrites()
+        for _ in 0..<3 {
+            let again = await s.engine.run()
+            #expect(again.run.adopted == 0 && again.run.updated == 0 && again.run.failed == 0)
+        }
+        #expect(s.events.writes.isEmpty && (try? s.fixture.count("field_locks")) == locks)
+        // A change made in Memorri is still written, and the next run again finds nothing to take over.
+        let id = try itemID(s, "Standup")
+        _ = try s.operations.edit(id, field: .place, value: .string("Room 9"))
+        let changed = await s.engine.run()
+        #expect(changed.run.updated == 1 && changed.run.adopted == 0)
+        let after = await s.engine.run()
+        #expect(after.run.adopted == 0 && after.run.updated == 0 && (try? s.fixture.count("field_locks")) == locks + 1)   // only the user's own lock
+    }
+
+    @Test func anAdoptedEditIsMarkedInTheItemsHistoryAsMadeInCalendar() async throws {
+        let s = try await setup(); defer { s.fixture.cleanUp() }
+        _ = await s.engine.run()
+        let id = try itemID(s, "Standup")
+        let link = try #require(try s.store.link(itemID: id))
+        s.events.edit(link.ekID) { $0.entry.location = "Room 4" }
+        _ = await s.engine.run()
+        let operations = try OperationLog(database: s.fixture.database).ops(forItem: id)
+        let edit = try #require(operations.first { $0.kind == "edit" })
+        #expect(ItemListModel.historyText(kind: edit.kind, detail: edit.detail) == "Edited place (in Calendar)")
+        #expect(ItemListModel.historyText(kind: "edit", detail: ["field": .string("title")]) == "Edited title")
+    }
+
     @Test func aThousandItemsAreWrittenQuicklyAndASecondRunIsCheap() async throws {
         let s = try await setup(items: ["Standup"]); defer { s.fixture.cleanUp() }
         try s.fixture.write { db in

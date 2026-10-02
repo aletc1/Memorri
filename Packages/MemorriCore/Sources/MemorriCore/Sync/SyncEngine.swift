@@ -133,7 +133,7 @@ public struct SyncEngine: Sendable {
         for kind in [SyncEntryKind.event, .reminder] {
             guard let id = settings.containerID(for: kind) else { continue }
             if events.access(for: kind) != .allowed { return .noAccess(kind) }
-            if !events.containers(for: kind).contains(where: { $0.id == id }) { return .targetGone(kind) }
+            if !events.containerExists(id: id, kind: kind) { return .targetGone(kind) }
         }
         return nil
     }
@@ -154,13 +154,17 @@ public struct SyncEngine: Sendable {
                 switch action {
                 case .create(let id, let entry, let container):
                     let ekID = try scoped.create(entry, in: container)
+                    // The baseline for spotting outside edits is what the store holds now: it may keep a field a little differently than written.
+                    let held = scoped.entry(id: ekID, kind: entry.kind)?.entry ?? entry
                     try store.save(SyncLink(itemID: id, kind: entry.kind, ekID: ekID, containerID: container, hash: SyncRender.hash(entry),
-                                            hashVersion: SyncRender.hashVersion, fields: entry, state: .synced, syncedAt: date), at: date)
+                                            hashVersion: SyncRender.hashVersion, fields: held, state: .synced, syncedAt: date), at: date)
                     run.created += 1
                 case .update(let id, let entry, _):
                     guard var link = links[id] else { continue }
                     try scoped.update(id: link.ekID, entry)
-                    link.hash = SyncRender.hash(entry); link.hashVersion = SyncRender.hashVersion; link.fields = entry; link.state = .synced; link.failure = nil; link.syncedAt = date
+                    link.hash = SyncRender.hash(entry); link.hashVersion = SyncRender.hashVersion
+                    link.fields = scoped.entry(id: link.ekID, kind: link.kind)?.entry ?? entry
+                    link.state = .synced; link.failure = nil; link.syncedAt = date
                     try store.save(link, at: date)
                     run.updated += 1
                 case .move(let id, let entry, let from, let to):
@@ -169,7 +173,8 @@ public struct SyncEngine: Sendable {
                     let newID = try scoped.create(entry, in: to)
                     try scoped.delete(id: link.ekID, kind: link.kind)
                     _ = from
-                    link.ekID = newID; link.containerID = to; link.hash = SyncRender.hash(entry); link.hashVersion = SyncRender.hashVersion; link.fields = entry
+                    link.ekID = newID; link.containerID = to; link.hash = SyncRender.hash(entry); link.hashVersion = SyncRender.hashVersion
+                    link.fields = scoped.entry(id: newID, kind: link.kind)?.entry ?? entry
                     link.state = .synced; link.failure = nil; link.syncedAt = date
                     try store.save(link, at: date)
                     run.updated += 1
@@ -182,7 +187,7 @@ public struct SyncEngine: Sendable {
                 case .adopt(let id, let fields):
                     guard var link = links[id] else { continue }
                     for (field, value) in fields.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
-                        do { _ = try operations.edit(id, field: field, value: value) }
+                        do { _ = try operations.edit(id, field: field, value: value, source: link.kind == .event ? "Calendar" : "Reminders") }
                         catch { run.failed += 1; run.detail.append("\(short): \(field.rawValue) from Calendar was not accepted") }
                     }
                     if let stored = scoped.entry(id: link.ekID, kind: link.kind) { link.fields = stored.entry }

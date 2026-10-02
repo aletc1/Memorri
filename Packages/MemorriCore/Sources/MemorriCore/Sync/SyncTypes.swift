@@ -73,6 +73,15 @@ public protocol EventStoring: Sendable {
     func create(_ entry: RenderedEntry, in containerID: String) throws -> String
     func update(id: String, _ entry: RenderedEntry) throws
     func delete(id: String, kind: SyncEntryKind) throws
+    /// A cheap test that the calendar or list still exists and can be written to (run before every sync).
+    func containerExists(id: String, kind: SyncEntryKind) -> Bool
+    /// Whether the calendar holds events (for the notice on the chosen calendar); may be slow, so never on the main thread.
+    func holdsEntries(inContainer id: String, kind: SyncEntryKind) -> Bool
+}
+
+extension EventStoring {
+    public func containerExists(id: String, kind: SyncEntryKind) -> Bool { containers(for: kind).contains { $0.id == id } }
+    public func holdsEntries(inContainer id: String, kind: SyncEntryKind) -> Bool { containers(for: kind).first { $0.id == id }?.holdsOtherEntries ?? false }
 }
 
 public enum SyncLinkState: String, Sendable, Equatable {

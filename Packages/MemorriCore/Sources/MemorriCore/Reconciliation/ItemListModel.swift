@@ -336,6 +336,14 @@ public enum ItemListModel {
     }
 
     /// What an operation of the history was, in words.
+    /// A line of the item's history: the operation, the field an edit changed, and where a change was made when it was not in Memorri.
+    public static func historyText(kind: String, detail: [String: JSONValue]) -> String {
+        var text = operationText(kind)
+        if kind == "edit", let field = detail["field"]?.asString { text += " \(field)" }
+        if let source = detail["source"]?.asString { text += " (in \(source))" }
+        return text
+    }
+
     public static func operationText(_ kind: String) -> String {
         switch kind {
         case "auto_merge": "Merged automatically"

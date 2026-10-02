@@ -61,4 +61,19 @@ import Testing
         #expect(runs.count == 20 && runs.first?.created == 24 && runs.last?.created == 5)
         #expect(runs.first?.detail == ["note 24"] && runs.first?.preview == true && runs[1].preview == false)
     }
+
+    @Test func emptyRunsOnlyMoveTheTimeOfThePreviousEmptyRunSoTheListKeepsTheMeaningfulOnes() throws {
+        let (fixture, store) = try make(); defer { fixture.cleanUp() }
+        var worked = SyncRunRecord(startedAt: clock, finishedAt: clock, preview: false); worked.created = 4
+        try store.record(worked)
+        for n in 1...30 { try store.record(SyncRunRecord(startedAt: clock.addingTimeInterval(Double(n)), finishedAt: clock.addingTimeInterval(Double(n) + 1), preview: false)) }
+        let runs = try store.runs()
+        #expect(runs.count == 2 && runs[0].created == 0 && runs[1].created == 4)          // one empty row, moved to the newest time
+        #expect(runs[0].finishedAt == clock.addingTimeInterval(31))
+        var failed = SyncRunRecord(startedAt: clock.addingTimeInterval(40), finishedAt: clock.addingTimeInterval(41), preview: false); failed.failed = 1
+        try store.record(failed)
+        try store.record(SyncRunRecord(startedAt: clock.addingTimeInterval(50), finishedAt: clock.addingTimeInterval(51), preview: true))   // a preview is its own row
+        try store.record(SyncRunRecord(startedAt: clock.addingTimeInterval(60), finishedAt: clock.addingTimeInterval(61), preview: false))
+        #expect(try store.runs().count == 5)
+    }
 }

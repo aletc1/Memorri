@@ -62,11 +62,11 @@ public struct OperationLog: Sendable {
     public func ops(forItem itemID: String) throws -> [OperationSummary] {
         try database.pool.read { db in
             try Row.fetchAll(db, sql: """
-                SELECT o.id, o.kind, o.by_user, o.created_at, o.undone_by FROM reconcile_ops o JOIN reconcile_op_items oi ON oi.op_id = o.id
+                SELECT o.id, o.kind, o.by_user, o.created_at, o.undone_by, o.detail_json FROM reconcile_ops o JOIN reconcile_op_items oi ON oi.op_id = o.id
                 WHERE oi.item_id = ? ORDER BY o.created_at DESC, o.rowid DESC
                 """, arguments: [itemID]).map { row in
                 OperationSummary(id: row["id"], kind: row["kind"], byUser: (row["by_user"] as Int) != 0, createdAt: row["created_at"],
-                                 undone: (row["undone_by"] as String?) != nil)
+                                 undone: (row["undone_by"] as String?) != nil, detail: OperationSummary.decodeDetail(row["detail_json"]))
             }
         }
     }

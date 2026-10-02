@@ -35,17 +35,25 @@ final class EventKitStore: EventStoring, @unchecked Sendable {
     func containers(for kind: SyncEntryKind) -> [SyncContainer] {
         guard access(for: kind) == .allowed else { return [] }
         return store.calendars(for: type(kind)).filter(\.allowsContentModifications).map { calendar in
-            SyncContainer(id: calendar.calendarIdentifier, name: calendar.title, account: calendar.source?.title ?? "", kind: kind,
-                          holdsOtherEntries: kind == .event && holdsEvents(calendar))
+            SyncContainer(id: calendar.calendarIdentifier, name: calendar.title, account: calendar.source?.title ?? "", kind: kind)
         }
         .sorted { ($0.account, $0.name) < ($1.account, $1.name) }
     }
 
-    /// Whether a calendar holds events within a year either way (a cheap sign it is in use; lists are not checked, that needs an asynchronous fetch).
-    private func holdsEvents(_ calendar: EKCalendar) -> Bool {
+    func containerExists(id: String, kind: SyncEntryKind) -> Bool {
+        guard access(for: kind) == .allowed, let calendar = store.calendar(withIdentifier: id) else { return false }
+        return calendar.allowsContentModifications && calendar.allowedEntityTypes.contains(kind == .event ? .event : .reminder)
+    }
+
+    /// Whether a calendar holds events within a year either way (a sign it is in use), stopping at the first one. Lists are not checked: that needs an
+    /// asynchronous fetch. Not for the main thread.
+    func holdsEntries(inContainer id: String, kind: SyncEntryKind) -> Bool {
+        guard kind == .event, access(for: .event) == .allowed, let calendar = store.calendar(withIdentifier: id) else { return false }
         let now = Date()
         let predicate = store.predicateForEvents(withStart: now.addingTimeInterval(-365 * 86_400), end: now.addingTimeInterval(365 * 86_400), calendars: [calendar])
-        return !store.events(matching: predicate).isEmpty
+        var found = false
+        store.enumerateEvents(matching: predicate) { _, stop in found = true; stop.pointee = true }
+        return found
     }
 
     // MARK: Reading

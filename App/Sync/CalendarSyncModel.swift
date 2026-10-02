@@ -34,6 +34,8 @@ final class CalendarSyncModel {
     var moveRequest: MoveRequest?
     var message: String?
     private(set) var now = Date()
+    /// Whether the chosen calendar already holds events, found off the main thread.
+    private(set) var calendarHoldsOthers = false
 
     init(services: SyncServices, items: ItemStore?) {
         self.services = services; self.items = items
@@ -53,6 +55,19 @@ final class CalendarSyncModel {
         calendarID = store.calendarID; listID = store.listID
         enabled = store.enabled; confirmed = store.firstSyncConfirmed
         runs = (try? store.runs()) ?? []
+        checkCalendarNotice()
+    }
+
+    private var checkedCalendar: String?
+    private func checkCalendarNotice() {
+        guard let id = calendarID, eventAccess == .allowed else { calendarHoldsOthers = false; checkedCalendar = nil; return }
+        guard id != checkedCalendar else { return }
+        checkedCalendar = id
+        let eventKit = services.eventKit
+        Task.detached {
+            let holds = eventKit.holdsEntries(inContainer: id, kind: .event)
+            await MainActor.run { [weak self] in if self?.calendarID == id { self?.calendarHoldsOthers = holds } }
+        }
     }
 
     /// Listens for finished runs so the tab stays current while it is open.
@@ -71,7 +86,10 @@ final class CalendarSyncModel {
 
     var calendarMissing: Bool { calendarID != nil && !SyncTargets.isStillAvailable(calendarID, in: calendars) && eventAccess == .allowed }
     var listMissing: Bool { listID != nil && !SyncTargets.isStillAvailable(listID, in: lists) && reminderAccess == .allowed }
-    var calendarNotice: String? { calendars.first { $0.id == calendarID }.flatMap(SyncTargets.notice) }
+    var calendarNotice: String? {
+        guard calendarHoldsOthers, let chosen = calendars.first(where: { $0.id == calendarID }) else { return nil }
+        return SyncTargets.notice(for: SyncContainer(id: chosen.id, name: chosen.name, account: chosen.account, kind: .event, holdsOtherEntries: true))
+    }
     var listNotice: String? { lists.first { $0.id == listID }.flatMap(SyncTargets.notice) }
     var canEnable: Bool {
         (calendarID != nil && eventAccess == .allowed && !calendarMissing) || (listID != nil && reminderAccess == .allowed && !listMissing)

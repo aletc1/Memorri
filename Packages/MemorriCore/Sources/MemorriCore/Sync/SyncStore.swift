@@ -113,8 +113,20 @@ public struct SyncStore: Sendable {
 
     // MARK: Runs
 
+    /// A run that did nothing and failed at nothing is not worth a row of its own: it only moves the time of the previous such run, so the kept
+    /// list is not filled with empty checks (Calendar reports every change of every calendar, and each one causes a check).
     public func record(_ run: SyncRunRecord) throws {
-        let detail = (try? JSONEncoder().encode(run.detail)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
+        if !run.preview, run.created + run.updated + run.removed + run.adopted + run.failed == 0 {
+            let moved = try database.pool.write { db -> Bool in
+                guard let newest = try Row.fetchOne(db, sql: "SELECT id, preview, created + updated + removed + adopted + failed AS work FROM sync_runs ORDER BY started_at DESC, rowid DESC LIMIT 1"),
+                      (newest["preview"] as Int) == 0, (newest["work"] as Int) == 0 else { return false }
+                try db.execute(sql: "UPDATE sync_runs SET started_at = ?, finished_at = ?, skipped = ?, detail_json = ? WHERE id = ?",
+                               arguments: [run.startedAt, run.finishedAt, run.skipped, Self.detailJSON(run.detail), newest["id"] as String])
+                return true
+            }
+            if moved { return }
+        }
+        let detail = Self.detailJSON(run.detail)
         try database.pool.write { db in
             try db.execute(sql: """
                 INSERT INTO sync_runs (id, started_at, finished_at, preview, created, updated, removed, adopted, skipped, failed, detail_json)
@@ -123,6 +135,8 @@ public struct SyncStore: Sendable {
             try db.execute(sql: "DELETE FROM sync_runs WHERE id NOT IN (SELECT id FROM sync_runs ORDER BY started_at DESC, rowid DESC LIMIT ?)", arguments: [Self.keptRuns])
         }
     }
+
+    private static func detailJSON(_ lines: [String]) -> String { (try? JSONEncoder().encode(lines)).map { String(decoding: $0, as: UTF8.self) } ?? "[]" }
 
     public func runs(limit: Int = keptRuns) throws -> [SyncRunRecord] {
         try database.pool.read { db in

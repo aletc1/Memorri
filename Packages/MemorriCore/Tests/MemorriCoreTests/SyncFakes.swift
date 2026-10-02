@@ -18,6 +18,8 @@ final class FakeEventStore: EventStoring, @unchecked Sendable {
     var reminderAccess: SyncAccess = .allowed
     /// Titles (as written) the store refuses to create or update.
     var failTitles: Set<String> = []
+    /// What a real store does to a field it keeps differently from how it was written (an all-day end, dropped seconds); applied on every write.
+    var normalise: (@Sendable (inout RenderedEntry) -> Void)?
 
     var entries: [String: StoredEntry] { lock.withLock { _entries } }
     var writes: [Write] { lock.withLock { _writes } }
@@ -33,7 +35,8 @@ final class FakeEventStore: EventStoring, @unchecked Sendable {
         return lock.withLock {
             counter += 1
             let id = (entry.kind == .event ? "E" : "R") + String(counter)
-            _entries[id] = StoredEntry(id: id, containerID: containerID, entry: entry)
+            var kept = entry; normalise?(&kept)
+            _entries[id] = StoredEntry(id: id, containerID: containerID, entry: kept)
             _writes.append(Write(op: "create", id: id, container: containerID))
             return id
         }
@@ -42,7 +45,7 @@ final class FakeEventStore: EventStoring, @unchecked Sendable {
     func update(id: String, _ entry: RenderedEntry) throws {
         if failTitles.contains(entry.title) { throw SyncError.failed("the store refused") }
         lock.withLock {
-            if var stored = _entries[id] { stored.entry = entry; _entries[id] = stored; _writes.append(Write(op: "update", id: id, container: stored.containerID)) }
+            if var stored = _entries[id] { var kept = entry; normalise?(&kept); stored.entry = kept; _entries[id] = stored; _writes.append(Write(op: "update", id: id, container: stored.containerID)) }
         }
     }
 

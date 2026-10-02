@@ -23,6 +23,8 @@ public struct ScopedEventStore: EventStoring {
     public func requestAccess(for kind: SyncEntryKind) async -> SyncAccess { await base.requestAccess(for: kind) }
     public func containers(for kind: SyncEntryKind) -> [SyncContainer] { base.containers(for: kind) }
     public func entry(id: String, kind: SyncEntryKind) -> StoredEntry? { base.entry(id: id, kind: kind) }
+    public func containerExists(id: String, kind: SyncEntryKind) -> Bool { base.containerExists(id: id, kind: kind) }
+    public func holdsEntries(inContainer id: String, kind: SyncEntryKind) -> Bool { base.holdsEntries(inContainer: id, kind: kind) }
 
     public func create(_ entry: RenderedEntry, in containerID: String) throws -> String {
         guard let target = chosen(entry.kind) else { throw SyncError.noTarget(entry.kind) }

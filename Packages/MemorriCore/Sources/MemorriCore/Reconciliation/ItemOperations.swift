@@ -42,7 +42,8 @@ public struct ItemOperations: Sendable {
 
     /// Sets a field to the user's value and locks it: later sightings are recorded but never change it.
     @discardableResult
-    public func edit(_ itemID: String, field: ItemField, value rawValue: JSONValue) throws -> OpID {
+    /// `source` names where the user made the change when it was not in Memorri (`Calendar`, `Reminders`), for the item's history.
+    public func edit(_ itemID: String, field: ItemField, value rawValue: JSONValue, source: String? = nil) throws -> OpID {
         if field == .title, let text = rawValue.asString, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw ItemOperationError.emptyTitle }
         guard Self.isValid(rawValue, for: field) else { throw ItemOperationError.invalidValue }
         let value = Self.normalised(rawValue, for: field)
@@ -67,7 +68,8 @@ public struct ItemOperations: Sendable {
             try ItemStore.recompute(db, itemID: itemID, at: date)
             try ItemStore.approve(db, itemID: itemID, at: date)             // the user has checked it (FR-014)
             return try OperationLog.record(db, kind: .edit, byUser: true, items: [itemID], before: [itemID: before],
-                                           detail: ["field": .string(field.rawValue), "observation": .string(observationID)], at: date)
+                                           detail: ["field": .string(field.rawValue), "observation": .string(observationID)]
+                                               .merging(source.map { ["source": JSONValue.string($0)] } ?? [:]) { first, _ in first }, at: date)
         }
     }
 
