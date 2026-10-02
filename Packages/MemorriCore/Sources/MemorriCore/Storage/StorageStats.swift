@@ -7,6 +7,8 @@ public struct StorageSummary: Sendable, Equatable {
     public let databaseBytes: Int64
     /// The cut-outs that prove items; they are kept after their captures are deleted (spec 006).
     public let evidenceBytes: Int64
+    /// The libraries a restore replaced, and a restore waiting for the next start (spec 010).
+    public let safetyCopyBytes: Int64
 }
 
 /// Reads the real figures: the count from the database, the space from the files themselves
@@ -24,7 +26,8 @@ public struct StorageStats: Sendable {
         StorageSummary(captureCount: try store.count(),
                        pictureBytes: Self.bytes(under: paths.captures),
                        databaseBytes: ["", "-wal", "-shm"].reduce(0) { $0 + Self.size(ofFileAt: paths.database.path + $1) },
-                       evidenceBytes: Self.bytes(under: paths.evidence))
+                       evidenceBytes: Self.bytes(under: paths.evidence),
+                       safetyCopyBytes: Self.bytes(under: paths.safetyCopies) + Self.bytes(under: paths.restorePending))
     }
 
     static func bytes(under directory: URL) -> Int64 {
