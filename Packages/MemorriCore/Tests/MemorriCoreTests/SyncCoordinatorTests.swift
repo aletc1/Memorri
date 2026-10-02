@@ -41,9 +41,10 @@ import Testing
         return (fixture, store, SyncCoordinator(engine: engine, store: store, debounce: .milliseconds(60)))
     }
 
-    private func settle(_ coordinator: SyncCoordinator, within seconds: Double = 3) async {
+    /// Waits until `condition` holds (at most `seconds`), so a loaded machine does not make a test flaky.
+    private func wait(_ seconds: Double = 8, until condition: () -> Bool) async {
         let deadline = Date().addingTimeInterval(seconds)
-        while Date() < deadline { if await !coordinator.isRunning { return }; try? await Task.sleep(for: .milliseconds(10)) }
+        while Date() < deadline && !condition() { try? await Task.sleep(for: .milliseconds(10)) }
     }
 
     @Test func nothingRunsByItselfBeforeTheFirstSyncNowOrWhileSyncIsOff() async throws {
@@ -76,12 +77,13 @@ import Testing
         let seen = OutcomeCounter()
         await coordinator.onOutcome { _ in seen.add() }
         await coordinator.start()
-        try await Task.sleep(for: .milliseconds(150))
+        await wait { seen.count >= 1 }
         #expect(events.writes.count == 2 && seen.count == 1)
 
         try fixture.write { try $0.execute(sql: "UPDATE items SET place = 'Room 9' WHERE id = 'i0'") }
         for _ in 0..<5 { await coordinator.changed(); try await Task.sleep(for: .milliseconds(10)) }
-        try await Task.sleep(for: .milliseconds(300))
+        await wait { seen.count >= 2 }
+        try await Task.sleep(for: .milliseconds(300))           // a burst must not cause a third run
         #expect(seen.count == 2 && events.writes.filter { $0.op == "update" }.count == 1)
     }
 
