@@ -3,6 +3,8 @@ import Foundation
 /// The instructions sent to the model (ADR 0014). Changing one changes its version.
 public enum ExtractionPrompts {
     public static let classifyVersion = "classify-v2"
+    /// The windows call (spec 011): it replaces `classify` for a capture whose windows are read apart.
+    public static let windowsVersion = "windows-v1"
     /// More lines than this are cut before they go to the model; the smallest boxes go first (research R4).
     public static let maxLines = 600
 

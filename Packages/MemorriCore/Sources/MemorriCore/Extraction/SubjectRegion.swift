@@ -23,17 +23,16 @@ public enum SubjectRegion {
 
     /// The text of the window that holds `anchor` (a header or cell of the calendar) and that no window in front covers: where a calendar's
     /// title, its month labels and its day numbers are looked for, so another window's text cannot name the month. Nil when the windows
-    /// carry no stack order or there is only one, and nothing is narrowed.
-    public static func visibleLines(_ lines: [RecognisedLine], around anchor: (x: Double, y: Double), windows: [WindowInfo]) -> [RecognisedLine]? {
+    /// carry no stack order or there is only one, and nothing is narrowed. The windows are split as the per-window analysis splits them
+    /// (`VisibleScreen`); the picture is taken to be as large as the windows' frames need when its size is not given.
+    public static func visibleLines(_ lines: [RecognisedLine], around anchor: (x: Double, y: Double), windows: [WindowInfo],
+                                    pictureWidth: Int? = nil, pictureHeight: Int? = nil) -> [RecognisedLine]? {
         guard windows.count > 1, windows.allSatisfy({ $0.stack != nil }) else { return nil }
-        func contains(_ frame: PixelBox, _ x: Double, _ y: Double) -> Bool {
-            x >= Double(frame.x) && x <= Double(frame.x + frame.width) && y >= Double(frame.y) && y <= Double(frame.y + frame.height)
-        }
-        guard let subject = windows.filter({ contains($0.frame, anchor.x, anchor.y) }).min(by: { ($0.stack ?? 0) < ($1.stack ?? 0) }) else { return nil }
-        let inFront = windows.filter { ($0.stack ?? 0) < (subject.stack ?? 0) }
-        return lines.filter { line in
-            contains(subject.frame, line.box.midX, line.box.midY) && !inFront.contains { contains($0.frame, line.box.midX, line.box.midY) }
-        }
+        let width = pictureWidth ?? windows.map { $0.frame.x + $0.frame.width }.max() ?? 0
+        let height = pictureHeight ?? windows.map { $0.frame.y + $0.frame.height }.max() ?? 0
+        let screen = VisibleScreen.split(lines: lines, windows: windows, pictureWidth: width, pictureHeight: height, minimumShare: 0, minimumLines: 1)
+        guard screen.perWindow else { return nil }
+        return screen.windows.first { $0.shows(x: anchor.x, y: anchor.y) }?.lines
     }
 
     struct Region: Equatable {

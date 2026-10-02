@@ -73,11 +73,19 @@ public struct AnalysisResult: Sendable {
     public let steps: [StepRecord]
     /// The version of the code that read the findings when the model did not (a month grid); nil when the model did.
     public let readBy: String?
+    /// The windows the picture was split into and what each was judged to be; empty when it was read as one picture (no stack, or the old path).
+    public let windows: [WindowReadingRecord]
+    /// The clock relative dates were resolved against; nil when the capture time was used without looking for a clock (the old path).
+    public let reference: ReferenceClock?
+    /// How many windows were read; 1 for a picture read as one.
+    public let windowsRead: Int
 
     public init(lines: [RecognisedLine], classification: ClassificationResult, tags: [CaptureTag] = [], findings: [Finding] = [],
                 discards: [CitationCheck.Discard] = [], decision: ContextDecision = .unassigned, timezone: TimeZone = .current,
                 timezoneSource: String = "mac", lineCapApplied: Bool = false, model: String = "", pictureLongEdge: Int = 0,
-                steps: [StepRecord] = [], readBy: String? = nil) {
+                steps: [StepRecord] = [], readBy: String? = nil, windows: [WindowReadingRecord] = [], reference: ReferenceClock? = nil,
+                windowsRead: Int? = nil) {
+        self.windows = windows; self.reference = reference; self.windowsRead = windowsRead ?? 1
         self.readBy = readBy
         self.lines = lines; self.classification = classification; self.tags = tags; self.findings = findings; self.discards = discards
         self.decision = decision; self.timezone = timezone; self.timezoneSource = timezoneSource; self.lineCapApplied = lineCapApplied

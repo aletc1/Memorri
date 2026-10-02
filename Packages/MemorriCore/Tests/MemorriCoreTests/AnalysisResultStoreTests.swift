@@ -23,11 +23,13 @@ import Testing
     }
 
     private func result(findings: [Finding], kind: ScreenKind = .calendarWeek, decision: ContextDecision = .unassigned,
-                        discards: [CitationCheck.Discard] = []) -> AnalysisResult {
+                        discards: [CitationCheck.Discard] = [], windows: [WindowReadingRecord] = [], reference: ReferenceClock? = nil,
+                        windowsRead: Int? = nil) -> AnalysisResult {
         AnalysisResult(lines: [], classification: classification(kind), tags: [CaptureTag(key: "theme", value: "light", confidence: 0.8, source: "visual"),
                                                                                  CaptureTag(key: "display_size", value: "1200x600", confidence: 1, source: "code")],
                        findings: findings, discards: discards, decision: decision, timezone: TimeZone(identifier: "Europe/Madrid")!,
-                       timezoneSource: "mac", lineCapApplied: true, model: "qwen3.8:27b-mlx", pictureLongEdge: 2048, steps: [])
+                       timezoneSource: "mac", lineCapApplied: true, model: "qwen3.8:27b-mlx", pictureLongEdge: 2048, steps: [],
+                       windows: windows, reference: reference, windowsRead: windowsRead)
     }
 
     private func count(_ fixture: PipelineFixture, _ table: String) throws -> Int {
@@ -171,5 +173,61 @@ import Testing
         try store.save(second, imageID: fixture.imageID, runID: nil, at: at.addingTimeInterval(60))
         #expect(try store.tags(imageID: fixture.imageID).map(\.key) == ["clock_style"])
         #expect(try count(fixture, "capture_tags") == 1)
+    }
+
+    // MARK: window key and readings (spec 011)
+
+    private func windowed(_ finding: Finding, key: String?) -> Finding {
+        Finding(id: finding.id, kind: finding.kind, title: finding.title, allDay: finding.allDay, start: finding.start, end: finding.end,
+                timezone: finding.timezone, citedLines: finding.citedLines, confidence: finding.confidence, windowKey: key)
+    }
+
+    @Test func aFindingHasNoWindowKeyByDefault() {
+        #expect(finding().windowKey == nil)
+    }
+
+    @Test func saveWritesTheWindowKeyReadsItBackAndReplacesItOnASecondSave() throws {
+        let fixture = try makePipelineFixture(); defer { fixture.cleanUp() }
+        let store = AnalysisResultStore(database: fixture.database)
+        let a = windowed(finding(title: "A"), key: "w1"), b = windowed(finding(title: "B"), key: nil)
+        try store.save(result(findings: [a, b]), imageID: fixture.imageID, runID: nil, at: at)
+        let first = try store.findings(imageID: fixture.imageID)
+        #expect(first.first { $0.title == "A" }?.windowKey == "w1")
+        #expect(first.first { $0.title == "B" }?.windowKey == nil)
+        try store.save(result(findings: [windowed(finding(title: "A"), key: "w4")]), imageID: fixture.imageID, runID: nil, at: at)
+        let second = try store.findings(imageID: fixture.imageID)
+        #expect(second.count == 1 && second[0].windowKey == "w4")
+    }
+
+    @Test func saveWritesTheReadingsOfTheWindowsAndReplacesThemOnASecondSave() throws {
+        let fixture = try makePipelineFixture(); defer { fixture.cleanUp() }
+        let store = AnalysisResultStore(database: fixture.database), readings = WindowReadingStore(database: fixture.database)
+        func reading(_ key: String) -> WindowReadingRecord {
+            WindowReadingRecord(imageID: fixture.imageID, windowKey: key, appName: "Calendar", title: "Calendar", frame: PixelBox(x: 0, y: 0, width: 100, height: 100),
+                                visible: [PixelBox(x: 0, y: 0, width: 100, height: 100)], visibleShare: 0.5, relevant: true, kind: .calendarMonth, confidence: 0.9,
+                                remote: false, runID: nil, promptVersion: ExtractionPrompts.windowsVersion, createdAt: at)
+        }
+        try store.save(result(findings: [], windows: [reading("w0"), reading("w1")]), imageID: fixture.imageID, runID: nil, windowsRunID: "run-w", at: at)
+        let stored = try readings.readings(imageID: fixture.imageID)
+        #expect(stored.map(\.windowKey) == ["w0", "w1"] && stored.allSatisfy { $0.runID == "run-w" })
+        try store.save(result(findings: []), imageID: fixture.imageID, runID: nil, at: at)           // the old path: no windows
+        #expect(try readings.readings(imageID: fixture.imageID).isEmpty)
+    }
+
+    @Test func theReferenceClockAndTheNumberOfWindowsReadAreStored() throws {
+        let fixture = try makePipelineFixture(); defer { fixture.cleanUp() }
+        let store = AnalysisResultStore(database: fixture.database)
+        let instant = Date(timeIntervalSinceReferenceDate: 12_345)
+        try store.save(result(findings: [], reference: ReferenceClock(instant: instant, source: .screenClock), windowsRead: 3), imageID: fixture.imageID, runID: nil, at: at)
+        let stored = try #require(try store.analysis(imageID: fixture.imageID))
+        #expect(stored.referenceAt == instant && stored.referenceSource == "screen-clock" && stored.windowsRead == 3)
+    }
+
+    @Test func anAnalysisWithoutAWindowSplitStoresOneWindowRead() throws {
+        let fixture = try makePipelineFixture(); defer { fixture.cleanUp() }
+        let store = AnalysisResultStore(database: fixture.database)
+        try store.save(result(findings: []), imageID: fixture.imageID, runID: nil, at: at)
+        let stored = try #require(try store.analysis(imageID: fixture.imageID))
+        #expect(stored.windowsRead == 1 && stored.referenceSource == "capture")
     }
 }

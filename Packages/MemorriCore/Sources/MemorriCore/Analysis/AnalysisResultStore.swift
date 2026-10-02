@@ -18,6 +18,10 @@ public struct StoredAnalysis: Sendable, Equatable {
     public let discarded: [CitationCheck.Discard]
     public let extractRunID: String?
     public let analysedAt: Date
+    /// The moment relative dates were resolved against and where it came from (`window-clock`, `screen-clock`, `capture`, `capture-far-clock`).
+    public let referenceAt: Date?
+    public let referenceSource: String?
+    public let windowsRead: Int
 }
 
 /// Saves what an analysis found, one picture at a time. The analysis row, the findings, the tags and the context are
@@ -37,19 +41,23 @@ public struct AnalysisResultStore: Sendable {
         text.flatMap { try? JSONDecoder().decode(type, from: Data($0.utf8)) }
     }
 
-    public func save(_ result: AnalysisResult, imageID: String, runID: String?, at date: Date) throws {
+    /// `runID` is the extraction run; `windowsRunID` the `windows` call that judged the windows, when one was made.
+    public func save(_ result: AnalysisResult, imageID: String, runID: String?, windowsRunID: String? = nil, at date: Date) throws {
         let kind = result.classification.kind
         try database.pool.write { db in
             try db.execute(sql: "DELETE FROM findings WHERE image_id = ?", arguments: [imageID])
             try db.execute(sql: "DELETE FROM capture_tags WHERE image_id = ?", arguments: [imageID])
             try db.execute(sql: """
                 INSERT OR REPLACE INTO image_analysis (image_id, screen_kind, kind_confidence, classify_version, prompt_version, schema_version,
-                    model, picture_long_edge, timezone, timezone_source, finding_count, line_cap_applied, discarded_json, extract_run_id, analysed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    model, picture_long_edge, timezone, timezone_source, finding_count, line_cap_applied, discarded_json, extract_run_id, analysed_at,
+                    reference_at, reference_source, windows_read)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, arguments: [imageID, kind.rawValue, result.classification.confidence, ExtractionPrompts.classifyVersion,
                                  result.readBy ?? ExtractionPrompts.version(for: kind), result.readBy == nil ? ExtractionSchemas.schemaVersion(for: kind) : "none", result.model,
                                  result.pictureLongEdge, result.timezone.identifier, result.timezoneSource, result.findings.count,
-                                 result.lineCapApplied ? 1 : 0, Self.encode(result.discards), runID, date])
+                                 result.lineCapApplied ? 1 : 0, Self.encode(result.discards), runID, date,
+                                 result.reference?.instant, result.reference?.source.rawValue ?? ReferenceClock.Source.capture.rawValue, result.windowsRead])
+            try WindowReadingStore.save(db, imageID: imageID, readings: result.windows.map { $0.with(imageID: imageID, runID: windowsRunID, createdAt: date) })
             for tag in result.tags {
                 try db.execute(sql: "INSERT OR REPLACE INTO capture_tags (image_id, key, value, confidence, source) VALUES (?, ?, ?, ?, ?)",
                                arguments: [imageID, tag.key, tag.value, tag.confidence, tag.source])
@@ -57,11 +65,11 @@ public struct AnalysisResultStore: Sendable {
             for f in result.findings {
                 try db.execute(sql: """
                     INSERT INTO findings (id, image_id, run_id, kind, title, all_day, start_at, end_at, due_at, remind_at, timezone, people_json,
-                        place, notes, cited_lines_json, confidence, provenance_json, unresolved_json, tags_json, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        place, notes, cited_lines_json, confidence, provenance_json, unresolved_json, tags_json, created_at, window_key)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, arguments: [f.id, imageID, runID, f.kind.rawValue, f.title, f.allDay ? 1 : 0, f.start, f.end, f.due, f.remind, f.timezone,
                                      Self.encode(f.people), f.place, f.notes, Self.encode(f.citedLines), f.confidence, Self.encode(f.provenance),
-                                     Self.encode(f.unresolved), Self.encode(f.tags), date])
+                                     Self.encode(f.unresolved), Self.encode(f.tags), date, f.windowKey])
             }
             let decision = result.decision
             try db.execute(sql: """
@@ -96,7 +104,8 @@ public struct AnalysisResultStore: Sendable {
                               pictureLongEdge: row["picture_long_edge"], timezone: row["timezone"], timezoneSource: row["timezone_source"],
                               findingCount: row["finding_count"], lineCapApplied: (row["line_cap_applied"] as Int) != 0,
                               discarded: Self.decode(row["discarded_json"], as: [CitationCheck.Discard].self) ?? [],
-                              extractRunID: row["extract_run_id"], analysedAt: row["analysed_at"])
+                              extractRunID: row["extract_run_id"], analysedAt: row["analysed_at"], referenceAt: row["reference_at"],
+                              referenceSource: row["reference_source"], windowsRead: row["windows_read"])
     }
 
     static func findings(_ db: Database, imageID: String) throws -> [Finding] {
@@ -108,7 +117,7 @@ public struct AnalysisResultStore: Sendable {
                            citedLines: Self.decode(row["cited_lines_json"], as: [Int].self) ?? [], confidence: row["confidence"],
                            provenance: Self.decode(row["provenance_json"], as: [String: FieldProvenance].self) ?? [:],
                            unresolved: Self.decode(row["unresolved_json"], as: [String: String].self) ?? [:],
-                           tags: Self.decode(row["tags_json"], as: [CaptureTag].self) ?? [])
+                           tags: Self.decode(row["tags_json"], as: [CaptureTag].self) ?? [], windowKey: row["window_key"])
         }
     }
 

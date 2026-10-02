@@ -132,11 +132,14 @@ public struct Finding: Sendable, Equatable {
     public let unresolved: [String: String]
     /// A copy of the picture's tags at the time of this run.
     public let tags: [CaptureTag]
+    /// The window this was read from (`w<stack index>`, or `all`); nil for analyses made before windows were kept apart.
+    public let windowKey: String?
 
     public init(id: String = UUID().uuidString, kind: FindingKind, title: String, allDay: Bool, start: Date? = nil, end: Date? = nil,
                 due: Date? = nil, remind: Date? = nil, timezone: String, people: [String] = [], place: String? = nil,
                 notes: String? = nil, citedLines: [Int], confidence: Double, provenance: [String: FieldProvenance] = [:],
-                unresolved: [String: String] = [:], tags: [CaptureTag] = []) {
+                unresolved: [String: String] = [:], tags: [CaptureTag] = [], windowKey: String? = nil) {
+        self.windowKey = windowKey
         self.id = id; self.kind = kind; self.title = title; self.allDay = allDay; self.start = start; self.end = end
         self.due = due; self.remind = remind; self.timezone = timezone; self.people = people; self.place = place
         self.notes = notes; self.citedLines = citedLines; self.confidence = confidence
