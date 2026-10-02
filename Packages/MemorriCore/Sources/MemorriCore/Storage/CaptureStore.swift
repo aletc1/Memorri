@@ -10,10 +10,13 @@ public struct CaptureEventRecord: Sendable, Equatable, Codable, FetchableRecord,
     public var status: String
     public var failureReason: String?
     public var displayCount: Int
+    /// Every display (the full-screen capture) or one window (spec 013).
+    public var scope: CaptureScope
 
     public init(id: String, capturedAt: Date, trigger: String, status: String,
-                failureReason: String?, displayCount: Int) {
+                failureReason: String?, displayCount: Int, scope: CaptureScope = .displays) {
         self.id = id
+        self.scope = scope
         self.capturedAt = capturedAt
         self.trigger = trigger
         self.status = status
@@ -27,6 +30,7 @@ public struct CaptureEventRecord: Sendable, Equatable, Codable, FetchableRecord,
         case trigger, status
         case failureReason = "failure_reason"
         case displayCount = "display_count"
+        case scope
     }
 }
 
@@ -47,10 +51,17 @@ public struct CaptureImageRecord: Sendable, Equatable, Codable, FetchableRecord,
     public var fullBytes: Int
     public var modelBytes: Int
     public var missing: Bool
+    /// For a window picture, the window's frame on the desktop in points, as JSON; nil for display pictures. Titles and names are never kept here.
+    private var desktopFrameJSON: String?
+
+    public var desktopFrame: DesktopRect? {
+        get { desktopFrameJSON.flatMap { try? JSONDecoder().decode(DesktopRect.self, from: Data($0.utf8)) } }
+        set { desktopFrameJSON = newValue.flatMap { try? JSONEncoder().encode($0) }.map { String(decoding: $0, as: UTF8.self) } }
+    }
 
     public init(id: String, eventId: String, displayId: Int, displayName: String?, pixelWidth: Int,
                 pixelHeight: Int, scale: Double, fullPath: String, modelPath: String, modelWidth: Int,
-                modelHeight: Int, fullBytes: Int, modelBytes: Int, missing: Bool) {
+                modelHeight: Int, fullBytes: Int, modelBytes: Int, missing: Bool, desktopFrame: DesktopRect? = nil) {
         self.id = id
         self.eventId = eventId
         self.displayId = displayId
@@ -65,6 +76,8 @@ public struct CaptureImageRecord: Sendable, Equatable, Codable, FetchableRecord,
         self.fullBytes = fullBytes
         self.modelBytes = modelBytes
         self.missing = missing
+        self.desktopFrameJSON = nil
+        self.desktopFrame = desktopFrame
     }
 
     enum CodingKeys: String, CodingKey {
@@ -82,6 +95,7 @@ public struct CaptureImageRecord: Sendable, Equatable, Codable, FetchableRecord,
         case fullBytes = "full_bytes"
         case modelBytes = "model_bytes"
         case missing
+        case desktopFrameJSON = "desktop_frame_json"
     }
 }
 
@@ -143,6 +157,14 @@ public struct CaptureStore: CaptureStoring {
     public func deleteEvents(ids: [String]) throws {
         try database.pool.write { db in
             _ = try CaptureEventRecord.deleteAll(db, keys: ids)
+        }
+    }
+
+    /// Whether the picture belongs to a window capture or to a full-screen capture (which also answers for an unknown picture).
+    public func scope(imageID: String) throws -> CaptureScope {
+        try database.pool.read { db in
+            let raw = try String.fetchOne(db, sql: "SELECT e.scope FROM capture_images i JOIN capture_events e ON e.id = i.event_id WHERE i.id = ?", arguments: [imageID])
+            return raw.flatMap(CaptureScope.init(rawValue:)) ?? .displays
         }
     }
 

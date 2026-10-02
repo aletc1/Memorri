@@ -12,7 +12,7 @@ Use it only on sessions and content you are permitted to capture. Check the rule
 
 ## What Memorri will do
 
-1. **Capture.** Press a global hotkey (or click the menu-bar icon) to screenshot every display.
+1. **Capture.** Press a global hotkey (or click the menu-bar icon) to screenshot every display, or press the window shortcut to capture only the window in front; a red outline shows what was recorded.
 2. **Understand.** Apple Vision OCR reads the text, and a vision model running locally in [Ollama](https://ollama.com) infers what matters:
    - A calendar in month, week or day view becomes appointments.
    - An email saying "please send me the report" becomes a task: "*Sender* needs *the report*".
@@ -54,6 +54,7 @@ The app is built one spec at a time, and each spec ends with a runnable incremen
 | 008 | Reprocessing |
 | 009 | Calendar and Reminders sync |
 | 010 | Hardening |
+| 013 | Capture the active window |
 
 Details and the prompt for each spec are in [`docs/roadmap.md`](docs/roadmap.md).
 

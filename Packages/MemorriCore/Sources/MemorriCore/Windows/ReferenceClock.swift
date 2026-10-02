@@ -32,23 +32,27 @@ public struct ReferenceClock: Sendable, Equatable {
     /// clock, else the capture time. A clock without a date takes the capture's date in `timezone`; a clock more than a day from the capture
     /// time is ignored (the capture time is used, and the dates that depend on it are guesses). With no clock at all the capture time is used and,
     /// when the capture has windows, the dates that depend on it are guesses; a capture read as one window keeps today's behaviour (no flag).
+    /// A window capture (`windowOnly`, spec 013) is a picture of one window and has no menu bar: only the window's own surroundings are searched, and
+    /// with no clock the capture time is used without a flag, because a missing clock is what that picture looks like.
     public static func find(window: VisibleWindow?, remote: Bool, screen: VisibleScreen, captureTime: Date, timezone: TimeZone, pictureHeight: Int,
-                            locales: [Locale]) -> ReferenceClock {
+                            locales: [Locale], windowOnly: Bool = false) -> ReferenceClock {
         var sources: [(Source, [RecognisedLine])] = []
         if remote, let window {
             let height = Double(window.frame.height) * windowStrip
             let top = Double(window.frame.y), bottom = Double(window.frame.y + window.frame.height)
             sources.append((.windowClock, window.lines.filter { $0.box.midY <= top + height || $0.box.midY >= bottom - height }))
         }
-        let limit = Double(pictureHeight) * screenStrip
-        let menuBar = screen.perWindow ? screen.desktopLines : screen.windows.flatMap(\.lines)
-        sources.append((.screenClock, menuBar.filter { $0.box.midY <= limit }))
+        if !windowOnly {
+            let limit = Double(pictureHeight) * screenStrip
+            let menuBar = screen.perWindow ? screen.desktopLines : screen.windows.flatMap(\.lines)
+            sources.append((.screenClock, menuBar.filter { $0.box.midY <= limit }))
+        }
         for (source, lines) in sources {
             guard let instant = clock(in: lines, captureTime: captureTime, timezone: timezone, locales: locales) else { continue }
             if abs(instant.timeIntervalSince(captureTime)) > farLimit { return ReferenceClock(instant: captureTime, source: .captureFarClock) }
             return ReferenceClock(instant: instant, source: source)
         }
-        return ReferenceClock(instant: captureTime, source: .capture, isGuess: screen.perWindow)
+        return ReferenceClock(instant: captureTime, source: .capture, isGuess: screen.perWindow && !windowOnly)
     }
 
     // MARK: Reading a clock

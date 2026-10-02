@@ -24,6 +24,12 @@ public struct WindowInfo: Sendable, Equatable {
 /// Where the analysis reads a picture's windows from.
 public protocol WindowProviding: Sendable {
     func windows(imageID: String) throws -> [WindowInfo]
+    /// Whether the picture is a window capture (spec 013); a provider that does not know says full-screen.
+    func scope(imageID: String) throws -> CaptureScope
+}
+
+extension WindowProviding {
+    public func scope(imageID: String) throws -> CaptureScope { .displays }
 }
 
 extension CaptureStore: WindowProviding {}

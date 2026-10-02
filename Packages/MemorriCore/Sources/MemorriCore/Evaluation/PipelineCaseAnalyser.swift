@@ -84,7 +84,8 @@ public struct PipelineCaseAnalyser: CaseAnalysing {
         let input = PipelineInput(image: image, classificationJPEG: copies.classificationJPEG, classificationSize: copies.classificationSize,
                                   analysisJPEG: copies.analysisJPEG, analysisSize: copies.analysisSize, macTimezone: zone,
                                   captureTime: golden.meta.capturedAt, locales: [Locale(identifier: "en_US"), Locale(identifier: "es_ES")],
-                                  contexts: known, windows: windows, displayScale: golden.meta.scale)
+                                  contexts: known, windows: windows, displayScale: golden.meta.scale,
+                                  chosenWindow: golden.meta.scope == .window)
 
         let chat: any ModelChatting = steps.map { ReplayModel(steps: $0) } ?? model
         let pipeline = AnalysisPipeline(recogniser: recogniser, model: chat, time: time)

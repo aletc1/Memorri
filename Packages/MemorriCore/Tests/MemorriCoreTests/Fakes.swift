@@ -142,9 +142,9 @@ final class TempDirectory: @unchecked Sendable {
 
 func makeEventRecord(id: String = UUID().uuidString, at date: Date = Date(timeIntervalSince1970: 1_800_000_000),
                      trigger: String = "shortcut", status: String = "complete",
-                     failureReason: String? = nil, displayCount: Int = 1) -> CaptureEventRecord {
+                     failureReason: String? = nil, displayCount: Int = 1, scope: CaptureScope = .displays) -> CaptureEventRecord {
     CaptureEventRecord(id: id, capturedAt: date, trigger: trigger, status: status,
-                       failureReason: failureReason, displayCount: displayCount)
+                       failureReason: failureReason, displayCount: displayCount, scope: scope)
 }
 
 func makeImageRecord(eventID: String, id: String = UUID().uuidString, displayID: Int = 1) -> CaptureImageRecord {
@@ -191,6 +191,46 @@ final class FakeDisplayCapturer: DisplayCapturing, @unchecked Sendable {
     }
 }
 
+/// Window capturer that returns a scripted picture or failure and counts its calls.
+final class FakeWindowCapturer: WindowCapturing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls = 0
+    let result: Result<WindowCaptureResult, WindowCaptureFailure>
+    let delay: Duration
+
+    init(result: WindowCaptureResult, delay: Duration = .zero) { self.result = .success(result); self.delay = delay }
+    init(failure: WindowCaptureFailure) { result = .failure(failure); delay = .zero }
+
+    var callCount: Int { lock.withLock { calls } }
+
+    func captureActiveWindow() async throws -> WindowCaptureResult {
+        lock.withLock { calls += 1 }
+        if delay > .zero { try? await Task.sleep(for: delay) }
+        return try result.get()
+    }
+}
+
+func makeWindowCapture(width: Int = 1200, height: Int = 800, scale: Double = 2, displayID: UInt32 = 3, app: String? = "Mail",
+                       title: String? = "Inbox", frame: DesktopRect = DesktopRect(x: 100, y: 50, width: 600, height: 400)) -> WindowCaptureResult {
+    WindowCaptureResult(image: makeTestImage(width: width, height: height), scale: scale, displayID: displayID, displayName: "Display \(displayID)",
+                        frame: frame, appName: app, bundleID: "com.example.mail", title: title)
+}
+
+/// Records every outline the pipeline asked for.
+final class FakeOutliner: CaptureOutlining, @unchecked Sendable {
+    private let lock = NSLock()
+    private var shown: [DesktopRect] = []
+    private var order: [String] = []
+    var frames: [DesktopRect] { lock.withLock { shown } }
+    /// A hook a test sets to look at the world at the moment the outline is shown.
+    var onShow: (@Sendable () -> Void)?
+
+    func showOutline(for frame: DesktopRect) async {
+        lock.withLock { shown.append(frame) }
+        onShow?()
+    }
+}
+
 func makeDisplay(id: UInt32 = 1, width: Int = 3440, height: Int = 1440) -> CapturedDisplay {
     CapturedDisplay(displayID: id, name: "Display \(id)", image: makeTestImage(width: width, height: height), scale: 1)
 }
@@ -225,6 +265,21 @@ final class FakeCaptureRunner: CaptureRunning, @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         triggers.append(trigger)
         return outcome
+    }
+}
+
+/// Window-capture runner that returns a scripted outcome and records how it was called.
+final class FakeWindowRunner: WindowCaptureRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var outcome: CaptureOutcome?
+    private var triggers: [CaptureTrigger] = []
+
+    init(outcome: CaptureOutcome? = .windowComplete(app: "Mail")) { self.outcome = outcome }
+
+    var calls: [CaptureTrigger] { lock.withLock { triggers } }
+
+    func runWindow(trigger: CaptureTrigger) async -> CaptureOutcome? {
+        lock.withLock { triggers.append(trigger); return outcome }
     }
 }
 
@@ -511,13 +566,13 @@ struct PipelineFixture {
 }
 
 func makePipelineFixture(fullSize: (Int, Int) = (1200, 600), modelSize: (Int, Int) = (600, 300),
-                         windows: [WindowInfo] = []) throws -> PipelineFixture {
+                         windows: [WindowInfo] = [], scope: CaptureScope = .displays) throws -> PipelineFixture {
     let temp = TempDirectory()
     let paths = AppPaths(root: temp.url.appendingPathComponent("Memorri"))
     try paths.prepare()
     guard case .opened(let database) = try StorageDatabase.open(paths: paths) else { throw CocoaError(.fileReadUnknown) }
     let store = CaptureStore(database: database)
-    let event = makeEventRecord()
+    let event = makeEventRecord(scope: scope)
     var image = makeImageRecord(eventID: event.id)
     image.pixelWidth = fullSize.0; image.pixelHeight = fullSize.1
     image.modelWidth = modelSize.0; image.modelHeight = modelSize.1

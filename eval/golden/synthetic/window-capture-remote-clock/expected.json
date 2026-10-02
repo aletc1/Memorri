@@ -1,0 +1,185 @@
+{
+  "context" : "Customer A",
+  "findings" : [
+    {
+      "allDay" : false,
+      "end" : "2026-10-16T15:00:00Z",
+      "inferred" : [
+        "end"
+      ],
+      "kind" : "appointment",
+      "people" : [
+
+      ],
+      "start" : "2026-10-16T14:00:00Z",
+      "title" : "Planning meeting",
+      "window" : "w0"
+    }
+  ],
+  "lines" : [
+    {
+      "box" : [
+        100,
+        9,
+        310,
+        18
+      ],
+      "text" : "Remote Desktop Connection - Customer A"
+    },
+    {
+      "box" : [
+        68,
+        66,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        68,
+        130,
+        91,
+        19
+      ],
+      "text" : "Design team"
+    },
+    {
+      "box" : [
+        68,
+        194,
+        82,
+        19
+      ],
+      "text" : "Carlos Ruiz"
+    },
+    {
+      "box" : [
+        68,
+        258,
+        118,
+        19
+      ],
+      "text" : "Release channel"
+    },
+    {
+      "box" : [
+        360,
+        56,
+        145,
+        26
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        940,
+        116,
+        39,
+        17
+      ],
+      "text" : "Today"
+    },
+    {
+      "box" : [
+        416,
+        166,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        536,
+        168,
+        36,
+        17
+      ],
+      "text" : "03:12"
+    },
+    {
+      "box" : [
+        416,
+        194,
+        259,
+        22
+      ],
+      "text" : "Morning! Did you see the notes?"
+    },
+    {
+      "box" : [
+        416,
+        262,
+        73,
+        19
+      ],
+      "text" : "Ben Ortiz"
+    },
+    {
+      "box" : [
+        500,
+        264,
+        39,
+        17
+      ],
+      "text" : "03:28"
+    },
+    {
+      "box" : [
+        416,
+        290,
+        404,
+        22
+      ],
+      "text" : "Planning meeting tomorrow at 10:00, can you join?"
+    },
+    {
+      "box" : [
+        416,
+        358,
+        109,
+        19
+      ],
+      "text" : "Anna Schmidt"
+    },
+    {
+      "box" : [
+        536,
+        360,
+        39,
+        17
+      ],
+      "text" : "03:29"
+    },
+    {
+      "box" : [
+        416,
+        386,
+        175,
+        22
+      ],
+      "text" : "Sounds good, thanks."
+    },
+    {
+      "box" : [
+        1509,
+        1031,
+        127,
+        19
+      ],
+      "text" : "Thu 15 Oct 03:30"
+    }
+  ],
+  "screenKind" : "chat",
+  "tags" : [
+    {
+      "key" : "language",
+      "value" : "en"
+    },
+    {
+      "key" : "theme",
+      "value" : "light"
+    }
+  ]
+}

@@ -105,4 +105,16 @@ import Testing
                                             time: FakeTimeSource(1000))
         await #expect(throws: (any Error).self) { try await analyser.analyse(golden, replaying: nil) }
     }
+
+    @Test func aWindowCaptureCaseIsAnalysedAsTheChosenWindow() async throws {
+        let (golden, temp) = try golden("window-capture-terminal"); defer { temp.cleanUp() }
+        let recogniser = FakeTextRecogniser(lines: recogniserLines())
+        let model = FakeModelChatting()
+        model.answer(whenSchemaHas: "windows", #"{"windows":[{"key":"w0","relevant":false,"kind":"other","confidence":0.8,"remote":false,"calendar_name":""}],"application":"Terminal","platform_look":"macos","theme":"dark","remote_session":{"is_remote":false,"client":""}}"#)
+        model.answer(whenSchemaHas: "findings", #"{"findings":[]}"#)
+        let analyser = PipelineCaseAnalyser(recogniser: recogniser, model: model, settings: settings, size: 800, time: FakeTimeSource(1000))
+        let result = try await analyser.analyse(golden, replaying: nil)
+        #expect(result.steps.map(\.step) == ["windows", "extract:w0"] && result.findings.isEmpty)
+        #expect(model.requests(whereSchemaHas: "screen_kind").isEmpty)
+    }
 }

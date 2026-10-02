@@ -29,7 +29,7 @@ public struct PictureIngest: Sendable {
 
     /// Returns the new image id. Nothing is left behind when it throws.
     @discardableResult
-    public func store(png: Data, windows: [WindowInfo] = [], capturedAt takenAt: Date? = nil) throws -> String {
+    public func store(png: Data, windows: [WindowInfo] = [], capturedAt takenAt: Date? = nil, scope: CaptureScope = .displays) throws -> String {
         guard let source = CGImageSourceCreateWithData(png as CFData, nil), CGImageSourceGetCount(source) > 0,
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw PictureIngestError.notAPicture }
 
@@ -60,7 +60,7 @@ public struct PictureIngest: Sendable {
             _ = try files.commit(staging: staging, eventID: eventID, capturedAt: capturedAt)
             committed = true
             let event = CaptureEventRecord(id: eventID, capturedAt: capturedAt, trigger: CaptureTrigger.menu.rawValue, status: "complete",
-                                           failureReason: nil, displayCount: 1)
+                                           failureReason: nil, displayCount: 1, scope: scope)
             try store.insert(event: event, images: [record], windows: windows.isEmpty ? [:] : [imageID: windows])
             return imageID
         } catch {

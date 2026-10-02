@@ -10,6 +10,10 @@ struct MenuContent: View {
         if let shortcut = environment.shortcuts.displayText { "Capture now   \(shortcut)" } else { "Capture now" }
     }
 
+    private var windowTitle: String {
+        if let shortcut = environment.shortcuts.windowDisplayText { "Capture window   \(shortcut)" } else { "Capture window" }
+    }
+
     private var searchTitle: String {
         if let shortcut = environment.shortcuts.searchDisplayText { "Search…   \(shortcut)" } else { "Search…" }
     }
@@ -20,6 +24,7 @@ struct MenuContent: View {
         Text(environment.state.lastCaptureLine)
         Text(environment.state.analysisLine)
         Button(captureTitle) { environment.requestCapture(.menu) }
+        Button(windowTitle) { environment.requestWindowCapture(.menu) }
         if environment.analysis != nil {
             let paused = environment.state.analysisProgress.paused
             Button(paused ? "Resume analysis" : "Pause analysis") {

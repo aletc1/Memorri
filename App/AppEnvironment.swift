@@ -154,16 +154,20 @@ final class AppEnvironment {
             search = nil
             searchIndex = nil
         }
+        let runners = Self.makeCaptureRunners(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings)
         captureService = CaptureRequestService(
-            runner: Self.makeCaptureRunner(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings),
+            runner: runners.screens,
             permission: permission,
             feedback: feedback,
             settings: feedbackSettings,
             onOutcome: { outcome in Task { @MainActor in state.record(outcome) } },
-            onNeedsOnboarding: { Task { @MainActor in windows.show(.onboarding) } }
+            onNeedsOnboarding: { Task { @MainActor in windows.show(.onboarding) } },
+            windowRunner: runners.window
         )
         shortcuts = ShortcutAdapter(onCapture: { [captureService] in
             Task { await captureService.request(.shortcut) }
+        }, onCaptureWindow: { [captureService] in
+            Task { await captureService.requestWindow(.shortcut) }
         })
         self.windows.contentProvider = { [unowned self] id in self.content(for: id) }
         shortcuts.onSearch = { [unowned self] in self.searchPanel.toggle() }
@@ -354,17 +358,20 @@ final class AppEnvironment {
         }
     }
 
-    /// The capture pipeline, which queues each new capture for analysis when the switch is on. When the storage cannot
-    /// be used, capturing reports why instead of crashing.
-    private static func makeCaptureRunner(context: StorageContext?, settingsStore: any SettingsStore, enqueuer: AnalysisQueue?,
-                                          analysisSettings: AnalysisSettings) -> any CaptureRunning {
-        guard let context else { return UnavailableCaptureRunner(reason: "could not open the capture storage") }
+    /// The capture pipeline, which queues each new capture for analysis when the switch is on. It runs both kinds of capture: every display
+    /// and, since spec 013, the active window. When the storage cannot be used, capturing reports why instead of crashing.
+    private static func makeCaptureRunners(context: StorageContext?, settingsStore: any SettingsStore, enqueuer: AnalysisQueue?,
+                                           analysisSettings: AnalysisSettings) -> (screens: any CaptureRunning, window: any WindowCaptureRunning) {
+        guard let context else { let none = UnavailableCaptureRunner(reason: "could not open the capture storage"); return (none, none) }
         guard let store = context.store else {
-            return UnavailableCaptureRunner(reason: context.capturingDisabledReason ?? "could not open the capture storage")
+            let none = UnavailableCaptureRunner(reason: context.capturingDisabledReason ?? "could not open the capture storage")
+            return (none, none)
         }
-        return CapturePipeline(capturer: ScreenCaptureKitCapturer(), encoder: HEICImageEncoder(), disk: DiskSpaceAdapter(),
-                               files: context.files, store: store, paths: context.paths,
-                               settings: StorageSettings(store: settingsStore), enqueuer: enqueuer, analysisSettings: analysisSettings)
+        let pipeline = CapturePipeline(capturer: ScreenCaptureKitCapturer(), encoder: HEICImageEncoder(), disk: DiskSpaceAdapter(),
+                                       files: context.files, store: store, paths: context.paths,
+                                       settings: StorageSettings(store: settingsStore), enqueuer: enqueuer, analysisSettings: analysisSettings,
+                                       windowCapturer: WindowCaptureAdapter(), outliner: CaptureOutlinePanel())
+        return (pipeline, pipeline)
     }
 
     private func startClockTick() {
@@ -431,6 +438,11 @@ final class AppEnvironment {
 
     func requestCapture(_ trigger: CaptureTrigger) {
         Task { [captureService] in await captureService.request(trigger) }
+    }
+
+    /// Captures only the active window (spec 013), from the menu or the window-capture shortcut.
+    func requestWindowCapture(_ trigger: CaptureTrigger) {
+        Task { [captureService] in await captureService.requestWindow(trigger) }
     }
 
     /// The SwiftUI content of each window.

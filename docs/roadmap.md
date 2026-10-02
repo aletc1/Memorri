@@ -16,6 +16,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 012 | items-calendar-view | Done |
 | 010 | hardening | Built; the run on the real library is pending |
 | 011 | window-aware-analysis | Done |
+| 013 | active-window-capture | Built; the outline over a full-screen app is to be looked at by eye |
 
 ## Prompts
 
@@ -51,3 +52,6 @@ Detect cancellations from calendar range coverage (missing items become possibly
 
 ### 011 window-aware-analysis
 Read each window of a capture on its own: split the capture into its visible windows by the stored stack, decide which can hold events, extract each on its own with the date context taken only from that window, read the nearest clock (the window's own surroundings, else the screen, else the capture time) for relative dates, flag every date whose month or year nothing names, and keep one list of items across windows and captures. Starts from the stop-gap that shipped with spec 006 (month title and label reading, guess flag, window-scoped date context; see `docs/postmortems/2026-10-01-month-view-read-as-the-capture-month.md`).
+
+### 013 active-window-capture
+A second global shortcut (default Control+Option+Command+W, configurable, with a "Capture window" menu fallback) captures only the window in front of the frontmost application, never Memorri's own. After a successful capture, a red border outlines the recorded area for about a second. The border never appears in the picture and lets clicks through. The picture is analysed as that one window and reconciled with the existing items. The full-screen capture and its shortcut stay exactly as they are.

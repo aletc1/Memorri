@@ -216,4 +216,38 @@ import Testing
         #expect(c.meta.context?.name == "Customer A" && c.expected.context == "Customer A")
         #expect(c.meta.capturedAt == SyntheticTime.date(2026, 10, 14, 20, 30, zone: "Europe/Madrid"))
     }
+
+    // MARK: window captures (spec 013)
+
+    private var captureCases: [GoldenCaseSummary] { cases.filter { $0.features.contains("window-capture") } }
+
+    @Test func theWindowCaptureCasesAreOneWindowThatFillsThePictureWithNoMenuBar() {
+        #expect(Set(captureCases.map(\.name)) == ["window-capture-mail", "window-capture-month-other-month", "window-capture-remote-clock",
+                                                  "window-capture-covered", "window-capture-terminal"])
+        for c in captureCases {
+            #expect(c.meta.scope == .window, "\(c.name)")
+            #expect(c.meta.windows.count == 1 && c.meta.windows[0].stack == 0 && c.meta.windows[0].frame == [0, 0, c.meta.displaySize[0], c.meta.displaySize[1]], "\(c.name)")
+            for f in c.expected.findings { #expect(f.window == "w0", "\(c.name): \(f.title)") }
+            // No menu bar: nothing that reads as a clock at the top edge of the picture beyond the window's own title bar.
+            #expect(!(c.expected.lines ?? []).contains { $0.text == "Wed 14 Oct 09:12" }, "\(c.name)")
+        }
+        #expect(cases.filter { !$0.features.contains("window-capture") }.allSatisfy { $0.meta.scope == nil })
+    }
+
+    @Test func theWindowCaptureCasesExpectWhatTheirWindowSaysAndNothingElse() {
+        func named(_ name: String) -> GoldenCaseSummary { captureCases.first { $0.name == name }! }
+        #expect(named("window-capture-mail").expected.findings.map(\.title) == ["Planning meeting"] && named("window-capture-mail").expected.screenKind == "email")
+        let month = named("window-capture-month-other-month")
+        #expect(month.expected.screenKind == "calendar_month" && month.expected.findings.count == 3)
+        #expect(month.expected.findings.allSatisfy { f in f.start.map { Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "Europe/Madrid")!, from: $0).month == 2 } == true })
+        let remote = named("window-capture-remote-clock")
+        #expect(remote.features.contains("remote-clock") && (remote.expected.lines ?? []).map(\.text).contains("Thu 15 Oct 03:30"))
+        #expect(remote.expected.findings.first?.start == SyntheticTime.date(2026, 10, 16, 10, 0, zone: "America/New_York"))
+        let covered = named("window-capture-covered")
+        #expect(covered.expected.findings.map(\.title).sorted() == ["Coffee with Sam", "Daily standup", "Design review"])
+        #expect((covered.expected.lines ?? []).map(\.text).contains("Charged 84%"))
+        let terminal = named("window-capture-terminal")
+        #expect(terminal.expected.findings.isEmpty && terminal.expected.screenKind == "other")
+        #expect(terminal.expected.tags?.first { $0.key == "theme" }?.value == "dark")      // drawn on a dark background
+    }
 }

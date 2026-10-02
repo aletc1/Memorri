@@ -55,6 +55,13 @@ public struct WindowsAnswer: Sendable, Equatable {
 
     public func judgement(for key: String) -> WindowJudgement? { judgements.first { $0.key == key } }
 
+    /// The same answer with every window called relevant: for a window the user chose, whatever the model thought of it (spec 013). The kind it
+    /// gave is kept when it gave one; a window it called irrelevant has none, and is read as `other`.
+    var allRelevant: WindowsAnswer {
+        WindowsAnswer(judgements: judgements.map { WindowJudgement(key: $0.key, relevant: true, kind: $0.kind, confidence: $0.confidence, remote: $0.remote) },
+                      calendarNames: calendarNames, application: application, platformLook: platformLook, theme: theme, isRemote: isRemote, remoteClient: remoteClient)
+    }
+
     /// What the capture as a whole is, for the tags and the context choice that expect a classification: the kind of the frontmost relevant window
     /// (`frontToBack` lists the keys in stack order), else `other`.
     public func classification(frontToBack: [String]) -> ClassificationResult {

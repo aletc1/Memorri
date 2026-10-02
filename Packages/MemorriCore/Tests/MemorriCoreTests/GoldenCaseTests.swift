@@ -114,4 +114,16 @@ import Testing
         #expect(golden.origin == .local && golden.meta.windows.isEmpty && golden.meta.context == nil)
         #expect(golden.expected.tags == nil && golden.expected.lines == nil && golden.expected.findings.isEmpty)
     }
+
+    @Test func theScopeOfAWindowCaptureIsReadAndAMissingScopeIsNil() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        try SyntheticCases.generate(into: temp.url)
+        let window = try GoldenCase.load(folder: temp.url.appendingPathComponent("window-capture-mail"))
+        let screens = try GoldenCase.load(folder: temp.url.appendingPathComponent("calendar-week-outlook-24h-blocks"))
+        #expect(window.meta.scope == .window && screens.meta.scope == nil)
+        let json = try String(contentsOf: temp.url.appendingPathComponent("window-capture-mail/meta.json"), encoding: .utf8)
+        #expect(json.contains("\"scope\" : \"window\""))
+        let plain = try String(contentsOf: temp.url.appendingPathComponent("calendar-week-outlook-24h-blocks/meta.json"), encoding: .utf8)
+        #expect(!plain.contains("scope"))
+    }
 }

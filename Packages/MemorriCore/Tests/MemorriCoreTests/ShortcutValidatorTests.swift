@@ -77,3 +77,31 @@ import Testing
         #expect(ShortcutValidator(system: FakeSystemShortcuts(reserved: [reserved]), otherActions: [:]).validate(reserved) == .reservedBySystem)
     }
 }
+
+/// The capture, window-capture and search shortcuts are checked against each other (spec 013 FR-003).
+@Suite struct ShortcutThreeActionsTests {
+    private func combo(_ key: Int, _ modifiers: Set<KeyCombo.Modifier>) -> KeyCombo { KeyCombo(keyCode: key, modifiers: modifiers) }
+    private let keyM = 46
+
+    private let keyW = 13, keyF = 3
+
+    @Test func theThreeDefaultsAreDistinctAndEachIsAcceptedAgainstTheOtherTwo() {
+        let capture = combo(keyM, [.control, .option, .command]), window = combo(keyW, [.control, .option, .command]), search = combo(keyF, [.control, .option, .command])
+        #expect(Set([capture, window, search]).count == 3)
+        #expect(ShortcutValidator(system: FakeSystemShortcuts(), otherActions: ["Capture window": window, "Search": search]).validate(capture) == nil)
+        #expect(ShortcutValidator(system: FakeSystemShortcuts(), otherActions: ["Capture now": capture, "Search": search]).validate(window) == nil)
+        #expect(ShortcutValidator(system: FakeSystemShortcuts(), otherActions: ["Capture now": capture, "Capture window": window]).validate(search) == nil)
+    }
+
+    @Test func aComboUsedByEitherOtherActionIsRefusedNamingThatAction() {
+        let capture = combo(keyM, [.control, .option, .command]), search = combo(keyF, [.control, .option, .command])
+        let validator = ShortcutValidator(system: FakeSystemShortcuts(), otherActions: ["Capture now": capture, "Search": search])
+        #expect(validator.validate(capture) == .usedByMemorriAction("Capture now"))
+        #expect(validator.validate(search) == .usedByMemorriAction("Search"))
+    }
+
+    @Test func theWindowShortcutIsRefusedWhenMacOSReservesIt() {
+        let reserved = combo(keyW, [.command])
+        #expect(ShortcutValidator(system: FakeSystemShortcuts(reserved: [reserved]), otherActions: [:]).validate(reserved) == .reservedBySystem)
+    }
+}

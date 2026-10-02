@@ -402,6 +402,123 @@ import Testing
         #expect(plain.findings.first?.provenance["start"]?.reason == nil)
     }
 
+    // MARK: a window the user chose (spec 013)
+
+    private func chosenInput(_ lines: [RecognisedLine], app: String = "Mail", title: String? = nil, width: Int = 1200, height: Int = 800,
+                             reuse: PipelineInput.Reuse = .init(), chosen: Bool = true) -> PipelineInput {
+        PipelineInput(image: makeTestImage(width: width, height: height), classificationJPEG: Data("c".utf8), classificationSize: (1024, 683),
+                      analysisJPEG: Data("a".utf8), analysisSize: (1200, 800), macTimezone: madrid, captureTime: captureTime,
+                      locales: [Locale(identifier: "en_US"), Locale(identifier: "es_ES")], reuse: reuse,
+                      windows: [window(app, stack: 0, 0, 0, width, height, title: title)], chosenWindow: chosen)
+    }
+
+    private let planning = #"{"findings":[{"kind":"appointment","title":"Planning meeting","cited_lines":[3],"start_text":"10:00","date_text":"tomorrow"}]}"#
+
+    private func chosenRig(_ lines: [RecognisedLine], windows: String) -> Rig {
+        let rig = makeRig(lines: lines)
+        rig.model.answer(whenSchemaHas: "windows", windows)
+        rig.model.answer(whenSchemaHas: "findings", planning)
+        return rig
+    }
+
+    @Test func aChosenWindowIsAlwaysReadEvenWhenTheModelCallsItIrrelevant() async throws {
+        let lines = texts(mailLines, from: 1, x: 100, y: 100)
+        let rig = chosenRig(lines, windows: windowsAnswer([entry("w0", relevant: false, kind: .other)]))
+        let result = try await rig.pipeline.analyse(chosenInput(lines, title: "Inbox"), settings: settings)
+        #expect(rig.model.requests(whereSchemaHas: "windows").count == 1 && rig.model.requests(whereSchemaHas: "findings").count == 1)
+        #expect(rig.model.requests(whereSchemaHas: "screen_kind").isEmpty)
+        #expect(result.steps.map(\.step) == ["windows", "extract:w0"])
+        #expect(result.findings.map(\.title) == ["Planning meeting"] && result.findings.first?.windowKey == "w0")
+        let record = try #require(result.windows.first)
+        #expect(result.windows.count == 1 && record.windowKey == "w0" && record.relevant && record.appName == "Mail" && record.title == "Inbox")
+        #expect(result.windowsRead == 1)
+    }
+
+    @Test func aChosenWindowKeepsTheKindTheModelGave() async throws {
+        let lines = texts(mailLines, from: 1, x: 100, y: 100)
+        let rig = chosenRig(lines, windows: windowsAnswer([entry("w0", relevant: true, kind: .email)]))
+        let result = try await rig.pipeline.analyse(chosenInput(lines), settings: settings)
+        #expect(result.windows.first?.kind == .email && result.steps[1].promptVersion == "extract-email-v13")
+    }
+
+    @Test func aStoredWindowsAnswerThatCalledTheWindowIrrelevantIsOverriddenToo() async throws {
+        let lines = texts(mailLines, from: 1, x: 100, y: 100)
+        let stored = try #require(WindowsAnswer.parse(storedAnswer: windowsAnswer([entry("w0", relevant: false, kind: .other)]), expecting: ["w0"]))
+        let rig = makeRig(lines: lines)
+        rig.model.answer(whenSchemaHas: "findings", planning)
+        let result = try await rig.pipeline.analyse(chosenInput(lines, reuse: .init(lines: lines, windows: stored)), settings: settings)
+        #expect(rig.model.requests(whereSchemaHas: "windows").isEmpty && rig.model.requests(whereSchemaHas: "findings").count == 1)
+        #expect(result.steps.map(\.step) == ["extract:w0"] && result.findings.count == 1 && result.windows.first?.relevant == true)
+    }
+
+    @Test func aChosenMonthGridIsReadByGeometryWithNoExtractionCall() async throws {
+        let lines = monthLines(first: 1, originX: 0, originY: 100)
+        let rig = makeRig(lines: lines)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer([entry("w0", relevant: true, kind: .calendarMonth)]))
+        let result = try await rig.pipeline.analyse(chosenInput(lines, app: "Calendar", width: 1500, height: 900), settings: settings)
+        #expect(rig.model.requests(whereSchemaHas: "findings").isEmpty && result.steps.map(\.step) == ["windows"])
+        #expect(result.findings.map(\.title) == ["Budget meeting"] && result.readBy == MonthEntries.version)
+        #expect(result.windows.first?.kind == .calendarMonth)
+    }
+
+    @Test func aChosenWindowWithNothingToFindGivesNoItemsAndNoError() async throws {
+        let lines = texts(terminalLines, from: 1, x: 100, y: 100)
+        let rig = makeRig(lines: lines)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer([entry("w0", relevant: false, kind: .other)]))
+        let result = try await rig.pipeline.analyse(chosenInput(lines, app: "Terminal"), settings: settings)
+        #expect(result.findings.isEmpty && result.windows.first?.relevant == true && result.windows.first?.appName == "Terminal")
+    }
+
+    @Test func aChosenWindowWithTwoLinesIsStillKeptAndNamed() async throws {
+        let lines = texts(["Hello", "World"], from: 1, x: 100, y: 100)
+        let rig = chosenRig(lines, windows: windowsAnswer([entry("w0", relevant: false, kind: .other)]))
+        let result = try await rig.pipeline.analyse(chosenInput(lines, app: "Notes"), settings: settings)
+        #expect(result.windows.map(\.windowKey) == ["w0"] && result.windows.first?.appName == "Notes" && rig.model.requests(whereSchemaHas: "windows").count == 1)
+    }
+
+    @Test func aFailedWindowsCallReadsTheChosenPictureWholeAsBefore() async throws {
+        let lines = texts(mailLines, from: 1, x: 100, y: 100)
+        let rig = makeRig(lines: lines)
+        rig.model.answer(whenSchemaHas: "windows", "this is not json")
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Old path","cited_lines":[3],"start_text":"10:00"}]}"#)
+        let result = try await rig.pipeline.analyse(chosenInput(lines), settings: settings)
+        #expect(result.steps.map(\.step) == ["windows", "classify", "extract"] && result.steps[0].failure == "invalid answer")
+        #expect(result.findings.map(\.title) == ["Old path"] && result.windows.isEmpty)
+    }
+
+    @Test func aChosenWindowWithNoClockUsesTheCaptureTimeWithoutAGuessFlag() async throws {
+        let lines = texts(mailLines, from: 1, x: 100, y: 100)
+        let rig = chosenRig(lines, windows: windowsAnswer([entry("w0", relevant: true, kind: .email)]))
+        let result = try await rig.pipeline.analyse(chosenInput(lines), settings: settings)
+        #expect(result.reference?.source == .capture && result.reference?.isGuess == false)
+        let finding = try #require(result.findings.first)
+        #expect(finding.start == start(2026, 10, 15, 10) && finding.provenance["start"]?.reason == nil)
+    }
+
+    @Test func aChosenRemoteWindowReadsItsOwnTaskbarClock() async throws {
+        var lines = texts(mailLines, from: 1, x: 100, y: 100)
+        lines.append(line(5, "Thu 15 Oct 03:30", x: 900, y: 780, w: 200))          // the taskbar, in the bottom strip of the window picture
+        let rig = chosenRig(lines, windows: windowsAnswer([entry("w0", relevant: true, kind: .email, remote: true)]))
+        let result = try await rig.pipeline.analyse(chosenInput(lines, app: "Citrix Viewer"), settings: settings)
+        #expect(result.reference?.source == .windowClock && result.findings.first?.start == start(2026, 10, 16, 10))
+    }
+
+    @Test func theTopOfAChosenPictureIsNeverReadAsAMenuBarClock() async throws {
+        var lines = texts(mailLines, from: 1, x: 100, y: 100)
+        lines.append(line(5, "Wed 14 Oct 11:11", x: 900, y: 5, w: 200))
+        let rig = chosenRig(lines, windows: windowsAnswer([entry("w0", relevant: true, kind: .email)]))
+        let result = try await rig.pipeline.analyse(chosenInput(lines), settings: settings)
+        #expect(result.reference?.source == .capture)
+    }
+
+    @Test func aSingleWindowThatIsNotChosenStillTakesTheOldPath() async throws {
+        let lines = texts(mailLines, from: 1, x: 100, y: 100)
+        let rig = makeRig(lines: lines)
+        rig.model.answer(whenSchemaHas: "findings", planning)
+        let result = try await rig.pipeline.analyse(chosenInput(lines, chosen: false), settings: settings)
+        #expect(result.steps.map(\.step) == ["classify", "extract"] && result.windows.isEmpty && rig.model.requests(whereSchemaHas: "windows").isEmpty)
+    }
+
     // MARK: one block listed twice
 
     @Test func aBlockListedTwiceIsOneFindingWithWhatEachEntryGave() {

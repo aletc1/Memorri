@@ -37,6 +37,16 @@ import Testing
         #expect(events[0].id == image.eventId)
     }
 
+    @Test func aPictureIngestedAsAWindowCaptureIsMarkedSo() throws {
+        let h = try Harness(); defer { h.temp.cleanUp() }
+        let window = WindowInfo(appName: "Mail", bundleID: "com.example.mail", title: "Inbox", frame: PixelBox(x: 0, y: 0, width: 1600, height: 1000), stack: 0)
+        let id = try h.ingest.store(png: try png(), windows: [window], scope: .window)
+        #expect(try h.context.store!.scope(imageID: id) == .window)
+        #expect(try h.context.store!.windows(imageID: id) == [window])
+        let plain = try h.ingest.store(png: try png())
+        #expect(try h.context.store!.scope(imageID: plain) == .displays)
+    }
+
     @Test func aSmallPictureIsNotEnlargedForTheAnalysisCopy() throws {
         let h = try Harness(modelLongEdge: 2048); defer { h.temp.cleanUp() }
         let image = try #require(try h.context.store!.image(id: try h.ingest.store(png: try png(width: 800, height: 500))))

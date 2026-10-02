@@ -13,6 +13,9 @@ public enum LastCaptureLine {
             return "Last capture: \(captured) of \(total) displays captured, \(when)"
         case .failed(let reason):
             return "Last capture failed: \(reason), \(when)"
+        case .window(let app):
+            let name = app?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return name.isEmpty ? "Last window capture, \(when)" : "Last window capture: \(name), \(when)"
         }
     }
 

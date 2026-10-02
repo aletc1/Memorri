@@ -10,6 +10,8 @@ extension KeyboardShortcuts.Name {
     static let capture = Self("capture", default: .init(.m, modifiers: [.control, .option, .command]))
     /// The quick-search shortcut. Default is Control+Option+Command+F (spec 007).
     static let search = Self("search", default: .init(.f, modifiers: [.control, .option, .command]))
+    /// The window-capture shortcut. Default is Control+Option+Command+W (spec 013).
+    static let captureWindow = Self("captureWindow", default: .init(.w, modifiers: [.control, .option, .command]))
 }
 
 private extension KeyCombo {
@@ -46,45 +48,80 @@ struct SystemShortcutAdapter: SystemShortcutChecking {
     }
 }
 
-/// Registers the global shortcuts (capture and search) and enforces the shortcut rules (FR-006, FR-007; spec 007 FR-009).
+/// Registers the global shortcuts (capture, window capture and search) and enforces the shortcut rules (FR-006, FR-007; spec 007 FR-009; spec 013 FR-003).
 ///
 /// The recorder view saves a shortcut itself and then calls `recorderChanged`; a rejected
-/// shortcut is reverted to the previous one right away. Each shortcut is also checked against the other one.
+/// shortcut is reverted to the previous one right away. Each shortcut is also checked against all the others.
 @MainActor @Observable
 final class ShortcutAdapter {
-    enum Action {
-        case capture, search
+    enum Action: CaseIterable {
+        case capture, window, search
 
-        var name: KeyboardShortcuts.Name { self == .capture ? .capture : .search }
-        /// How the other action names it in a refusal message.
-        var label: String { self == .capture ? "Capture now" : "Search" }
+        var name: KeyboardShortcuts.Name {
+            switch self {
+            case .capture: .capture
+            case .window: .captureWindow
+            case .search: .search
+            }
+        }
+        /// How the other actions name it in a refusal message.
+        var label: String {
+            switch self {
+            case .capture: "Capture now"
+            case .window: "Capture window"
+            case .search: "Search"
+            }
+        }
     }
 
-    private(set) var rejectionMessage: String?
-    private(set) var searchRejectionMessage: String?
-    private var accepted: KeyboardShortcuts.Shortcut?
-    private var searchAccepted: KeyboardShortcuts.Shortcut?
+    private var messages: [Action: String] = [:]
+    private var accepted: [Action: KeyboardShortcuts.Shortcut] = [:]
     private let system = SystemShortcutAdapter()
 
     /// What the search shortcut does; set once the panel exists.
     var onSearch: @MainActor () -> Void = {}
 
-    init(onCapture: @escaping @MainActor () -> Void) {
-        accepted = KeyboardShortcuts.getShortcut(for: .capture)
-        searchAccepted = KeyboardShortcuts.getShortcut(for: .search)
-        Logger(subsystem: MemorriCore.subsystem, category: "shortcut")
-            .notice("shortcut at launch: \(self.accepted?.description ?? "none", privacy: .public)")
+    init(onCapture: @escaping @MainActor () -> Void, onCaptureWindow: @escaping @MainActor () -> Void = {}) {
+        for action in Action.allCases { accepted[action] = KeyboardShortcuts.getShortcut(for: action.name) }
+        resolveWindowDefault()
+        let logger = Logger(subsystem: MemorriCore.subsystem, category: "shortcut")
+        logger.notice("shortcut at launch: \(self.accepted[.capture]?.description ?? "none", privacy: .public)")
+        logger.notice("window shortcut at launch: \(self.accepted[.window]?.description ?? "none", privacy: .public)")
         KeyboardShortcuts.onKeyUp(for: .capture) {
             Task { @MainActor in onCapture() }
+        }
+        KeyboardShortcuts.onKeyUp(for: .captureWindow) {
+            Task { @MainActor in onCaptureWindow() }
         }
         KeyboardShortcuts.onKeyUp(for: .search) { [weak self] in
             Task { @MainActor in self?.onSearch() }
         }
     }
 
-    /// The shortcut as text for menus, for example "⌃⌥⌘M". `nil` when none is set.
-    var displayText: String? { accepted?.description }
-    var searchDisplayText: String? { searchAccepted?.description }
+    /// The default window-capture shortcut never takes a combination the user already gave to another action (spec 013, research R10).
+    private func resolveWindowDefault() {
+        let name = Action.window.name
+        guard let defaultShortcut = name.defaultShortcut else { return }
+        let others = Dictionary(uniqueKeysWithValues: Action.allCases.filter { $0 != .window }.compactMap { action in
+            accepted[action].map { (action.label, KeyCombo($0)) }
+        })
+        switch DefaultShortcutResolver.resolve(default: KeyCombo(defaultShortcut), current: accepted[.window].map(KeyCombo.init), others: others) {
+        case .keep: break
+        case .unassign(let user):
+            KeyboardShortcuts.setShortcut(nil, for: name)
+            accepted[.window] = nil
+            messages[.window] = DefaultShortcutResolver.message(usedBy: user)
+        }
+    }
+
+    /// The shortcut of an action as text for menus, for example "⌃⌥⌘M". `nil` when none is set.
+    func displayText(_ action: Action) -> String? { accepted[action]?.description }
+    var displayText: String? { displayText(.capture) }
+    var searchDisplayText: String? { displayText(.search) }
+    var windowDisplayText: String? { displayText(.window) }
+
+    /// Why the last shortcut recorded for the action was refused, or why it has none.
+    func message(for action: Action) -> String? { messages[action] }
 
     /// Called by the recorder after the user recorded or cleared a shortcut.
     func recorderChanged(_ shortcut: KeyboardShortcuts.Shortcut?, for action: Action = .capture) {
@@ -98,24 +135,21 @@ final class ShortcutAdapter {
         apply(target, for: action)
     }
 
-    private func current(_ action: Action) -> KeyboardShortcuts.Shortcut? { action == .capture ? accepted : searchAccepted }
-
-    private func set(_ shortcut: KeyboardShortcuts.Shortcut?, message: String?, for action: Action) {
-        if action == .capture { accepted = shortcut; rejectionMessage = message } else { searchAccepted = shortcut; searchRejectionMessage = message }
-    }
-
     private func apply(_ shortcut: KeyboardShortcuts.Shortcut?, for action: Action) {
         guard let shortcut else {            // cleared: no shortcut is registered
-            set(nil, message: nil, for: action)
+            accepted[action] = nil
+            messages[action] = nil
             return
         }
-        let other: Action = action == .capture ? .search : .capture
-        let others = current(other).map { [other.label: KeyCombo($0)] } ?? [:]
+        let others = Dictionary(uniqueKeysWithValues: Action.allCases.filter { $0 != action }.compactMap { other in
+            accepted[other].map { (other.label, KeyCombo($0)) }
+        })
         if let rejection = ShortcutValidator(system: system, otherActions: others).validate(KeyCombo(shortcut)) {
-            KeyboardShortcuts.setShortcut(current(action), for: action.name)   // keep the previous one
-            set(current(action), message: Self.message(for: rejection), for: action)
+            KeyboardShortcuts.setShortcut(accepted[action], for: action.name)   // keep the previous one
+            messages[action] = Self.message(for: rejection)
         } else {
-            set(shortcut, message: nil, for: action)
+            accepted[action] = shortcut
+            messages[action] = nil
         }
     }
 

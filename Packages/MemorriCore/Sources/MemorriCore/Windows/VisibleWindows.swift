@@ -62,11 +62,22 @@ public struct VisibleScreen: Sendable, Equatable {
     /// Splits the lines of a picture by the windows it showed. A capture that has no windows, windows without a stack order, or only one window
     /// (or whose windows all get dropped) is one window, `all`, with every line, as before this feature (FR-010).
     /// `minimumShare` and `minimumLines` are what a window must have to be read; a caller that only needs to know what covers what can lower them.
+    /// With `chosenWindow` (a window capture, spec 013) the one recorded window is the window the user chose: it is kept whatever its size, number of lines
+    /// or application, so it is always read and its name is always known.
     public static func split(lines: [RecognisedLine], windows: [WindowInfo], pictureWidth: Int, pictureHeight: Int,
-                             minimumShare: Double = VisibleScreen.minimumVisibleShare, minimumLines: Int = VisibleScreen.minimumLines) -> VisibleScreen {
+                             minimumShare: Double = VisibleScreen.minimumVisibleShare, minimumLines: Int = VisibleScreen.minimumLines,
+                             chosenWindow: Bool = false) -> VisibleScreen {
         let picture = PixelBox(x: 0, y: 0, width: pictureWidth, height: pictureHeight)
         let whole = VisibleScreen(windows: [VisibleWindow(key: wholePicture, appName: nil, title: nil, bundleID: nil, frame: picture, visible: [picture],
                                                           visibleShare: 1, lines: lines)], desktopLines: [])
+        if chosenWindow {
+            guard let chosen = windows.min(by: { ($0.stack ?? 0) < ($1.stack ?? 0) }), let frame = clip(chosen.frame, to: picture) else { return whole }
+            let inside = lines.filter { contains(frame, x: $0.box.midX, y: $0.box.midY) }
+            let outside = lines.filter { !contains(frame, x: $0.box.midX, y: $0.box.midY) }
+            let share = Double(frame.width * frame.height) / Double(max(1, pictureWidth * pictureHeight))
+            return VisibleScreen(windows: [VisibleWindow(key: "w\(chosen.stack ?? 0)", appName: chosen.appName, title: chosen.title, bundleID: chosen.bundleID,
+                                                         frame: frame, visible: [frame], visibleShare: share, lines: inside)], desktopLines: outside)
+        }
         guard windows.count > 1, windows.allSatisfy({ $0.stack != nil }) else { return whole }
 
         // Front to back; clip each frame to the picture. A window with nothing inside the picture is not on it.

@@ -41,7 +41,8 @@ enum DebugIngest {
             do {
                 let png = try Data(contentsOf: URL(fileURLWithPath: request.picture))
                 let windows = try request.windows.map(loadWindows) ?? []
-                let imageID = try ingest.store(png: png, windows: windows, capturedAt: request.windows.flatMap(capturedAt))
+                let meta = request.windows.flatMap(metadata)
+                let imageID = try ingest.store(png: png, windows: windows, capturedAt: meta?.capturedAt, scope: meta?.scope ?? .displays)
                 try await analysis.enqueue(kind: ImageAnalysisJobRunner.analyseKind, imageID: imageID)
                 logger.info("ingested picture image=\(imageID, privacy: .public) windows=\(windows.count)")
             } catch {
@@ -50,12 +51,13 @@ enum DebugIngest {
         }
     }
 
-    /// The capture time of a golden case's `meta.json`, so a drawn clock and relative dates are read against the time the case is about.
-    private static func capturedAt(_ path: String) -> Date? {
+    /// The capture time and scope of a golden case's `meta.json`, so a drawn clock and relative dates are read against the time the case is about
+    /// and a window case is stored as a window capture.
+    private static func metadata(_ path: String) -> (capturedAt: Date, scope: CaptureScope?)? {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode(GoldenMeta.self, from: data))?.capturedAt
+        return (try? decoder.decode(GoldenMeta.self, from: data)).map { ($0.capturedAt, $0.scope) }
     }
 
     private static func loadWindows(_ path: String) throws -> [WindowInfo] {

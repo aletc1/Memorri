@@ -33,6 +33,60 @@ import Testing
         #expect(try store.count() == 0)
     }
 
+    @Test func aCaptureIsAFullScreenCaptureUnlessItSaysItIsAWindow() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let store = try makeStore(temp)
+        let screens = makeEventRecord(), window = makeEventRecord(scope: .window)
+        let screenImage = makeImageRecord(eventID: screens.id), windowImage = makeImageRecord(eventID: window.id)
+        try store.insert(event: screens, images: [screenImage])
+        try store.insert(event: window, images: [windowImage])
+        #expect(screens.scope == .displays && window.scope == .window)
+        #expect(try store.scope(imageID: screenImage.id) == .displays)
+        #expect(try store.scope(imageID: windowImage.id) == .window)
+        #expect(try store.scope(imageID: "unknown") == .displays)
+        #expect(try store.events(olderThan: nil).map(\.scope).sorted { $0.rawValue < $1.rawValue } == [.displays, .window])
+    }
+
+    @Test func aWindowCaptureKeepsItsFrameOnTheDesktopAndOneWindowThatFillsThePicture() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let store = try makeStore(temp)
+        let event = makeEventRecord(scope: .window)
+        let frame = DesktopRect(x: -1200.5, y: 40, width: 900, height: 700.25)
+        var image = makeImageRecord(eventID: event.id)
+        image.desktopFrame = frame
+        let window = WindowInfo(appName: "Mail", bundleID: "com.example.mail", title: "Inbox",
+                                frame: PixelBox(x: 0, y: 0, width: image.pixelWidth, height: image.pixelHeight), stack: 0)
+        try store.insert(event: event, images: [image], windows: [image.id: [window]])
+        let read = try #require(try store.image(id: image.id))
+        #expect(read.desktopFrame == frame)
+        #expect(read == image)
+        #expect(try store.windows(imageID: image.id) == [window])
+        #expect(try store.allImages().count == 1)
+    }
+
+    @Test func aDisplayPictureHasNoDesktopFrame() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let store = try makeStore(temp)
+        let event = makeEventRecord()
+        let image = makeImageRecord(eventID: event.id)
+        try store.insert(event: event, images: [image])
+        #expect(try store.image(id: image.id)?.desktopFrame == nil)
+    }
+
+    @Test func deletingAWindowCaptureRemovesItsImageWindowAndFrame() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let store = try makeStore(temp)
+        let event = makeEventRecord(scope: .window)
+        var image = makeImageRecord(eventID: event.id)
+        image.desktopFrame = DesktopRect(x: 1, y: 2, width: 300, height: 200)
+        let window = WindowInfo(appName: "Mail", bundleID: nil, title: "Inbox", frame: PixelBox(x: 0, y: 0, width: 300, height: 200), stack: 0)
+        try store.insert(event: event, images: [image], windows: [image.id: [window]])
+        try store.deleteEvents(ids: [event.id])
+        #expect(try store.count() == 0)
+        #expect(try store.allImages().isEmpty)
+        #expect(try store.windows(imageID: image.id).isEmpty)
+    }
+
     @Test func eventsOlderThanUsesAStrictCutoff() throws {
         let temp = TempDirectory(); defer { temp.cleanUp() }
         let store = try makeStore(temp)
