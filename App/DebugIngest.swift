@@ -58,7 +58,8 @@ enum DebugIngest {
             let f = window.frame
             return WindowInfo(appName: window.app, bundleID: window.bundleID, title: window.title,
                               frame: PixelBox(x: f.count > 0 ? f[0] : 0, y: f.count > 1 ? f[1] : 0,
-                                              width: f.count > 2 ? f[2] : 0, height: f.count > 3 ? f[3] : 0))
+                                              width: f.count > 2 ? f[2] : 0, height: f.count > 3 ? f[3] : 0),
+                              stack: window.stack)
         }
     }
 }

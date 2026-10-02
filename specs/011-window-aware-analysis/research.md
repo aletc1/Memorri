@@ -65,3 +65,48 @@
 ## R10. Evaluation
 
 - **Decision**: `SyntheticChrome` learns to draw several windows (with stack order and frames in `meta.json`, including a menu-bar clock): calendar + mail side by side; calendar half under a browser full of dates and numbers; two calendar windows sharing an event; a remote-desktop window with its own taskbar clock in another zone; a month view on another month with a menu-bar clock. `GoldenWindow` gains an optional `stack`. Scores per case as today, plus model calls per case in the report (SC-004).
+
+## Results (2026-10-02)
+
+Whole eval on `qwen3-vl:8b-instruct` (ADR 0019), think off, size 2048, temperature 0. Before: the commit before spec 011 (`875508a`, built in a scratch worktree); after: this branch. Reports in `eval/out/vl8b-v13-before.json` and `vl8b-v13-after.json` (not committed). `memorri-eval compare` over the 28 older cases:
+
+| | Before | After |
+|---|---|---|
+| Precision | 0.843 | 0.843 |
+| Recall | 0.878 | 0.878 |
+| Field accuracy | 0.908 | 0.908 |
+| Model calls (28 cases) | 52 | 52 |
+| Mean seconds per case | 8.64 | 8.65 (+0.06%) |
+| Cases that changed | | none |
+
+The five new window cases (after only):
+
+| Case | Findings found / expected / matched | Fields equal | Model calls | Seconds |
+|---|---|---|---|---|
+| windows-calendar-and-mail | 4 / 4 / 4 | 25 of 25 | 3 | 15.3 |
+| windows-calendar-under-browser | 3 / 3 / 3 | 18 of 20 | 2 | 11.2 |
+| windows-month-other-month-menu-clock | 4 / 4 / 4 | 22 of 22 | 2 | 9.8 |
+| windows-remote-clock-other-zone | 1 / 1 / 1 | 6 of 6 | 3 | 13.5 |
+| windows-two-calendars-same-event | 4 / 4 / 4 | 25 of 26 | 3 | 15.7 |
+
+Precision and recall are 1.00 on the new cases. The three fields that differ are the `place` of events whose window does not show it (the old path misses the same field on the old cases); no date and no window differs.
+
+| Criterion | Result |
+|---|---|
+| SC-001 | Met: the month case gets 4 of 4 dates in the month its window shows. |
+| SC-002 | Met: calendar under a browser full of dates gives 3 of 3, nothing from the browser. |
+| SC-003 | Met by test (`DateResolverMonthTests`, `WindowPipelineTests`): a month nothing names is `month-assumed`, and a guess goes to the Inbox. |
+| SC-004 | Met: calls equal the old count on all 28 older cases (52 and 52); the new cases make one windows call plus one extraction per relevant window that is not a month grid (3, 2, 2, 3, 3); mean seconds +0.06% on the older set (limit +25%). |
+| SC-005 | Met: no older case changed (limit 0.02); no stack gives the old path (tests). |
+| SC-006 | Met: the remote case resolves its relative dates against its own taskbar clock (6 of 6 fields). |
+| SC-007 | Met by test (`ReconcilerWindowsTests`, `EvidenceLifecycleTests`): sightings and evidence carry the window's application and title, also after the capture is deleted. |
+| SC-008, SC-009 | Real library: see below (needs the user's go-ahead and their app closed). The re-read, its priority and its protection of edited, locked, approved and dismissed values are covered by `LibraryRereadTests` and `ImageAnalysisJobTests`. |
+
+### R11 repeated on the new cases
+
+`minicpm-v4.5` on the five window cases (same settings): matched 9 of 16 findings (default model 16 of 16), with 0 of 3 on the calendar under a browser and 0 of 1 on the remote case. The decision of R11 stands: one model, the default; the windows prompt holds on the new cases with it.
+
+### Known gaps
+
+- The `place` field of an event is only read where the window shows it, as before.
+- Real screens will be harder than drawn ones; SC-008 is checked on the real library, by counts only.
