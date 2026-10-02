@@ -44,6 +44,7 @@ final class AppEnvironment {
     let evidenceWriter: EvidenceWriter?
     /// Search over items and captures (spec 007); `nil` when the storage is unavailable.
     let search: SearchService?
+    let searchIndex: SearchIndex?
     /// The floating quick-search panel.
     lazy var searchPanel = SearchPanelController(environment: self)
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
@@ -99,6 +100,7 @@ final class AppEnvironment {
             itemOperations = ItemOperations(database: database, reconciler: reconciler)
             operationLog = OperationLog(database: database)
             search = SearchService(database: database)
+            searchIndex = SearchIndex(database: database)
         } else {
             analysis = nil
             analysisJobs = nil
@@ -110,6 +112,7 @@ final class AppEnvironment {
             evidenceStore = nil
             evidenceWriter = nil
             search = nil
+            searchIndex = nil
         }
         captureService = CaptureRequestService(
             runner: Self.makeCaptureRunner(context: context, settingsStore: settingsStore, enqueuer: analysis, analysisSettings: analysisSettings),
@@ -152,10 +155,23 @@ final class AppEnvironment {
         }
         followAnalysisProgress()
         followReviewCount()
+        prepareSearchIndex()
         // Sightings from before evidence existed get their cut-outs a few at a time, newest first.
         if let evidenceWriter { Task.detached(priority: .utility) { _ = await evidenceWriter.backfill(limit: 200) } }
         if let storage { StartupAlerts.showIfNeeded(for: storage) }
         startRetention()
+    }
+
+    /// Builds the search index in the background when it is missing or outdated (spec 007); the panel says it is being prepared meanwhile.
+    private func prepareSearchIndex() {
+        guard let searchIndex else { return }
+        let state = self.state
+        if let current = try? searchIndex.state() { state.searchState = current }
+        Task.detached(priority: .utility) {
+            try? await searchIndex.prepare { progress in Task { @MainActor in state.searchState = progress } }
+            let final = (try? searchIndex.state()) ?? .ready          // the last word, whatever order the progress updates arrived in
+            await MainActor.run { state.searchState = final }
+        }
     }
 
     /// Keeps the menu's `Inbox (N)` current.

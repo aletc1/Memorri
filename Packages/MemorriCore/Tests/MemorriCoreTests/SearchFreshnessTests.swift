@@ -124,4 +124,55 @@ import Testing
         #expect(try await found(f, "dentist").count == 1)
         try expectInStep(f)
     }
+
+    // MARK: captures and retention
+
+    private func service(_ f: EvidenceFixture) -> SearchService { SearchService(database: f.database) }
+
+    private func cleanup(_ f: EvidenceFixture, now: Date) -> CleanupService {
+        CleanupService(paths: f.paths, store: f.fixture.base.captures, files: CaptureFileStore(paths: f.paths), time: FakeTimeSource(now.timeIntervalSinceReferenceDate))
+    }
+
+    private func table(_ f: EvidenceFixture, _ name: String) throws -> Int { try f.fixture.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM \(name)") ?? -1 } }
+
+    @Test func aNewCapturesTextIsSearchableAtOnceAndReadingAgainReplacesIt() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        let image = try await f.see([f.fixture.finding("Daily standup", cited: [1])])
+        let first = try await service(f).search(SearchQuery(text: "elsewhere"))
+        #expect(first.captures.map(\.id) == [image])
+        let again = [RecognisedLine(n: 1, text: "Quarterly planning", box: PixelBox(x: 100, y: 100, width: 300, height: 30), confidence: 0.9)]
+        try OCRStore(database: f.database).save(imageID: image, lines: again, durationMs: 1, recogniser: "test", at: Date(timeIntervalSince1970: 1_791_950_000))
+        let old = try await service(f).search(SearchQuery(text: "elsewhere")), fresh = try await service(f).search(SearchQuery(text: "quarterly"))
+        #expect(old.captures.isEmpty && fresh.captures.map(\.id) == [image])
+    }
+
+    @Test func retentionRemovesTheTextOfOldCapturesAndKeepsTheItemsTheUserEdited() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        _ = try await f.see([f.fixture.finding("Daily standup", cited: [1])])
+        let item = try #require(try f.fixture.read { try String.fetchOne($0, sql: "SELECT id FROM items") })
+        try f.fixture.write { try $0.execute(sql: "UPDATE items SET user_touched = 1 WHERE id = ?", arguments: [item]) }
+        #expect(try await service(f).search(SearchQuery(text: "elsewhere")).captures.count == 1)
+        _ = try cleanup(f, now: Date(timeIntervalSince1970: 1_800_000_000 + 100 * 86_400)).delete(olderThanDays: 30)
+        let text = try await service(f).search(SearchQuery(text: "elsewhere")), kept = try await service(f).search(SearchQuery(text: "standup"))
+        #expect(text.captures.isEmpty && kept.items.map(\.id) == [item])
+        #expect(try table(f, "search_captures") == 0)
+    }
+
+    @Test func deleteEverythingLeavesNoCaptureTextAndNoRowForAnItemThatWentWithIt() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        _ = try await f.see([f.fixture.finding("Daily standup", cited: [1])])
+        _ = try cleanup(f, now: Date(timeIntervalSince1970: 1_800_200_000)).delete(olderThanDays: nil)
+        #expect(try table(f, "search_captures") == 0 && table(f, "search_items") == 0 && table(f, "items") == 0)
+        #expect(try await service(f).search(SearchQuery(text: "standup")) .items.isEmpty)
+    }
+
+    @Test func theIndexSurvivesARestart() async throws {
+        let f = try SearchFixture(); defer { f.cleanUp() }
+        try f.addItem("a", title: "Café - Pruebas", aliases: ["Pruebas Café"])
+        let paths = AppPaths(root: f.temp.url.appendingPathComponent("Memorri"))
+        guard case .opened(let reopened) = try StorageDatabase.open(paths: paths) else { Issue.record("not reopened"); return }
+        let hits = try await SearchService(database: reopened).search(SearchQuery(text: "cafe pru")).items
+        #expect(hits.map(\.id) == ["a"])
+        #expect(try SearchIndex(database: reopened).state() == .preparing(done: 0, total: 1) || SearchIndex(database: reopened).state() == .ready)
+    }
 }

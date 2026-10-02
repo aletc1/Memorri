@@ -14,7 +14,7 @@ final class SearchViewModel {
     var dates: ClosedRange<Date>? { didSet { if dates != oldValue { changed() } } }
     var includeDismissed = false { didSet { if includeDismissed != oldValue { changed() } } }
     private(set) var results = SearchResults.empty
-    private(set) var state = SearchState.ready
+    var state: SearchState { environment.state.searchState }
     private(set) var contexts: [ContextRecord] = []
     private(set) var isSlow = false
     var selection: Int?
@@ -42,6 +42,9 @@ final class SearchViewModel {
     }
 
     func close() { running?.cancel(); observing?.cancel(); observing = nil }
+
+    /// Asks again (the index finished building).
+    func refresh() { run() }
 
     func clearFilters() {
         var cleared = query

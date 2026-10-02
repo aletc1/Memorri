@@ -45,6 +45,7 @@ struct SearchPanelView: View {
         .onKeyPress(.upArrow) { model.move(-1); return .handled }
         .onKeyPress(.escape) { onClose(); return .handled }
         .onChange(of: model.focusToken) { focused = true }
+        .onChange(of: model.state) { model.refresh() }
         .task { focused = true }
     }
 

@@ -21,6 +21,8 @@ final class AppState {
         var status: ItemStatus?
     }
     var itemsScopeRequest: ScopeRequest?
+    /// Whether the search index is built or still being built (spec 007).
+    var searchState = SearchState.ready
     /// A capture a search result asked the capture window to show.
     var captureRequest: CaptureRequest?
 
