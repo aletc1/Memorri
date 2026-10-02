@@ -331,6 +331,17 @@ import Testing
         #expect(result.discards.filter { $0.reason == "outside the window" }.count == 2)
     }
 
+    @Test func theStoredReadingOfAWindowKeepsTheKindItWasReadAsNotTheModelsMistake() async throws {
+        let left = weekWindow(first: 1, x: 0, y: 60, title: "March 9 – 13, 2026", days: ["Mon 9", "Tue 10", "Wed 11", "Thu 12", "Fri 13"])
+        let right = weekWindow(first: left.block + 1, x: 1250, y: 60, title: "October 12 – 16, 2026", days: ["Mon 12", "Tue 13", "Wed 14", "Thu 15", "Fri 16"])
+        let rig = makeRig(lines: left.lines + right.lines)
+        // The model calls the week in front a day view; five day headers across it make it a week.
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer([entry("w0", relevant: true, kind: .calendarDay), entry("w1", relevant: true, kind: .calendarWeek)]))
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[]}"#)
+        let result = try await rig.pipeline.analyse(input(windows: [window("Calendar", stack: 0, 1200, 60, 1150, 700), window("Calendar", stack: 1, 0, 60, 1200, 700)]), settings: settings)
+        #expect(result.windows.map(\.kind) == [.calendarWeek, .calendarWeek])
+    }
+
     // MARK: the reference clock (spec 011, US3)
 
     /// A remote desktop window (stack 0) with its own taskbar clock (06:00 behind the Mac) and a mail in it that says "tomorrow".

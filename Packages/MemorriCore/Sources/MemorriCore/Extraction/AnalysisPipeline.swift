@@ -297,6 +297,7 @@ public struct AnalysisPipeline: Sendable {
         var capped = false, modelReads = 0, geometryReads = 0, windowsRead = 0
         var reference: ReferenceClock?
         var frontKind: ScreenKind?            // what the frontmost relevant window turned out to be, after the geometry check
+        var usedKinds: [String: ScreenKind] = [:]      // the kind each window was read as, after that check (the stored reading keeps it)
         for window in screen.windows {
             guard let judgement = answer.judgement(for: window.key), judgement.relevant else { continue }
             windowsRead += 1
@@ -309,6 +310,7 @@ public struct AnalysisPipeline: Sendable {
             reference = reference ?? clock
             let resolved = Self.corrected(ownClass, lines: window.lines, locales: locales, reference: clock.instant, zone: zone, dayWithManyHeadersIsAWeek: true)
             frontKind = frontKind ?? resolved.kind
+            usedKinds[window.key] = resolved.kind
             let calendarKind = resolved.kind == .calendarWeek || resolved.kind == .calendarDay
             // The dates are read from this window's own text only.
             let headers = calendarKind ? DateResolver.headers(in: window.lines, locales: locales, reference: clock.instant, timezone: zone) : []
@@ -366,7 +368,7 @@ public struct AnalysisPipeline: Sendable {
         let records = screen.windows.map { window -> WindowReadingRecord in
             let judgement = answer.judgement(for: window.key)
             return WindowReadingRecord(imageID: "", windowKey: window.key, appName: window.appName, title: window.title, frame: window.frame, visible: window.visible,
-                                       visibleShare: window.visibleShare, relevant: judgement?.relevant ?? false, kind: judgement?.kind,
+                                       visibleShare: window.visibleShare, relevant: judgement?.relevant ?? false, kind: usedKinds[window.key] ?? judgement?.kind,
                                        confidence: judgement?.confidence ?? 0, remote: judgement?.remote ?? false, runID: nil,
                                        promptVersion: ExtractionPrompts.windowsVersion, createdAt: now)
         }
