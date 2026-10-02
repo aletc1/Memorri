@@ -1,0 +1,23 @@
+{
+  "capturedAt" : "2026-10-14T15:00:00Z",
+  "displaySize" : [
+    1600,
+    1000
+  ],
+  "macTimezone" : "Europe/Madrid",
+  "origin" : "synthetic",
+  "scale" : 1,
+  "windows" : [
+    {
+      "app" : "Microsoft Outlook",
+      "bundleID" : "com.microsoft.Outlook",
+      "frame" : [
+        0,
+        0,
+        1600,
+        1000
+      ],
+      "title" : "Calendario - Outlook"
+    }
+  ]
+}

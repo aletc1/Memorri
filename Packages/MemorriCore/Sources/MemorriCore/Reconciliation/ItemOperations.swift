@@ -11,6 +11,10 @@ public enum ItemOperationError: Error, Equatable {
     /// The status does not allow it (dismissing a dismissed item).
     case wrongStatus
     case invalidValue
+    /// An edit would put the start after the end (spec 006).
+    case startAfterEnd
+    /// A title cannot be empty.
+    case emptyTitle
     /// Both items have a locked value for these fields; say which to keep.
     case needsLockChoice([ItemField])
     /// The sightings do not belong to the item, or would leave it empty, or take all of it.
@@ -35,11 +39,17 @@ public struct ItemOperations: Sendable {
 
     /// Sets a field to the user's value and locks it: later sightings are recorded but never change it.
     @discardableResult
-    public func edit(_ itemID: String, field: ItemField, value: JSONValue) throws -> OpID {
-        guard Self.isValid(value, for: field) else { throw ItemOperationError.invalidValue }
+    public func edit(_ itemID: String, field: ItemField, value rawValue: JSONValue) throws -> OpID {
+        if field == .title, let text = rawValue.asString, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw ItemOperationError.emptyTitle }
+        guard Self.isValid(rawValue, for: field) else { throw ItemOperationError.invalidValue }
+        let value = Self.normalised(rawValue, for: field)
         let date = now()
         return try database.pool.write { db in
             var item = try Self.live(db, itemID)
+            if let new = value.asDate {
+                if field == .start, let end = item.end, new > end { throw ItemOperationError.startAfterEnd }
+                if field == .end, let start = item.start, new < start { throw ItemOperationError.startAfterEnd }
+            }
             let before = try OperationLog.state(db, itemID: itemID)!
             let observationID = UUID().uuidString
             let json = (try? JSONEncoder().encode(value)).map { String(decoding: $0, as: UTF8.self) } ?? "null"
@@ -52,6 +62,7 @@ public struct ItemOperations: Sendable {
             item.userTouched = true
             try ItemStore.update(db, item, at: date)
             try ItemStore.recompute(db, itemID: itemID, at: date)
+            try ItemStore.approve(db, itemID: itemID, at: date)             // the user has checked it (FR-014)
             return try OperationLog.record(db, kind: .edit, byUser: true, items: [itemID], before: [itemID: before],
                                            detail: ["field": .string(field.rawValue), "observation": .string(observationID)], at: date)
         }
@@ -72,6 +83,19 @@ public struct ItemOperations: Sendable {
         }
     }
 
+    /// The user checked the item: it leaves the Inbox and stays approved until a later sighting changes what was approved (FR-012).
+    @discardableResult
+    public func approve(_ itemID: String) throws -> OpID {
+        let date = now()
+        return try database.pool.write { db in
+            let item = try Self.live(db, itemID)
+            guard item.status == .active else { throw ItemOperationError.wrongStatus }
+            let before = try OperationLog.state(db, itemID: itemID)!
+            try ItemStore.approve(db, itemID: itemID, at: date)
+            return try OperationLog.record(db, kind: .approve, byUser: true, items: [itemID], before: [itemID: before], at: date)
+        }
+    }
+
     /// The item is remembered, hidden, and still collects sightings of the same event.
     @discardableResult
     public func dismiss(_ itemID: String) throws -> OpID { try setStatus(itemID, from: .active, to: .dismissed, kind: .dismiss) }
@@ -88,6 +112,7 @@ public struct ItemOperations: Sendable {
             item.status = to
             item.userTouched = true
             try ItemStore.update(db, item, at: date)
+            try ItemStore.recompute(db, itemID: itemID, at: date)         // a dismissed item needs no review; a restored one may
             return try OperationLog.record(db, kind: kind, byUser: true, items: [itemID], before: [itemID: before], at: date)
         }
     }
@@ -99,13 +124,29 @@ public struct ItemOperations: Sendable {
         return item
     }
 
+    /// `null` clears an optional field (a locked empty value); a start, a title, the all-day flag and the people list always have a value.
     static func isValid(_ value: JSONValue, for field: ItemField) -> Bool {
         switch field {
         case .title: if let text = value.asString { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } else { false }
-        case .start, .end, .due, .remind: value.asDate != nil
+        case .start: value.asDate != nil
+        case .end, .due, .remind: value == .null || value.asDate != nil
         case .allDay: value.asBool != nil
         case .people: value.asStrings != nil
-        case .place, .notes: value.asString != nil
+        case .place, .notes: value == .null || value.asString != nil
+        }
+    }
+
+    /// What is stored for a value that passed `isValid`: a title trimmed, people trimmed and de-duplicated without regard to case or accents.
+    static func normalised(_ value: JSONValue, for field: ItemField) -> JSONValue {
+        switch field {
+        case .title: return .string((value.asString ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
+        case .people:
+            var seen: Set<String> = []
+            let names = (value.asStrings ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { name in
+                !name.isEmpty && seen.insert(name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)).inserted
+            }
+            return .array(names.map(JSONValue.string))
+        default: return value
         }
     }
 }

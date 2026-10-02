@@ -74,8 +74,36 @@ public struct ItemStore: Sendable {
     // MARK: Reading
 
     /// `contextID`: nil for any context, `.some(nil)` for items without one, `.some(id)` for one context.
-    public func items(status: Set<ItemStatus>, kinds: Set<KindFamily>?, contextID: String??) throws -> [ItemRow] {
-        try database.pool.read { try Self.rows($0, status: status, kinds: kinds, contextID: contextID) }
+    /// `review`: only the items that need review (the Inbox).
+    public func items(status: Set<ItemStatus>, kinds: Set<KindFamily>?, contextID: String??, review: Bool = false) throws -> [ItemRow] {
+        try database.pool.read { try Self.rows($0, status: status, kinds: kinds, contextID: contextID, review: review) }
+    }
+
+    /// How many items need review: what the Inbox lists (FR-017). `contextID` as in `items`.
+    public func reviewCount(contextID: String?? = nil) throws -> Int {
+        try database.pool.read { try Self.reviewCount($0, contextID: contextID) }
+    }
+
+    static func reviewCount(_ db: Database, contextID: String??) throws -> Int {
+        var sql = "SELECT COUNT(*) FROM items WHERE status = 'active' AND needs_review = 1"
+        var arguments: [any DatabaseValueConvertible] = []
+        if let contextID {
+            if let id = contextID { sql += " AND context_id = ?"; arguments.append(id) } else { sql += " AND context_id IS NULL" }
+        }
+        return try Int.fetchOne(db, sql: sql, arguments: StatementArguments(arguments)) ?? 0
+    }
+
+    /// The count of items needing review, again after every change to the items.
+    public func observeReviewCount(contextID: String?? = nil) -> AsyncStream<Int> {
+        let observation = ValueObservation.tracking { db in try Self.reviewCount(db, contextID: contextID) }
+        let pool = database.pool
+        return AsyncStream { continuation in
+            let task = Task {
+                do { for try await count in observation.values(in: pool) { continuation.yield(count) } } catch {}
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
     public func item(id: String) throws -> Item? {
@@ -135,8 +163,11 @@ public struct ItemStore: Sendable {
         detail.aliases = try Row.fetchAll(db, sql: "SELECT normalised, title FROM item_aliases WHERE item_id = ? ORDER BY normalised", arguments: [item.id])
             .filter { ($0["normalised"] as String) != own }.map { $0["title"] as String }
 
-        detail.possibleDuplicates = try Row.fetchAll(db, sql: "SELECT item_a, item_b FROM possible_duplicates WHERE item_a = ?1 OR item_b = ?1 ORDER BY item_a, item_b",
-                                                     arguments: [item.id]).map { ($0["item_a"] as String) == item.id ? $0["item_b"] : $0["item_a"] }
+        detail.possibleDuplicates = try Row.fetchAll(db, sql: """
+            SELECT p.item_a, p.item_b FROM possible_duplicates p
+            JOIN items o ON o.id = CASE WHEN p.item_a = ?1 THEN p.item_b ELSE p.item_a END
+            WHERE (p.item_a = ?1 OR p.item_b = ?1) AND o.status != 'merged' ORDER BY p.item_a, p.item_b
+            """, arguments: [item.id]).map { ($0["item_a"] as String) == item.id ? $0["item_b"] : $0["item_a"] }
 
         detail.operations = try Row.fetchAll(db, sql: """
             SELECT o.id, o.kind, o.by_user, o.created_at, o.undone_by FROM reconcile_ops o JOIN reconcile_op_items oi ON oi.op_id = o.id
@@ -149,8 +180,8 @@ public struct ItemStore: Sendable {
     }
 
     /// The list, again after every change to the tables it reads.
-    public func observeItems(status: Set<ItemStatus>, kinds: Set<KindFamily>? = nil, contextID: String?? = nil) -> AsyncStream<[ItemRow]> {
-        let observation = ValueObservation.tracking { db in try Self.rows(db, status: status, kinds: kinds, contextID: contextID) }
+    public func observeItems(status: Set<ItemStatus>, kinds: Set<KindFamily>? = nil, contextID: String?? = nil, review: Bool = false) -> AsyncStream<[ItemRow]> {
+        let observation = ValueObservation.tracking { db in try Self.rows(db, status: status, kinds: kinds, contextID: contextID, review: review) }
         let pool = database.pool
         return AsyncStream { continuation in
             let task = Task {
@@ -161,8 +192,9 @@ public struct ItemStore: Sendable {
         }
     }
 
-    static func rows(_ db: Database, status: Set<ItemStatus>, kinds: Set<KindFamily>?, contextID: String??) throws -> [ItemRow] {
+    static func rows(_ db: Database, status: Set<ItemStatus>, kinds: Set<KindFamily>?, contextID: String??, review: Bool = false) throws -> [ItemRow] {
         var clauses = ["i.status IN (\(status.map { _ in "?" }.joined(separator: ", ")))"]
+        if review { clauses.append("i.needs_review = 1") }
         var arguments: [any DatabaseValueConvertible] = status.map(\.rawValue).sorted()
         if let kinds {
             clauses.append("i.family IN (\(kinds.map { _ in "?" }.joined(separator: ", ")))")
@@ -175,7 +207,8 @@ public struct ItemStore: Sendable {
             SELECT i.*,
                    (SELECT COUNT(*) FROM sightings s WHERE s.item_id = i.id) AS sighting_count,
                    EXISTS (SELECT 1 FROM field_locks l WHERE l.item_id = i.id) AS locked,
-                   EXISTS (SELECT 1 FROM possible_duplicates p WHERE p.item_a = i.id OR p.item_b = i.id) AS possible_duplicate
+                   EXISTS (SELECT 1 FROM possible_duplicates p JOIN items o ON o.id = CASE WHEN p.item_a = i.id THEN p.item_b ELSE p.item_a END
+                           WHERE (p.item_a = i.id OR p.item_b = i.id) AND o.status != 'merged') AS possible_duplicate
             FROM items i WHERE \(clauses.joined(separator: " AND "))
             ORDER BY COALESCE(i.start_at, i.due_at) IS NULL, COALESCE(i.start_at, i.due_at), i.title, i.id
             """
@@ -196,7 +229,11 @@ public struct ItemStore: Sendable {
         return Item(id: row["id"], kind: kind, status: status, mergedInto: row["merged_into"], contextID: row["context_id"], title: row["title"],
                     allDay: (row["all_day"] as Int) != 0, start: row["start_at"], end: row["end_at"], due: row["due_at"], remind: row["remind_at"],
                     timezone: row["timezone"], dayKey: row["day_key"], people: people, place: row["place"], notes: row["notes"],
-                    confidence: row["confidence"], userTouched: (row["user_touched"] as Int) != 0, firstSeen: row["first_seen"], lastSeen: row["last_seen"])
+                    confidence: row["confidence"], userTouched: (row["user_touched"] as Int) != 0, firstSeen: row["first_seen"], lastSeen: row["last_seen"],
+                    needsReview: ((row["needs_review"] as Int?) ?? 0) != 0,
+                    reviewReasons: ((row["review_reasons_json"] as String?).flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) } ?? [])
+                        .compactMap(ReviewReason.init(rawValue:)),
+                    approvedAt: row["approved_at"])
     }
 
     /// After captures are deleted their sightings are gone: every item is built again from what is left, and an item with nothing left is
@@ -219,8 +256,9 @@ public struct ItemStore: Sendable {
     static func insert(_ db: Database, _ item: Item, at date: Date) throws {
         try db.execute(sql: """
             INSERT INTO items (id, kind, family, status, merged_into, context_id, title, all_day, start_at, end_at, due_at, remind_at, timezone,
-                               day_key, people_json, place, notes, confidence, user_touched, first_seen, last_seen, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               day_key, people_json, place, notes, confidence, user_touched, first_seen, last_seen, needs_review,
+                               review_reasons_json, approved_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, arguments: StatementArguments(values(for: item) + [date, date]))
     }
 
@@ -229,17 +267,39 @@ public struct ItemStore: Sendable {
         try db.execute(sql: """
             UPDATE items SET kind = ?, family = ?, status = ?, merged_into = ?, context_id = ?, title = ?, all_day = ?, start_at = ?, end_at = ?,
                 due_at = ?, remind_at = ?, timezone = ?, day_key = ?, people_json = ?, place = ?, notes = ?, confidence = ?, user_touched = ?,
-                first_seen = ?, last_seen = ?, updated_at = ?
+                first_seen = ?, last_seen = ?, needs_review = ?, review_reasons_json = ?, approved_at = ?, updated_at = ?
             WHERE id = ?
             """, arguments: StatementArguments(Array(values(for: item).dropFirst()) + [date, item.id]))
     }
 
+    /// Marks the item approved as it reads now: the time, the values it vouches for, and the review state that follows from it.
+    static func approve(_ db: Database, itemID: String, at date: Date) throws {
+        guard var item = try Self.item(db, id: itemID) else { return }
+        item.approvedAt = date
+        item.userTouched = true
+        try update(db, item, at: date)
+        try setApprovalValues(db, itemID: itemID, ReviewRules.snapshot(of: item))
+        try recompute(db, itemID: itemID, at: date)
+    }
+
+    /// The values an approval vouches for (`approved_values_json`); `update` does not write them.
+    static func setApprovalValues(_ db: Database, itemID: String, _ values: [ItemField: JSONValue]?) throws {
+        try db.execute(sql: "UPDATE items SET approved_values_json = ? WHERE id = ?", arguments: [values.map(ReviewRules.encode), itemID])
+    }
+
+    /// Takes an item's approval away, so the plain review rules judge it again.
+    static func clearApproval(_ db: Database, itemID: String) throws {
+        try db.execute(sql: "UPDATE items SET approved_at = NULL, approved_values_json = NULL WHERE id = ?", arguments: [itemID])
+    }
+
     private static func values(for item: Item) -> [(any DatabaseValueConvertible)?] {
         let people = (try? JSONEncoder().encode(item.people)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
+        let reasons = (try? JSONEncoder().encode(item.reviewReasons.map(\.rawValue))).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
         let values: [(any DatabaseValueConvertible)?] = [
             item.id, item.kind.rawValue, item.family.rawValue, item.status.rawValue, item.mergedInto, item.contextID, item.title,
             item.allDay ? 1 : 0, item.start, item.end, item.due, item.remind, item.timezone, item.dayKey, people, item.place, item.notes,
             item.confidence, item.userTouched ? 1 : 0, item.firstSeen, item.lastSeen,
+            item.needsReview ? 1 : 0, reasons, item.approvedAt,
         ]
         return values
     }

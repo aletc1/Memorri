@@ -9,7 +9,7 @@ Build in order. Each spec ships a runnable, testable increment. Start each sessi
 | 003 | ollama-connector | Done |
 | 004 | ocr-extraction-and-eval | Done |
 | 005 | reconciliation | Done |
-| 006 | items-ui-evidence | Not started |
+| 006 | items-ui-evidence | Done |
 | 007 | search | Not started |
 | 008 | reprocessing | Not started |
 | 009 | eventkit-sync | Not started |

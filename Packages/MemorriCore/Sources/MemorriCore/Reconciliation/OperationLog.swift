@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 public enum OperationKind: String, Sendable, Equatable, Codable {
-    case autoMerge = "auto_merge", merge, split, dismiss, restore, edit, unlock, context, different, undo
+    case autoMerge = "auto_merge", merge, split, dismiss, restore, edit, unlock, context, different, approve, undo
 }
 
 /// A sighting that changed item: `from` is nil when it joined an item as part of its own analysis.
@@ -24,9 +24,14 @@ public struct ItemState: Sendable, Equatable, Codable {
     public var locks: [String: String]
     /// The ids of the user's own observations (those with no sighting) the item owned.
     public var observations: [String]
+    /// The approval (spec 006): when, and the values it vouched for. Absent in entries written before it existed.
+    public var approvedAt: Date?
+    public var approvedValues: [String: JSONValue]?
 
-    public init(status: String, mergedInto: String?, userTouched: Bool, locks: [String: String], observations: [String]) {
+    public init(status: String, mergedInto: String?, userTouched: Bool, locks: [String: String], observations: [String],
+                approvedAt: Date? = nil, approvedValues: [String: JSONValue]? = nil) {
         self.status = status; self.mergedInto = mergedInto; self.userTouched = userTouched; self.locks = locks; self.observations = observations
+        self.approvedAt = approvedAt; self.approvedValues = approvedValues
     }
 }
 
@@ -103,13 +108,15 @@ public struct OperationLog: Sendable {
 
     /// The state an undo has to restore for an item; nil when it does not exist.
     static func state(_ db: Database, itemID: String) throws -> ItemState? {
-        guard let row = try Row.fetchOne(db, sql: "SELECT status, merged_into, user_touched FROM items WHERE id = ?", arguments: [itemID]) else { return nil }
+        guard let row = try Row.fetchOne(db, sql: "SELECT status, merged_into, user_touched, approved_at, approved_values_json FROM items WHERE id = ?", arguments: [itemID]) else { return nil }
         var locks: [String: String] = [:]
         for lock in try Row.fetchAll(db, sql: "SELECT field, observation_id FROM field_locks WHERE item_id = ?", arguments: [itemID]) {
             locks[lock["field"]] = lock["observation_id"]
         }
         let own = try String.fetchAll(db, sql: "SELECT id FROM observations WHERE item_id = ? AND sighting_id IS NULL ORDER BY id", arguments: [itemID])
-        return ItemState(status: row["status"], mergedInto: row["merged_into"], userTouched: (row["user_touched"] as Int) != 0, locks: locks, observations: own)
+        let values = (row["approved_values_json"] as String?).flatMap { try? JSONDecoder().decode([String: JSONValue].self, from: Data($0.utf8)) }
+        return ItemState(status: row["status"], mergedInto: row["merged_into"], userTouched: (row["user_touched"] as Int) != 0, locks: locks, observations: own,
+                         approvedAt: row["approved_at"], approvedValues: values)
     }
 
     private static func encode<T: Encodable>(_ value: T) -> String {

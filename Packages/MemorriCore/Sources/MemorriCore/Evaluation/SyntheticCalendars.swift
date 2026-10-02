@@ -293,6 +293,19 @@ enum SyntheticCalendars {
                 (SyntheticDay(2026, 10, 20), SyntheticEvent(title: "Roadmap", day: 0, hour: 11, minute: 30, minutes: 0)),
             ])
         })
+
+        // A month that is not the month of the capture: only its title (and the label of its first day) say which month it is, because
+        // the same weekday grid fits other months too. A calendar left on an old month is common; reading it as the capture's month is not allowed.
+        let jan26 = SyntheticDay(2026, 1, 26)
+        s = SyntheticSetup(name: "calendar-month-other-month-es", look: .outlook, application: "Outlook", platform: "Windows", language: .es,
+                           palette: .light, zone: mac, capturedAt: capture, windowTitle: "Calendario - Outlook", features: ["header-date", "other-month"])
+        out.append(try SyntheticChrome.make(s) { c, a in
+            month(c, a, s, firstMonday: jan26, month: 2, year: 2026, events: [
+                (SyntheticDay(2026, 2, 3), SyntheticEvent(title: "Revisión de presupuesto", day: 0, hour: 10, minute: 0, minutes: 0)),
+                (SyntheticDay(2026, 2, 12), SyntheticEvent(title: "Reunión de equipo", day: 0, hour: 15, minute: 30, minutes: 0)),
+                (SyntheticDay(2026, 2, 19), SyntheticEvent(title: "Formación", day: 0, hour: 0, minute: 0, minutes: 0, allDay: true)),
+            ])
+        })
         return out
     }
 }

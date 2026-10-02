@@ -147,6 +147,8 @@ struct StorageSettingsView: View {
             Text("Storage").font(.headline)
             Text(summary.map { Self.captures($0.captureCount) } ?? "…")
             Text("Pictures: \(summary.map { Self.size($0.pictureBytes) } ?? "…")")
+            Text("Evidence: \(summary.map { Self.size($0.evidenceBytes) } ?? "…")")
+                .help("Cut-outs of the captures that show where each item's values were read. They stay while the item exists; Delete All removes them.")
             Text("Database: \(summary.map { Self.size($0.databaseBytes) } ?? "…")")
         }
     }
@@ -186,7 +188,7 @@ struct StorageSettingsView: View {
 
     private func deleteAll() {
         confirmAndDelete(days: nil) { preview in
-            "Delete all \(Self.captures(preview.captureCount))? This frees \(Self.size(preview.bytes)) and cannot be undone. \(Self.keptNote)"
+            "Delete all \(Self.captures(preview.captureCount)) and the evidence cut-outs? This frees \(Self.size(preview.bytes)) and cannot be undone. \(Self.keptNote)"
         } confirmTitle: { "Delete All" }
     }
 

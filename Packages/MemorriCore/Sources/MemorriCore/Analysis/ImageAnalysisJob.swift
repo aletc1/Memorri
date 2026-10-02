@@ -23,11 +23,12 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
     private let contexts: ContextStore?
     private let windows: (any WindowProviding)?
     private let reconciler: (any ImageReconciling)?
+    private let evidence: (any ImageEvidenceWriting)?
 
     public init(service: OllamaService, pipeline: AnalysisPipeline, pictures: any AnalysisPictureProviding,
                 fullPictures: any FullPictureProviding, ocr: OCRStore, results: AnalysisResultStore, jobs: any AnalysisJobStoring,
                 settings: OllamaSettings, time: any TimeSource, recogniserName: String = VisionTextRecogniser.descriptor,
-                contexts: ContextStore? = nil, windows: (any WindowProviding)? = nil, reconciler: (any ImageReconciling)? = nil) {
+                contexts: ContextStore? = nil, windows: (any WindowProviding)? = nil, reconciler: (any ImageReconciling)? = nil, evidence: (any ImageEvidenceWriting)? = nil) {
         self.service = service
         self.pipeline = pipeline
         self.pictures = pictures
@@ -41,6 +42,7 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         self.contexts = contexts
         self.windows = windows
         self.reconciler = reconciler
+        self.evidence = evidence
     }
 
     private static let gone = JobOutcome.permanent("picture no longer stored")
@@ -131,6 +133,8 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         // Reconciliation turns the findings into items. It never fails the job: a failure is stored on the picture and retried with
         // the next analysis (ADR 0020).
         _ = await reconciler?.reconcile(imageID: imageID)
+        // The proof of each sighting is cut out of the full picture; it never fails the job either (ADR 0021).
+        _ = await evidence?.write(imageID: imageID)
         return .success
     }
 

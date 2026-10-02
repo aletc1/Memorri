@@ -1,6 +1,19 @@
+import CoreGraphics
 import MemorriCore
 import Observation
 import SwiftUI
+
+/// A decoded picture handed across actors; it is never changed after it is made.
+final class ImageBox: @unchecked Sendable {
+    let image: CGImage
+    init(_ image: CGImage) { self.image = image }
+}
+
+/// The whole capture of a sighting with its read lines, for the sheet that outlines the cited ones.
+struct WholeCapture: @unchecked Sendable {
+    let picture: CGImage
+    let lines: [RecognisedLine]
+}
 
 /// The state of the Items window: the list as the store observes it, the selection, the open item and what the user asked for.
 /// The rules (filters, order, which buttons are enabled) are in `ItemListModel`; every change runs in the core off the main actor.
@@ -21,12 +34,18 @@ final class ItemsViewModel {
     private(set) var contexts: [ContextRecord] = []
     var selection: Set<String> = []
     private(set) var detail: ItemDetail?
+    /// The saved cut-outs of the open item, newest first.
+    private(set) var evidence: [EvidenceRecord] = []
+    private let cutOuts = NSCache<NSString, ImageBox>()
     private(set) var undoTarget: OperationSummary?
     var message: String?
     var lockSheet: LockSheet?
     private var observing: Task<Void, Never>?
 
-    init(environment: AppEnvironment) { self.environment = environment }
+    init(environment: AppEnvironment) {
+        self.environment = environment
+        cutOuts.countLimit = 100
+    }
 
     // MARK: Reading
 
@@ -34,6 +53,9 @@ final class ItemsViewModel {
     /// All rows, not only the visible ones: a dismissed item stays selected (and can be restored) after the filter hides it.
     var selectedRows: [ItemRow] { rows.filter { selection.contains($0.item.id) } }
     var canMerge: Bool { ItemListModel.canMerge(selectedRows) }
+    var canApprove: Bool { ItemListModel.canApprove(selectedRows) }
+    /// How many items the Inbox lists with the kind and context filters as they are (FR-017).
+    var inboxCount: Int { ItemListModel.inboxCount(rows, filter: filter) }
     var statusAction: ItemListModel.StatusAction? { ItemListModel.statusAction(for: selectedRows) }
     var isAvailable: Bool { environment.items != nil }
 
@@ -64,14 +86,38 @@ final class ItemsViewModel {
     }
 
     private func loadDetail() async {
-        guard selection.count == 1, let id = selection.first, let store = environment.items else { detail = nil; return }
+        guard selection.count == 1, let id = selection.first, let store = environment.items else { detail = nil; evidence = []; return }
         detail = try? await Task.detached { try store.detail(itemID: id) }.value
+        if let writer = environment.evidenceWriter { _ = await writer.backfill(itemID: id) }
+        if let evidenceStore = environment.evidenceStore {
+            evidence = (try? await Task.detached { try evidenceStore.evidence(itemID: id) }.value) ?? []
+        } else {
+            evidence = []
+        }
     }
 
     private func loadUndoTarget() async {
         guard let log = environment.operationLog else { undoTarget = nil; return }
         let recent = (try? await Task.detached { try log.recent() }.value) ?? []
         undoTarget = ItemListModel.undoTarget(in: recent)
+    }
+
+    // MARK: Evidence images
+
+    /// The saved cut-out, decoded off the main actor and kept in memory (100 images).
+    func cutOut(_ record: EvidenceRecord) async -> CGImage? {
+        let key = record.id as NSString
+        if let hit = cutOuts.object(forKey: key) { return hit.image }
+        guard let store = environment.evidenceStore else { return nil }
+        guard let box = await Task.detached(operation: { store.image(record).map(ImageBox.init) }).value else { return nil }
+        cutOuts.setObject(box, forKey: key)
+        return box.image
+    }
+
+    /// The whole capture, nil once the picture is no longer stored.
+    func wholeCapture(imageID: String) async -> WholeCapture? {
+        guard let store = environment.evidenceStore else { return nil }
+        return await Task.detached { (try? store.capture(imageID: imageID)).flatMap { $0 }.map { WholeCapture(picture: $0.picture, lines: $0.lines) } }.value
     }
 
     // MARK: Changing
@@ -112,6 +158,26 @@ final class ItemsViewModel {
         await merge(keep: sheet.keep, other: sheet.other, choices: picked)
     }
 
+    /// Approves the selected items. In the Inbox the selection moves on to the next item so the user can keep going with the keyboard.
+    func approve() async {
+        guard canApprove else { return }
+        let ids = selectedRows.map(\.item.id)
+        let next = filter.scope == .inbox ? nextSelection(leaving: Set(ids)) : nil
+        await run { operations in
+            for id in ids { _ = try operations.approve(id) }
+        }
+        if let next { selection = next }
+    }
+
+    /// The item after the selected ones in the list, else the one before; nothing when the list would be empty.
+    private func nextSelection(leaving ids: Set<String>) -> Set<String> {
+        let list = visibleRows.map(\.item.id)
+        guard let last = list.lastIndex(where: ids.contains), let first = list.firstIndex(where: ids.contains) else { return [] }
+        if let after = list[(last + 1)...].first(where: { !ids.contains($0) }) { return [after] }
+        if let before = list[..<first].last(where: { !ids.contains($0) }) { return [before] }
+        return []
+    }
+
     func dismissOrRestore() async {
         guard let action = statusAction else { return }
         let ids = selectedRows.map(\.item.id)
@@ -141,10 +207,25 @@ final class ItemsViewModel {
         await refresh()
     }
 
-    func editTitle(_ text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let item = detail?.item, !trimmed.isEmpty, trimmed != item.title else { return }
-        await run { _ = try $0.edit(item.id, field: .title, value: .string(trimmed)) }
+    /// Sets a field of the open item to the user's value. Returns why it was refused, to show next to the field, or nil when it was saved.
+    func edit(field: ItemField, value: JSONValue) async -> String? {
+        guard let id = detail?.item.id, let operations = environment.itemOperations else { return "Editing is not available right now." }
+        do {
+            try await Task.detached { _ = try operations.edit(id, field: field, value: value) }.value
+        } catch {
+            return Self.text(for: error)
+        }
+        await refresh()
+        return nil
+    }
+
+    /// The same for text the user typed: it is read in the item's zone first.
+    func edit(field: ItemField, text: String) async -> String? {
+        guard let zone = detail?.item.timezone else { return nil }
+        switch ItemListModel.parse(text, field: field, timezone: zone) {
+        case .failure(let failure): return failure.message
+        case .success(let value): return await edit(field: field, value: value)
+        }
     }
 
     func unlock(_ field: ItemField) async {
@@ -181,6 +262,8 @@ final class ItemsViewModel {
         case .notLocked?: "That field is not locked."
         case .wrongStatus?: "That is not possible in the item's current state."
         case .invalidValue?: "That value is not valid."
+        case .startAfterEnd?: "The start cannot be after the end."
+        case .emptyTitle?: "The title cannot be empty."
         case .invalidSightings?: "Check at least one sighting and leave at least one unchecked."
         case .sameItem?: "Select two different items."
         case .noReconciler?: "Matching is not available right now."

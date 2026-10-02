@@ -196,4 +196,88 @@ import Testing
         let result = DateResolver.resolve(text: "19", field: "start", draft: draft(cited: [eventLine], date: "19"), in: resolver(lines))
         #expect(result.date == at(2026, 10, 19) && result.allDay && result.provenance?.rule == "month-cell")
     }
+
+    // MARK: a month that is not the capture's month (the day numbers alone cannot say which month it is)
+
+    /// Six rows from Monday 12 January 2026 (labels as in a real month view that scrolls), the first of February labelled `1 feb`.
+    /// Mondays fell on the 12th in October 2026 too, with 31 days in both months, so this grid is the same grid as 12 October to 22 November:
+    /// only the words on the screen say which it is.
+    private func februaryGrid(title: String?, firstLabel: String = "1 feb") -> [RecognisedLine] {
+        var lines: [RecognisedLine] = []
+        var n = 1
+        if let title { lines.append(RecognisedLine(n: n, text: title, box: PixelBox(x: 20, y: 10, width: 200, height: 24), confidence: 0.9)); n += 1 }
+        for (i, number) in (Array(12...31) + Array(1...22)).enumerated() {
+            let text = i == 20 ? firstLabel : "\(number)"
+            let width = text.count > 2 ? 34 : (number >= 10 ? 22 : 11)
+            lines.append(RecognisedLine(n: n, text: text, box: PixelBox(x: (i % 7) * 200 + 10, y: 60 + (i / 7) * 150, width: width, height: 18), confidence: 0.9)); n += 1
+        }
+        return lines
+    }
+
+    private func span(_ headers: [DateHeader]) -> String {
+        func text(_ h: DateHeader?) -> String { h.map { "\($0.date.year!)-\($0.date.month!)-\($0.date.day!)" } ?? "none" }
+        return "\(text(headers.first)) to \(text(headers.last))"
+    }
+
+    @Test func aSpanishTitleNamingAnotherMonthThanTheCapturesWins() {
+        let headers = cells(februaryGrid(title: "Febrero de 2026"), locales: es)
+        #expect(span(headers) == "2026-1-12 to 2026-2-22" && headers.allSatisfy { !$0.monthAssumed })
+    }
+
+    @Test func anEnglishTitleNamingAnotherMonthThanTheCapturesWins() {
+        let headers = cells(februaryGrid(title: "February 2026"))
+        #expect(span(headers) == "2026-1-12 to 2026-2-22" && headers.allSatisfy { !$0.monthAssumed })
+    }
+
+    @Test func aTitleWithoutAYearIsReadWithTheCapturesYear() {
+        let headers = cells(februaryGrid(title: "February"), reference: at(2026, 10, 14, 9))
+        #expect(span(headers) == "2026-1-12 to 2026-2-22")
+    }
+
+    @Test func withoutATitleAMonthNameOnTheFirstDayGivesTheMonth() {
+        let headers = cells(februaryGrid(title: nil))
+        #expect(span(headers) == "2026-1-12 to 2026-2-22" && headers.allSatisfy { !$0.monthAssumed })
+    }
+
+    @Test func withNothingNamingTheMonthTheCapturesMonthIsUsedAndSaidToBeAssumed() {
+        let headers = cells(februaryGrid(title: nil, firstLabel: "1"))
+        #expect(headers.count == 42 && headers.allSatisfy(\.monthAssumed))
+        #expect(headers.allSatisfy { ($0.date.month ?? 0) >= 9 })                  // around the capture's October, not January
+        #expect(cells(grid(title: nil)).allSatisfy(\.monthAssumed) && cells(grid()).allSatisfy { !$0.monthAssumed })
+    }
+
+    @Test func aMonthTitleOutsideTheGridsColumnsDoesNotBeatTheOneAboveIt() {
+        // A side bar's small calendar says October 2026 and sits nearer the grid than its real title does.
+        var lines = februaryGrid(title: "Febrero de 2026")
+        lines.append(RecognisedLine(n: 500, text: "Octubre de 2026", box: PixelBox(x: -700, y: 30, width: 200, height: 24), confidence: 0.9))
+        #expect(span(cells(lines, locales: es)) == "2026-1-12 to 2026-2-22")
+    }
+
+    @Test func aTitleIsALineThatOnlyNamesAMonthAndYear() {
+        for text in ["Febrero de 2026", "February 2026", "febrero", "Oct 2026", "Octubre"] { #expect(DateResolver.monthTitle(text, locales: es) != nil, "\(text)") }
+        for text in ["Febrero de 2026 reunión", "Review of 2026 plans", "12 de febrero", "1 feb", "Mayo 40", "oct", "sep", ""] { #expect(DateResolver.monthTitle(text, locales: es) == nil, "\(text)") }
+        #expect(DateResolver.monthTitle("Febrero de 2026", locales: es)?.month == 2 && DateResolver.monthTitle("Febrero de 2026", locales: es)?.year == 2026)
+    }
+
+    @Test func theTextOfAnotherWindowCannotNameTheMonth() {
+        // The calendar window holds the grid; a browser window behind it shows a month name above a block of numbers.
+        let lines = februaryGrid(title: nil, firstLabel: "1") + [RecognisedLine(n: 300, text: "1 abr", box: PixelBox(x: 2300, y: 60, width: 34, height: 18), confidence: 0.9)]
+        let windows = [WindowInfo(appName: "Calendar", bundleID: nil, title: nil, frame: PixelBox(x: 0, y: 0, width: 1400, height: 1000), stack: 0),
+                       WindowInfo(appName: "Browser", bundleID: nil, title: nil, frame: PixelBox(x: 1500, y: 0, width: 1000, height: 1000), stack: 1)]
+        #expect(DateResolver.labelMonth(in: lines, locales: es) == 4)                           // read over the whole screen, the other window leaks in
+        let own = SubjectRegion.visibleLines(lines, around: (110, 70), windows: windows)
+        #expect(own?.contains { $0.n == 300 } == false && own?.count == lines.count - 1)
+        #expect(own.flatMap { DateResolver.labelMonth(in: $0, locales: es) } == nil)
+    }
+
+    @Test func aWindowInFrontCoversTheLinesBehindIt() {
+        let lines = [RecognisedLine(n: 1, text: "a", box: PixelBox(x: 100, y: 100, width: 10, height: 10), confidence: 0.9),
+                     RecognisedLine(n: 2, text: "b", box: PixelBox(x: 900, y: 100, width: 10, height: 10), confidence: 0.9)]
+        let calendar = WindowInfo(appName: "Calendar", bundleID: nil, title: nil, frame: PixelBox(x: 0, y: 0, width: 1000, height: 500), stack: 1)
+        let dialog = WindowInfo(appName: "Dialog", bundleID: nil, title: nil, frame: PixelBox(x: 800, y: 0, width: 300, height: 300), stack: 0)
+        #expect(SubjectRegion.visibleLines(lines, around: (100, 100), windows: [calendar, dialog])?.map(\.n) == [1])
+        #expect(SubjectRegion.visibleLines(lines, around: (100, 100), windows: [calendar]) == nil)                  // one window: nothing to narrow
+        let unstacked = WindowInfo(appName: "Calendar", bundleID: nil, title: nil, frame: calendar.frame, stack: nil)
+        #expect(SubjectRegion.visibleLines(lines, around: (100, 100), windows: [unstacked, dialog]) == nil)         // no stack order recorded
+    }
 }

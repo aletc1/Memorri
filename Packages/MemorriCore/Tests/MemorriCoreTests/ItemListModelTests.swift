@@ -24,10 +24,12 @@ import Testing
         #expect(titles(ItemFilter()) == ["Pay rent", "Standup", "Call"])
         #expect(titles(ItemFilter(showDismissed: true)).contains("Old"))
         #expect(Set(titles(ItemFilter(kind: .appointments))) == ["Standup"])
-        #expect(Set(titles(ItemFilter(kind: .tasks))) == ["Pay rent", "Call"])
+        #expect(Set(titles(ItemFilter(kind: .tasks))) == ["Pay rent"])             // reminders have their own filter (spec 006)
+        #expect(Set(titles(ItemFilter(kind: .reminders))) == ["Call"])
         #expect(titles(ItemFilter(context: .context("a"))) == ["Pay rent"])
         #expect(titles(ItemFilter(context: .none)) == ["Standup"])
-        #expect(Set(titles(ItemFilter(kind: .tasks, context: .context("b")))) == ["Call"])
+        #expect(Set(titles(ItemFilter(kind: .reminders, context: .context("b")))) == ["Call"])
+        #expect(titles(ItemFilter(kind: .tasks, context: .context("b"))).isEmpty)
     }
 
     @Test func sortsByStartOrDueThenTitleWithUndatedLast() {
@@ -152,5 +154,253 @@ import Testing
             #expect(ItemListModel.operationText(kind) != kind)
         }
         #expect(ItemListModel.operationText("new_kind") == "new_kind")
+    }
+
+    // MARK: evidence cards
+
+    private func sighting(_ id: String, at seconds: Double) -> SightingRow {
+        SightingRow(id: id, imageID: "i-\(id)", displayName: "Display", capturedAt: Date(timeIntervalSince1970: seconds), title: "t-\(id)", confidence: 0.9, citedLines: [1], decisionJSON: "{}")
+    }
+
+    private func evidence(_ id: String, sighting: String?, at seconds: Double, reason: String? = nil) -> EvidenceRecord {
+        EvidenceRecord(id: id, itemID: "item", sightingID: sighting, imageID: "i-\(sighting ?? id)", capturedAt: Date(timeIntervalSince1970: seconds), displayName: "Display",
+                       title: "e-\(id)", citedLines: [1], region: nil, filePath: reason == nil ? "evidence/x.heic" : nil, reason: reason)
+    }
+
+    @Test func entriesJoinSightingsAndEvidenceNewestFirst() {
+        let entries = ItemListModel.evidenceEntries(
+            sightings: [sighting("a", at: 300), sighting("b", at: 100)],
+            evidence: [evidence("ea", sighting: "a", at: 300), evidence("gone", sighting: nil, at: 200)])
+        #expect(entries.map(\.id) == ["a", "gone", "b"])
+        #expect(entries[0].evidence?.id == "ea" && entries[0].sighting?.id == "a")
+        #expect(entries[1].sighting == nil && entries[1].title == "e-gone")           // the capture is gone, the cut-out stays
+        #expect(entries[2].evidence == nil && entries[2].title == "t-b")               // a sighting from before evidence existed
+    }
+
+    @Test func onlyTheFiveNewestShowBeforeShowAll() {
+        let entries = ItemListModel.evidenceEntries(sightings: (0..<8).map { sighting("s\($0)", at: Double($0)) }, evidence: [])
+        let few = ItemListModel.shownEntries(entries, showAll: false)
+        #expect(few.shown.map(\.id) == ["s7", "s6", "s5", "s4", "s3"] && few.moreText == "Show all 8 sightings")
+        let all = ItemListModel.shownEntries(entries, showAll: true)
+        #expect(all.shown.count == 8 && all.moreText == nil)
+        let five = ItemListModel.shownEntries(Array(entries.prefix(5)), showAll: false)
+        #expect(five.shown.count == 5 && five.moreText == nil)
+    }
+
+    @Test func aMissingCutOutSaysWhy() {
+        #expect(ItemListModel.missingCutOutText(evidence("e", sighting: "a", at: 1, reason: "no-lines")) == "No cut-out: the finding cited no lines.")
+        #expect(ItemListModel.missingCutOutText(evidence("e", sighting: "a", at: 1, reason: "picture-missing")).contains("no longer stored"))
+        #expect(ItemListModel.missingCutOutText(evidence("e", sighting: "a", at: 1, reason: "failed")).contains("could not be made"))
+        #expect(ItemListModel.missingCutOutText(nil) == "No cut-out yet.")
+        #expect(ItemListModel.missingCutOutText(evidence("e", sighting: "a", at: 1)) == "The cut-out file is gone.")
+    }
+
+    // MARK: review scope (spec 006, US2)
+
+    private func reviewed(_ title: String, reasons: [ReviewReason] = [], approved: Bool = false, status: ItemStatus = .active, lastSeen: TimeInterval = 0,
+                          start: Date? = ReconcileFixture.nine) -> ItemRow {
+        var made = item(title, start: start, status: status)
+        made.reviewReasons = reasons
+        made.needsReview = !reasons.isEmpty && status == .active
+        made.approvedAt = approved ? Date(timeIntervalSince1970: 1_800_000_000) : nil
+        made.lastSeen = Date(timeIntervalSince1970: 1_800_000_000 + lastSeen)
+        return row(made)
+    }
+
+    @Test func theInboxListsOnlyItemsNeedingReviewNewestSightingFirst() {
+        let rows = [reviewed("Older", reasons: [.lowConfidence], lastSeen: 10), reviewed("Fine"), reviewed("Newer", reasons: [.guessedEnd], lastSeen: 50),
+                    reviewed("Dismissed", reasons: [.lowConfidence], status: .dismissed, lastSeen: 99),
+                    reviewed("Undated newest", reasons: [.possibleDuplicate], lastSeen: 80, start: nil)]
+        let inbox = ItemListModel.visible(rows, filter: ItemFilter(scope: .inbox, showDismissed: true))
+        #expect(inbox.map(\.item.title) == ["Undated newest", "Newer", "Older"])
+    }
+
+    @Test func theApprovedScopeListsActiveItemsThatDoNotNeedReview() {
+        let rows = [reviewed("Fine"), reviewed("Checked", approved: true), reviewed("Doubtful", reasons: [.lowConfidence]),
+                    reviewed("Dismissed", status: .dismissed)]
+        #expect(Set(ItemListModel.visible(rows, filter: ItemFilter(scope: .approved, showDismissed: true)).map(\.item.title)) == ["Fine", "Checked"])
+        #expect(Set(ItemListModel.visible(rows, filter: ItemFilter(scope: .all)).map(\.item.title)) == ["Fine", "Checked", "Doubtful"])
+    }
+
+    @Test func theScopesWorkWithTheKindAndContextFilters() {
+        var a = reviewed("In context", reasons: [.lowConfidence]).item
+        a.contextID = "a"
+        var b = reviewed("Other context", reasons: [.lowConfidence]).item
+        b.contextID = "b"
+        let rows = [row(a), row(b), reviewed("Task", reasons: [.lowConfidence])]
+        #expect(ItemListModel.visible(rows, filter: ItemFilter(context: .context("a"), scope: .inbox)).map(\.item.title) == ["In context"])
+        #expect(ItemListModel.visible(rows, filter: ItemFilter(context: .none, scope: .inbox)).map(\.item.title) == ["Task"])
+    }
+
+    @Test func reasonsAreShownInWords() {
+        #expect(ItemListModel.reviewText([.lowConfidence, .guessedStart, .guessedEnd, .guessedDue, .possibleDuplicate, .changedAfterApproval])
+                == ["Low confidence", "Guessed time", "Guessed end", "Guessed due date", "Possible duplicate", "Changed after you approved it"])
+        #expect(ItemListModel.reviewText([]).isEmpty)
+    }
+
+    @Test func approvalIsShownInWords() {
+        #expect(ItemListModel.approvalText(reviewed("a", reasons: [.lowConfidence]).item) == "Needs review")
+        #expect(ItemListModel.approvalText(reviewed("b").item) == "Approved")
+        #expect(ItemListModel.approvalText(reviewed("c", approved: true).item) == "Approved by you")
+        #expect(ItemListModel.approvalText(reviewed("d", status: .dismissed).item) == "Dismissed")
+        let text = ItemListModel.rowText(reviewed("e", reasons: [.guessedEnd]), contextName: nil)
+        #expect(text.approval == "Needs review" && text.reasons == ["Guessed end"])
+    }
+
+    @Test func approveIsOfferedWhenEverySelectedItemNeedsReview() {
+        let doubtful = reviewed("a", reasons: [.lowConfidence]), fine = reviewed("b")
+        #expect(ItemListModel.canApprove([doubtful]) && ItemListModel.canApprove([doubtful, reviewed("c", reasons: [.guessedEnd])]))
+        #expect(!ItemListModel.canApprove([doubtful, fine]) && !ItemListModel.canApprove([fine]) && !ItemListModel.canApprove([]))
+    }
+
+    @Test func theEmptyStatesNameTheScope() {
+        #expect(ItemListModel.emptyText(scope: .inbox) == "Nothing needs review.")
+        #expect(ItemListModel.emptyText(scope: .all) == "No items yet. Items appear after captures are analysed.")
+        #expect(ItemListModel.emptyText(scope: .approved) == "No approved items yet.")
+    }
+
+    @Test func approvalsAreUndoableAndWorded() {
+        let ops = [OperationSummary(id: "2", kind: "approve", byUser: true, createdAt: Date(), undone: false),
+                   OperationSummary(id: "1", kind: "edit", byUser: true, createdAt: Date(), undone: false)]
+        #expect(ItemListModel.undoTarget(in: ops)?.id == "2")
+        #expect(ItemListModel.operationText("approve") == "Approved")
+    }
+
+    // MARK: parsing an edit (spec 006, US3)
+
+    private func parsed(_ text: String, _ field: ItemField, zone: String = "Europe/Madrid") -> JSONValue? {
+        if case .success(let value) = ItemListModel.parse(text, field: field, timezone: zone) { value } else { nil }
+    }
+    private func failure(_ text: String, _ field: ItemField, zone: String = "Europe/Madrid") -> EditError? {
+        if case .failure(let error) = ItemListModel.parse(text, field: field, timezone: zone) { error } else { nil }
+    }
+
+    @Test func datesAreReadInTheItemsOwnZone() {
+        // 09:00 in Madrid in October (UTC+2) is 07:00 UTC; the same wall clock in New York (UTC-4) is 13:00 UTC.
+        #expect(parsed("2026-10-14 09:00", .start) == .date(ReconcileFixture.nine))
+        #expect(parsed("2026-10-14 09:00", .start, zone: "America/New_York") == .date(ReconcileFixture.nine.addingTimeInterval(6 * 3600)))
+        #expect(parsed("  2026-10-14 09:00 ", .end) == .date(ReconcileFixture.nine))
+        #expect(parsed("2026-10-14", .due) == .date(ReconcileFixture.nine.addingTimeInterval(-9 * 3600)))
+    }
+
+    @Test func anInvalidDateIsRefusedWithAMessage() {
+        for text in ["tomorrow", "2026-13-40 09:00", "09:00", "2026-10-14 25:00"] {
+            #expect(failure(text, .start) == .invalidDate)
+        }
+        #expect(failure("", .start) == .invalidDate)               // a start cannot be cleared
+        #expect(!EditError.invalidDate.message.isEmpty && EditError.invalidDate.message.contains("2026-10-14 09:00"))
+    }
+
+    @Test func anEmptyOptionalFieldMeansClear() {
+        for field in [ItemField.end, .due, .remind, .place, .notes] { #expect(parsed("  ", field) == .null) }
+        #expect(parsed("", .people) == .array([]))
+    }
+
+    @Test func titlePlaceAndNotesAreTrimmedAndATitleCannotBeEmpty() {
+        #expect(parsed("  Standup \n", .title) == .string("Standup"))
+        #expect(parsed(" Room 4 ", .place) == .string("Room 4"))
+        #expect(parsed("line one\nline two  ", .notes) == .string("line one\nline two"))
+        #expect(failure("   ", .title) == .emptyTitle)
+        #expect(EditError.emptyTitle.message == "The title cannot be empty.")
+    }
+
+    @Test func peopleAreSplitOnCommasTrimmedAndDeDuplicated() {
+        #expect(parsed("Anna, Ben ,, anna,  ", .people) == .array([.string("Anna"), .string("Ben")]))
+    }
+
+    @Test func theAllDayFlagIsReadAsYesOrNo() {
+        #expect(parsed("yes", .allDay) == .bool(true) && parsed("No", .allDay) == .bool(false))
+        #expect(failure("maybe", .allDay) == .invalidValue)
+    }
+
+    @Test func theEditorsInitialTextRoundTripsThroughParse() {
+        let zone = "Europe/Madrid"
+        let cases: [(ItemField, JSONValue)] = [(.title, .string("Standup")), (.start, .date(ReconcileFixture.nine)), (.end, .date(ReconcileFixture.minutes(90))),
+                                               (.due, .date(ReconcileFixture.minutes(600))), (.people, .array([.string("Anna"), .string("Ben")])),
+                                               (.place, .string("Room 4")), (.notes, .string("agenda"))]
+        for (field, value) in cases {
+            let text = ItemListModel.editText(value, field: field, timezone: zone)
+            #expect(parsed(text, field, zone: zone) == value, "\(field)")
+        }
+        #expect(ItemListModel.editText(nil, field: .place, timezone: zone) == "" && ItemListModel.editText(.null, field: .end, timezone: zone) == "")
+        #expect(ItemListModel.editText(.date(ReconcileFixture.nine), field: .start, timezone: zone) == "2026-10-14 09:00")
+    }
+
+    // MARK: kinds, scopes and the count (spec 006, US4)
+
+    @Test func eachKindFilterListsOnlyItsKinds() {
+        let rows = [row(item("Standup")), row(item("Pay rent", kind: .task, start: nil, due: ReconcileFixture.nine)),
+                    row(item("Contract", kind: .deadline, start: nil, due: ReconcileFixture.nine)), row(item("Call", kind: .reminder, start: nil))]
+        func titles(_ kind: ItemKindFilter) -> Set<String> { Set(ItemListModel.visible(rows, filter: ItemFilter(kind: kind)).map(\.item.title)) }
+        #expect(titles(.all) == ["Standup", "Pay rent", "Contract", "Call"])
+        #expect(titles(.appointments) == ["Standup"])
+        #expect(titles(.tasks) == ["Pay rent", "Contract"])
+        #expect(titles(.reminders) == ["Call"])
+        #expect(ItemKindFilter.allCases == [.all, .appointments, .tasks, .reminders])
+    }
+
+    @Test func theInboxCombinesWithKindAndContextAndItsCountIsWhatItLists() {
+        var rows: [ItemRow] = []
+        for (title, kind, context, doubtful) in [("A1", FindingKind.appointment, "a", true), ("A2", .appointment, "a", false), ("T1", .task, "a", true),
+                                                  ("R1", .reminder, "b", true), ("R2", .reminder, nil, true), ("T2", .task, "b", true)] as [(String, FindingKind, String?, Bool)] {
+            var made = item(title, kind: kind, start: kind == .appointment ? ReconcileFixture.nine : nil, context: context)
+            made.needsReview = doubtful
+            made.reviewReasons = doubtful ? [.lowConfidence] : []
+            rows.append(row(made))
+        }
+        func listed(_ filter: ItemFilter) -> Set<String> { Set(ItemListModel.visible(rows, filter: filter).map(\.item.title)) }
+        #expect(listed(ItemFilter(scope: .inbox)) == ["A1", "T1", "R1", "R2", "T2"])
+        #expect(listed(ItemFilter(kind: .reminders, scope: .inbox)) == ["R1", "R2"])
+        #expect(listed(ItemFilter(kind: .tasks, context: .context("b"), scope: .inbox)) == ["T2"])
+        #expect(listed(ItemFilter(context: .none, scope: .inbox)) == ["R2"])
+        for filter in [ItemFilter(), ItemFilter(context: .context("a")), ItemFilter(kind: .tasks), ItemFilter(kind: .reminders, context: .none)] {
+            #expect(ItemListModel.inboxCount(rows, filter: filter) == listed(ItemFilter(kind: filter.kind, context: filter.context, scope: .inbox)).count)
+        }
+    }
+
+    @Test func theScopeLabelCountEqualsTheStoresReviewCountForTheSameContext() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        try fixture.addContext("a", "A"); try fixture.addContext("b", "B")
+        let reconciler = Reconciler(database: fixture.database, judge: NoMeaningJudge(), now: { Date(timeIntervalSince1970: 1_800_100_000) })
+        let specs: [(String, Double, String?)] = [("Standup", 0.6, "a"), ("Lunch", 0.9, "a"), ("Dentist", 0.6, "b"), ("Review", 0.5, nil)]
+        for (index, (title, confidence, context)) in specs.enumerated() {
+            let picture = index == 0 ? fixture.base.imageID : try fixture.addPicture(at: Date(timeIntervalSince1970: 1_800_000_000 + Double(index) * 7200))
+            try fixture.save([fixture.finding(title, start: ReconcileFixture.minutes(index * 300), confidence: confidence)], imageID: picture, contextID: context)
+            _ = await reconciler.reconcile(imageID: picture)
+        }
+        let store = ItemStore(database: fixture.database)
+        let rows = try store.items(status: [.active, .dismissed], kinds: nil, contextID: nil)
+        for (filter, context) in [(ItemContextFilter.all, String??.none), (.context("a"), .some("a")), (.context("b"), .some("b")), (.none, .some(nil))] {
+            #expect(ItemListModel.inboxCount(rows, filter: ItemFilter(context: filter)) == (try store.reviewCount(contextID: context)))
+        }
+        #expect(try store.reviewCount() == 3)
+    }
+
+    // MARK: provenance (spec 006, FR-005)
+
+    private func history(_ entries: [(String, JSONValue, ObservationSource, String?, TimeInterval)], chosen: String?, locked: Bool = false) -> FieldHistory {
+        FieldHistory(field: .place, current: nil, chosenObservationID: chosen, locked: locked,
+                     entries: entries.map { FieldHistory.Entry(observationID: $0.0, value: $0.1, source: $0.2, confidence: 0.8,
+                                                                observedAt: Date(timeIntervalSince1970: 1_791_961_200 + $0.4), sightingID: $0.3, imageID: nil, citedLines: []) })
+    }
+
+    @Test func everyValueBehindAFieldIsListedWithItsSourceAndTheCurrentOneMarked() {
+        let field = history([("c", .string("Room 4"), .read, "s2", 7200), ("b", .string("Room 9"), .user, nil, 3600), ("a", .string("Room 3"), .inferred, "s1", 0)],
+                            chosen: "b", locked: true)
+        let rows = ItemListModel.provenance(field, timezone: "UTC")
+        #expect(rows.map(\.value) == ["Room 4", "Room 9", "Room 3"])
+        #expect(rows.map(\.source) == ["read", "you", "guessed"])
+        #expect(rows.map(\.isCurrent) == [false, true, false])
+        #expect(rows.map(\.confidence) == ["0.80", nil, "0.80"])
+        #expect(rows[1].when == "Wed 14 Oct 08:00")
+    }
+
+    @Test func theSightingBehindTheCurrentValueIsKnownUnlessTheUserSetIt() {
+        let seen = history([("a", .string("Room 4"), .read, "s1", 0), ("b", .string("Room 9"), .read, "s2", 3600)], chosen: "b")
+        #expect(ItemListModel.sourceSightingID(seen) == "s2")
+        let set = history([("a", .string("Room 4"), .read, "s1", 0), ("u", .string("Room 9"), .user, nil, 3600)], chosen: "u", locked: true)
+        #expect(ItemListModel.sourceSightingID(set) == nil)
+        #expect(ItemListModel.sourceSightingID(nil) == nil)
+        #expect(ItemListModel.sourceSightingID(history([], chosen: nil)) == nil)
     }
 }

@@ -126,8 +126,10 @@ extension ItemOperations {
                     try db.execute(sql: "INSERT INTO field_locks (item_id, field, observation_id, locked_at) VALUES (?, ?, ?, ?)", arguments: [itemID, field, observation, date])
                 }
             }
-            try db.execute(sql: "UPDATE items SET status = ?, merged_into = ?, user_touched = ?, updated_at = ? WHERE id = ?",
-                           arguments: [state.status, state.mergedInto, state.userTouched ? 1 : 0, date, itemID])
+            try db.execute(sql: "UPDATE items SET status = ?, merged_into = ?, user_touched = ?, approved_at = ?, approved_values_json = ?, updated_at = ? WHERE id = ?",
+                           arguments: [state.status, state.mergedInto, state.userTouched ? 1 : 0, state.approvedAt,
+                                       state.approvedValues.map { ReviewRules.encode(Dictionary(uniqueKeysWithValues: $0.compactMap { name, value in ItemField(rawValue: name).map { ($0, value) } })) },
+                                       date, itemID])
             restored.insert(itemID)
             touch(itemID)
             didSomething = true
@@ -145,6 +147,7 @@ extension ItemOperations {
             if pair.count == 2, case .string(let scores)? = op.detail["possible"], restored.count == 2 {
                 try db.execute(sql: "INSERT OR IGNORE INTO possible_duplicates (item_a, item_b, scores_json, created_at) VALUES (?, ?, ?, ?)",
                                arguments: [pair[0], pair[1], scores, date])
+                touch(pair[0]); touch(pair[1])
             }
         case .different:
             let pair = op.itemIDs.sorted()
@@ -154,6 +157,7 @@ extension ItemOperations {
                     try db.execute(sql: "INSERT OR IGNORE INTO possible_duplicates (item_a, item_b, scores_json, created_at) VALUES (?, ?, ?, ?)",
                                    arguments: [pair[0], pair[1], scores, date])
                 }
+                touch(pair[0]); touch(pair[1])
                 didSomething = true
             }
         case .undo:
@@ -163,6 +167,7 @@ extension ItemOperations {
                 if pair.count == 2, first.kind == .merge || first.kind == .different {
                     try db.execute(sql: "DELETE FROM possible_duplicates WHERE item_a = ? AND item_b = ?", arguments: [pair[0], pair[1]])
                     if first.kind == .different { try Self.keepApart(db, pair[0], pair[1], op: opID) }
+                    touch(pair[0]); touch(pair[1])
                 }
             }
         case .context:

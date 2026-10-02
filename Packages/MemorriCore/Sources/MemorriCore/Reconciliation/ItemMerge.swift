@@ -47,13 +47,25 @@ extension ItemOperations {
             let possible = try String.fetchOne(db, sql: "SELECT scores_json FROM possible_duplicates WHERE item_a = ? AND item_b = ?", arguments: [pair[0], pair[1]])
             try db.execute(sql: "DELETE FROM possible_duplicates WHERE item_a = ? AND item_b = ?", arguments: [pair[0], pair[1]])
 
+            // The merged item stays approved only when both were; otherwise the plain review rules judge it again (FR-014, edge cases).
+            let bothApproved = kept.approvedAt != nil && gone.approvedAt != nil
+            let partners = try ItemStore.possibleDuplicatePartners(db, of: other).filter { $0 != keep }
             gone.status = .merged
             gone.mergedInto = keep
             gone.userTouched = true
+            gone.needsReview = false
+            gone.reviewReasons = []
             kept.userTouched = true
             try ItemStore.update(db, gone, at: date)
             try ItemStore.update(db, kept, at: date)
+            if !bothApproved { try ItemStore.clearApproval(db, itemID: keep) }
             try ItemStore.recompute(db, itemID: keep, at: date)
+            if bothApproved, let merged = try ItemStore.item(db, id: keep) {
+                // The user vouched for both, so the joined item is approved as it now reads.
+                try ItemStore.setApprovalValues(db, itemID: keep, ReviewRules.snapshot(of: merged))
+                try ItemStore.recompute(db, itemID: keep, at: date)
+            }
+            try ItemStore.recomputeReview(db, itemIDs: partners, at: date)
             let choices = Dictionary(uniqueKeysWithValues: winners.filter { lockChoices[$0.key] != nil }.map { ($0.key.rawValue, JSONValue.string($0.value)) })
             return try OperationLog.record(db, kind: .merge, byUser: true, items: [keep, other], moved: moved, before: [keep: beforeKeep, other: beforeOther],
                                            detail: ["keep": .string(keep), "other": .string(other), "lockChoices": .object(choices),
@@ -100,6 +112,7 @@ extension ItemOperations {
             try db.execute(sql: "DELETE FROM possible_duplicates WHERE item_a = ? AND item_b = ?", arguments: [pair[0], pair[1]])
             let op = try OperationLog.record(db, kind: .different, byUser: true, items: pair, detail: ["scores": scores.map(JSONValue.string) ?? .null], at: date)
             try Self.keepApart(db, a, b, op: op)
+            try ItemStore.recomputeReview(db, itemIDs: pair, at: date)      // the pair is no longer an open duplicate
             return op
         }
     }
@@ -111,11 +124,12 @@ extension ItemOperations {
             .flatMap { try? JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }
     }
 
-    /// Moves sightings, and the observations that belong to them, to another item.
+    /// Moves sightings, and the observations and evidence that belong to them, to another item.
     static func move(_ db: Database, sightings: [String], to itemID: String) throws {
         for id in sightings {
             try db.execute(sql: "UPDATE sightings SET item_id = ? WHERE id = ?", arguments: [itemID, id])
             try db.execute(sql: "UPDATE observations SET item_id = ? WHERE sighting_id = ?", arguments: [itemID, id])
+            try db.execute(sql: "UPDATE evidence SET item_id = ? WHERE sighting_id = ?", arguments: [itemID, id])
         }
     }
 

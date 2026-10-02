@@ -385,7 +385,8 @@ import Testing
     private static let v5Columns: [(String, [String])] = [
         ("items", ["id", "kind", "family", "status", "merged_into", "context_id", "title", "all_day", "start_at", "end_at", "due_at", "remind_at",
                    "timezone", "day_key", "people_json", "place", "notes", "confidence", "user_touched", "first_seen", "last_seen",
-                   "created_at", "updated_at"]),
+                   "created_at", "updated_at",
+                   "needs_review", "review_reasons_json", "approved_at", "approved_values_json"]),      // the last four: migration v6
         ("sightings", ["id", "item_id", "image_id", "finding_id", "captured_at", "title", "cited_lines_json", "confidence", "decision_json", "created_at"]),
         ("observations", ["id", "item_id", "sighting_id", "field", "value_json", "source", "confidence", "observed_at"]),
         ("field_locks", ["item_id", "field", "observation_id", "locked_at"]),
@@ -562,6 +563,149 @@ import Testing
             #expect(v18 == 1)
             let v19 = try Row.fetchOne(db, sql: "SELECT reconciled_at, reconcile_error FROM image_analysis")?["reconciled_at"] as Date?
             #expect(v19 == nil)
+        }
+    }
+
+    // MARK: migration "v6" (spec 006)
+
+    @Test func v6CreatesTheEvidenceTableAndTheReviewColumns() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.read { db in
+            let evidence = try db.columns(in: "evidence").map(\.name)
+            #expect(evidence == ["id", "item_id", "sighting_id", "image_id", "captured_at", "display_name", "title", "cited_lines_json", "region_json",
+                                 "file_path", "reason", "bytes", "created_at", "geometry"])       // "geometry" arrived with v7
+            let needs = try self.column("items", "needs_review", in: db), reasons = try self.column("items", "review_reasons_json", in: db)
+            let approved = try self.column("items", "approved_at", in: db), values = try self.column("items", "approved_values_json", in: db)
+            #expect(needs.isNotNull && reasons.isNotNull && !approved.isNotNull && !values.isNotNull)
+            #expect(needs.defaultValueSQL == "0" && reasons.defaultValueSQL == "'[]'")
+            let sql = try Row.fetchAll(db, sql: "SELECT tbl_name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL")
+                .map { ($0["tbl_name"] as String) + ": " + ($0["sql"] as String) }
+            #expect(sql.contains { $0.hasPrefix("items:") && $0.hasSuffix("(\"needs_review\", \"status\")") })
+            #expect(sql.contains { $0.hasPrefix("evidence:") && $0.hasSuffix("(\"item_id\", \"captured_at\")") })
+            #expect(sql.contains { $0.hasPrefix("evidence:") && $0.hasSuffix("(\"image_id\")") })
+            #expect(sql.contains { $0.hasPrefix("evidence:") && $0.contains("UNIQUE") && $0.contains("\"sighting_id\" IS NOT NULL") })
+        }
+    }
+
+    @Test func deletingAnItemRemovesItsEvidenceAndDeletingASightingKeepsIt() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.write { db in
+            try self.seedPicture(db)
+            try self.insertItem(db, id: "item-1")
+            try self.insertSighting(db, id: "s-1", item: "item-1")
+            for (id, sighting) in [("e-1", "s-1"), ("e-2", nil as String?)] {
+                try db.execute(sql: """
+                    INSERT INTO evidence (id, item_id, sighting_id, image_id, captured_at, title, cited_lines_json, region_json, created_at)
+                    VALUES (?, 'item-1', ?, 'img-1', datetime('now'), 'Daily standup', '[1]', '{}', datetime('now'))
+                    """, arguments: [id, sighting])
+            }
+            try db.execute(sql: "DELETE FROM sightings WHERE id = 's-1'")
+            let keptRows = try Row.fetchAll(db, sql: "SELECT id, sighting_id FROM evidence ORDER BY id")
+            #expect(keptRows.count == 2 && (keptRows[0]["sighting_id"] as String?) == nil)
+            try db.execute(sql: "DELETE FROM items WHERE id = 'item-1'")
+            #expect(try self.count(db, "evidence") == 0)
+        }
+    }
+
+    @Test func aSightingHasAtMostOneEvidenceRow() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let db = try #require(opened(try StorageDatabase.open(paths: makePaths(temp))))
+        try db.pool.write { db in
+            try self.seedPicture(db)
+            try self.insertItem(db, id: "item-1")
+            try self.insertSighting(db, id: "s-1", item: "item-1")
+            let insert = """
+                INSERT INTO evidence (id, item_id, sighting_id, image_id, captured_at, title, cited_lines_json, region_json, created_at)
+                VALUES (?, 'item-1', 's-1', 'img-1', datetime('now'), 't', '[1]', '{}', datetime('now'))
+                """
+            try db.execute(sql: insert, arguments: ["e-1"])
+            #expect(throws: DatabaseError.self) { try db.execute(sql: insert, arguments: ["e-2"]) }
+        }
+    }
+
+    @Test func approveIsAKnownOperationKindAndOlderOperationsSurviveTheMigration() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v5")
+            try pool.write { db in
+                try db.execute(sql: """
+                    INSERT INTO reconcile_ops (id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at)
+                    VALUES ('op-1', 'merge', 1, '["a"]', '[]', '{}', '{}', NULL, datetime('now'))
+                    """)
+                try db.execute(sql: "INSERT INTO reconcile_op_items (op_id, item_id) VALUES ('op-1', 'a')")
+            }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.write { db in
+            #expect(try self.count(db, "reconcile_ops") == 1 && self.count(db, "reconcile_op_items") == 1)
+            try db.execute(sql: """
+                INSERT INTO reconcile_ops (id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at)
+                VALUES ('op-2', 'approve', 1, '["a"]', '[]', '{}', '{}', NULL, datetime('now'))
+                """)
+            #expect(throws: DatabaseError.self) {
+                try db.execute(sql: """
+                    INSERT INTO reconcile_ops (id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at)
+                    VALUES ('op-3', 'bogus', 1, '[]', '[]', '{}', '{}', NULL, datetime('now'))
+                    """)
+            }
+            // the history still hangs on its operation
+            try db.execute(sql: "DELETE FROM reconcile_ops WHERE id = 'op-1'")
+            #expect(try self.count(db, "reconcile_op_items") == 0)
+        }
+    }
+
+    @Test func aV5DatabaseGainsV6WithoutLosingItems() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v5")
+            try pool.write { db in try self.insertItem(db, id: "item-1") }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.read { db in
+            let row = try #require(try Row.fetchOne(db, sql: "SELECT title, needs_review, review_reasons_json, approved_at FROM items WHERE id = 'item-1'"))
+            #expect(row["title"] as String == "Daily standup" && (row["approved_at"] as Date?) == nil)
+            #expect(try db.tableExists("evidence"))
+        }
+    }
+
+    @Test func theMigrationComputesTheReviewStateOfItemsThatExist() throws {
+        let temp = TempDirectory(); defer { temp.cleanUp() }
+        let paths = try makePaths(temp)
+        do {
+            let pool = try DatabasePool(path: paths.database.path)
+            try Migrations.make().migrate(pool, upTo: "v6")
+            try pool.write { db in
+                try self.insertItem(db, id: "fine")
+                try self.insertItem(db, id: "faint")
+                try db.execute(sql: "UPDATE items SET confidence = 0.5 WHERE id = 'faint'")
+                try self.insertItem(db, id: "gone", status: "merged")
+                try db.execute(sql: "UPDATE items SET confidence = 0.5 WHERE id = 'gone'")
+                try self.insertItem(db, id: "dismissed", status: "dismissed")
+                try db.execute(sql: "UPDATE items SET confidence = 0.5 WHERE id = 'dismissed'")
+            }
+            try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
+            try pool.close()
+        }
+        let db = try #require(opened(try StorageDatabase.open(paths: paths)))
+        try db.pool.read { db in
+            func state(_ id: String) throws -> (Int, String) {
+                let row = try #require(try Row.fetchOne(db, sql: "SELECT needs_review, review_reasons_json FROM items WHERE id = ?", arguments: [id]))
+                return (row["needs_review"], row["review_reasons_json"])
+            }
+            let fine = try state("fine"), faint = try state("faint"), gone = try state("gone"), dismissed = try state("dismissed")
+            #expect(fine == (0, "[]"))
+            #expect(faint == (1, "[\"low-confidence\"]"))
+            #expect(gone == (0, "[]") && dismissed == (0, "[]"))
         }
     }
 }

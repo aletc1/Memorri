@@ -105,6 +105,7 @@ extension Reconciler {
                         try db.execute(sql: "INSERT OR IGNORE INTO possible_duplicates (item_a, item_b, scores_json, created_at) VALUES (?, ?, ?, ?)",
                                        arguments: [pair[0], pair[1], scores, date])
                         summary.possibleDuplicates += 1
+                        touched.insert(possibleOf)       // its review state changes too
                     }
                 } else {
                     summary.merged += 1

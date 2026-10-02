@@ -18,11 +18,13 @@ public struct CleanupService: Sendable {
 
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
 
+    private let paths: AppPaths
     private let store: CaptureStore
     private let files: CaptureFileStore
     private let time: any TimeSource
 
     public init(paths: AppPaths, store: CaptureStore, files: CaptureFileStore, time: any TimeSource = SystemTimeSource()) {
+        self.paths = paths
         self.store = store
         self.files = files
         self.time = time
@@ -34,7 +36,8 @@ public struct CleanupService: Sendable {
         let bytes = events.reduce(Int64(0)) { total, event in
             total + StorageStats.bytes(under: files.captureDirectory(eventID: event.id, capturedAt: event.capturedAt))
         }
-        return Preview(captureCount: events.count, bytes: bytes)
+        // "Delete everything" also removes the evidence cut-outs, which otherwise outlive their captures (spec 006).
+        return Preview(captureCount: events.count, bytes: days == nil ? bytes + StorageStats.bytes(under: paths.evidence) : bytes)
     }
 
     /// Returns how many captures were deleted. A capture in progress is not in the database yet,
@@ -42,15 +45,22 @@ public struct CleanupService: Sendable {
     @discardableResult
     public func delete(olderThanDays days: Int?, now: Date? = nil) throws -> Int {
         let events = try events(olderThanDays: days, now: now)
+        if days == nil {
+            do { try EvidenceFiles.removeAll(paths: paths, database: store.database) }
+            catch { Self.logger.error("cleanup evidence removal failed: \(error.localizedDescription, privacy: .public)") }
+        }
         guard !events.isEmpty else { return 0 }
         try store.deleteEvents(ids: events.map(\.id))
         // Items lose their sightings with the captures; the sweep rebuilds them and drops the empty ones nobody touched.
         do {
             let itemsRemoved = try ItemStore(database: store.database).sweep(at: time.now())
             Self.logger.notice("cleanup items removed=\(itemsRemoved)")
+            // Items the sweep removed take their evidence rows with them; their files go now.
+            if itemsRemoved > 0 { _ = try? EvidenceFiles.removeOrphans(paths: paths, database: store.database) }
         } catch {
             Self.logger.error("cleanup item sweep failed: \(error.localizedDescription, privacy: .public)")
         }
+
         for event in events { files.removeCaptureDirectory(eventID: event.id, capturedAt: event.capturedAt) }
         Self.logger.notice("cleanup removed=\(events.count)")
         return events.count
