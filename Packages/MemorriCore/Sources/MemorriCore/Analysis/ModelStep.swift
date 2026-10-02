@@ -57,6 +57,12 @@ public struct StepRecord: Sendable, Equatable {
     public let startedAt: Date
     public let promptVersion: String
     public let schemaVersion: String
+
+    /// The same record, marked as a failure: the model answered in the right shape but not usefully (spec 011), so a retry does not reuse it.
+    func failing(_ reason: String) -> StepRecord {
+        StepRecord(step: step, request: request, rawAnswer: rawAnswer, durationMs: durationMs, failure: reason, model: model, think: think,
+                   startedAt: startedAt, promptVersion: promptVersion, schemaVersion: schemaVersion)
+    }
 }
 
 public struct ModelStepResult: Sendable, Equatable {

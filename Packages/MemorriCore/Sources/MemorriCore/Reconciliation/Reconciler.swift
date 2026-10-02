@@ -130,18 +130,20 @@ public struct Reconciler: ImageReconciling {
         var usedEarlier: Set<String> = []
         var extra: [Candidate.Key: Candidate] = [:]            // what decided findings added to a candidate
         var created: [Candidate] = []                          // items this plan makes
-        var claimed: Set<Candidate.Key> = []                   // what earlier findings of this picture already joined or made
+        var claimed: [String: Set<Candidate.Key>] = [:]        // what earlier findings of this picture already joined or made, by window (research R7)
 
         for (index, finding) in snapshot.findings.enumerated() {
             let span = Self.span(of: finding)
             let normal = TitleNormaliser.normalise(finding.title)
+            // Two windows of one picture may show the same event, so a finding only avoids what findings of its own window took.
+            let window = finding.windowKey ?? ""
 
             // Rule 0: a finding this picture already had stays with its item.
             // (Not when the picture has since been given another context: then the finding is matched afresh.)
             if let earlier = snapshot.earlier.first(where: { !usedEarlier.contains($0.sightingID) && $0.itemContext == snapshot.context
                                                              && TitleNormaliser.normalise($0.title) == normal && Self.sameInstant($0.when, span.start) }) {
                 usedEarlier.insert(earlier.sightingID)
-                claimed.insert(.item(earlier.itemID))
+                claimed[window, default: []].insert(.item(earlier.itemID))
                 steps.append(.init(findingID: finding.id, target: .existing(itemID: earlier.itemID), scores: nil, rule: "same-picture", candidate: earlier.itemID))
                 Self.remember(.item(earlier.itemID), finding: finding, span: span, into: &extra)
                 continue
@@ -195,10 +197,10 @@ public struct Reconciler: ImageReconciling {
                 step = .init(findingID: finding.id, target: Self.target(of: hit.candidate), scores: hit.scores, rule: rule, candidate: hit.candidate.itemID)
             } else {
                 let uncertain = scored.filter { $0.decision == .uncertain }
-                // A picture shows each event once: when another finding of this picture already joined or made a candidate, a finding with
+                // A window shows each event once: when another finding of this window already joined or made a candidate, a finding with
                 // another title is a different event and is not sent to the judge (the small reranker says yes to "Sprint review" and
                 // "Sprint retrospective" at the same time). Equal or truncated titles still merge by text.
-                let judgeable = uncertain.filter { !claimed.contains($0.candidate.key) }
+                let judgeable = uncertain.filter { !(claimed[window]?.contains($0.candidate.key) ?? false) }
                 let sameFrame = !uncertain.isEmpty && judgeable.isEmpty
                 var outcome: ReconcilePlan.Step?
                 var asked = 0
@@ -234,9 +236,9 @@ public struct Reconciler: ImageReconciling {
             }
             steps.append(step)
             switch step.target {
-            case .existing(let id): claimed.insert(.item(id))
-            case .sameAsStep(let n): claimed.insert(.step(n))
-            case .newItem, .newWithPossibleDuplicate: claimed.insert(.step(index))
+            case .existing(let id): claimed[window, default: []].insert(.item(id))
+            case .sameAsStep(let n): claimed[window, default: []].insert(.step(n))
+            case .newItem, .newWithPossibleDuplicate: claimed[window, default: []].insert(.step(index))
             }
             switch step.target {
             case .existing(let id): Self.remember(.item(id), finding: finding, span: span, into: &extra)

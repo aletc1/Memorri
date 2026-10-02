@@ -52,8 +52,10 @@ public struct AnalysisResultStore: Sendable {
                     model, picture_long_edge, timezone, timezone_source, finding_count, line_cap_applied, discarded_json, extract_run_id, analysed_at,
                     reference_at, reference_source, windows_read)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, arguments: [imageID, kind.rawValue, result.classification.confidence, ExtractionPrompts.classifyVersion,
-                                 result.readBy ?? ExtractionPrompts.version(for: kind), result.readBy == nil ? ExtractionSchemas.schemaVersion(for: kind) : "none", result.model,
+                """, arguments: [imageID, kind.rawValue, result.classification.confidence,
+                                 result.windows.isEmpty ? ExtractionPrompts.classifyVersion : ExtractionPrompts.windowsVersion,
+                                 result.readBy ?? ExtractionPrompts.version(for: kind, windowed: !result.windows.isEmpty),
+                                 result.readBy == nil ? ExtractionSchemas.schemaVersion(for: kind) : "none", result.model,
                                  result.pictureLongEdge, result.timezone.identifier, result.timezoneSource, result.findings.count,
                                  result.lineCapApplied ? 1 : 0, Self.encode(result.discards), runID, date,
                                  result.reference?.instant, result.reference?.source.rawValue ?? ReferenceClock.Source.capture.rawValue, result.windowsRead])

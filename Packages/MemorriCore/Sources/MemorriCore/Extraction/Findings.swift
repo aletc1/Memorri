@@ -165,13 +165,16 @@ public enum CitationCheck {
 
     /// Keeps drafts that cite at least one line and only existing lines (numbers 1 to `lineCount`); the others become
     /// discards. Cited numbers of the kept drafts are sorted and distinct.
-    public static func apply(_ drafts: [FindingDraft], lineCount: Int) -> (kept: [FindingDraft], discarded: [Discard]) {
+    /// With `allowed` (the line numbers of one window) a draft that cites a line outside it is discarded as `outside the window`.
+    public static func apply(_ drafts: [FindingDraft], lineCount: Int, allowed: Set<Int>? = nil) -> (kept: [FindingDraft], discarded: [Discard]) {
         var kept: [FindingDraft] = [], discarded: [Discard] = []
         for draft in drafts {
             if draft.citedLines.isEmpty {
                 discarded.append(Discard(title: draft.title, reason: "cites no line", citedLines: []))
             } else if draft.citedLines.contains(where: { $0 < 1 || $0 > lineCount }) {
                 discarded.append(Discard(title: draft.title, reason: "cites a line that does not exist", citedLines: draft.citedLines))
+            } else if let allowed, draft.citedLines.contains(where: { !allowed.contains($0) }) {
+                discarded.append(Discard(title: draft.title, reason: "outside the window", citedLines: draft.citedLines))
             } else {
                 kept.append(draft.withCitedLines(Array(Set(draft.citedLines)).sorted()))
             }

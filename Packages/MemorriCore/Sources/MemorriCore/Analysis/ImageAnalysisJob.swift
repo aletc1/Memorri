@@ -75,6 +75,10 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
            let stored = run.rawAnswer.flatMap({ ClassificationResult.parse(storedAnswer: $0) }) {
             reuse.classification = stored
         }
+        if !forced, let run = try? jobs.latestSuccessfulRun(imageID: imageID, step: "windows", promptVersion: ExtractionPrompts.windowsVersion),
+           let stored = run.rawAnswer.flatMap({ WindowsAnswer.parse(storedAnswer: $0) }) {
+            reuse.windows = stored
+        }
         // The context step's inputs: the user's contexts, the windows seen with the picture and what the user chose for it.
         let knownContexts = (try? contexts?.all()) ?? []
         let choice = (try? contexts?.decision(imageID: imageID)).flatMap { $0 }.flatMap { $0.source == .user ? $0 : nil }
@@ -102,7 +106,7 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
 
         var runIDs: [String: String] = [:]
         for step in steps {
-            let edge = step.step == "classify" ? max(size.width, size.height) : analysisCopy.longEdge
+            let edge = step.step == "classify" || step.step == "windows" ? max(size.width, size.height) : analysisCopy.longEdge
             let run = ModelRunRecord(jobId: job.id, imageId: imageID, attempt: attempt, model: step.model, think: step.think, temperature: 0,
                                      imageLongEdge: edge, promptVersion: step.promptVersion,
                                      schemaVersion: step.schemaVersion, startedAt: step.startedAt, durationMs: step.durationMs,
@@ -117,9 +121,13 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         if let classify = steps.first(where: { $0.step == "classify" }) {
             Self.logger.info("classify image=\(imageID, privacy: .public) kind=\(analysis.classification.kind.rawValue, privacy: .public) confidence=\(analysis.classification.confidence) ms=\(classify.durationMs)")
         }
+        if let sorting = steps.first(where: { $0.step == "windows" }) {
+            // Counts only: window names and titles are never logged (FR-009).
+            Self.logger.info("windows image=\(imageID, privacy: .public) windows=\(analysis.windows.count) relevant=\(analysis.windowsRead) failed=\(sorting.failure != nil) ms=\(sorting.durationMs)")
+        }
         if let readBy = analysis.readBy {
             Self.logger.info("extract image=\(imageID, privacy: .public) kind=\(analysis.classification.kind.rawValue, privacy: .public) by=\(readBy, privacy: .public) findings=\(analysis.findings.count)")
-        } else if let extract = steps.first(where: { $0.step == "extract" }) {
+        } else if let extract = steps.first(where: { $0.step == "extract" || $0.step.hasPrefix("extract:") }) {
             Self.logger.info("extract image=\(imageID, privacy: .public) kind=\(analysis.classification.kind.rawValue, privacy: .public) findings=\(analysis.findings.count) discarded=\(analysis.discards.count) ms=\(extract.durationMs)")
         }
         let contextName = knownContexts.first { $0.id == analysis.decision.contextID }?.name
@@ -127,7 +135,9 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         let unresolved = analysis.findings.reduce(0) { $0 + $1.unresolved.count }
         let inferred = analysis.findings.reduce(0) { $0 + $1.provenance.values.filter { $0.origin == .inferred }.count }
         Self.logger.info("resolve image=\(imageID, privacy: .public) unresolved=\(unresolved) inferred=\(inferred)")
-        do { try results.save(analysis, imageID: imageID, runID: runIDs["extract"], at: time.now()) }
+        // A picture read window by window has one extraction run per window; findings point at the first (each finding's window is its key).
+        let extractRun = runIDs["extract"] ?? steps.first { $0.step.hasPrefix("extract:") }.flatMap { runIDs[$0.step] }
+        do { try results.save(analysis, imageID: imageID, runID: extractRun, windowsRunID: runIDs["windows"], at: time.now()) }
         catch { return .transient("could not store the analysis") }
         Self.logger.info("analysis stored image=\(imageID, privacy: .public)")
         // Reconciliation turns the findings into items. It never fails the job: a failure is stored on the picture and retried with

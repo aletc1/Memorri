@@ -321,6 +321,85 @@ import Testing
         _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
         #expect(rig.reconciler.imageIDs.count == 2)
     }
+
+    // MARK: Windows (spec 011)
+
+    private func windowedLines() -> [RecognisedLine] {
+        let mail = ["From: Ana Ruiz", "Subject: Planning", "Planning meeting tomorrow at 10:00", "Date: Wed 14 Oct 2026 09:00"]
+        let terminal = ["$ ls -la", "drwxr-xr-x  5 user  staff", "-rw-r--r--  1 user  staff", "$ make build"]
+        return mail.enumerated().map { RecognisedLine(n: $0.offset + 1, text: $0.element, box: PixelBox(x: 620, y: 40 + $0.offset * 30, width: 300, height: 18), confidence: 0.9) }
+            + terminal.enumerated().map { RecognisedLine(n: $0.offset + 5, text: $0.element, box: PixelBox(x: 20, y: 300 + $0.offset * 30, width: 300, height: 18), confidence: 0.9) }
+    }
+
+    private let twoWindows = [WindowInfo(appName: "Mail", bundleID: "com.example.mail", title: "Inbox", frame: PixelBox(x: 600, y: 20, width: 560, height: 500), stack: 0),
+                              WindowInfo(appName: "Terminal", bundleID: "com.example.terminal", title: "zsh", frame: PixelBox(x: 0, y: 20, width: 1200, height: 560), stack: 1)]
+
+    private func windowsAnswer(mailRelevant: Bool = true) -> String {
+        #"""
+        {"windows":[{"key":"w0","relevant":\#(mailRelevant),"kind":"email","confidence":0.9,"remote":false,"calendar_name":""},
+                    {"key":"w1","relevant":false,"kind":"other","confidence":0.9,"remote":false,"calendar_name":""}],
+         "application":"Mail","platform_look":"macos","theme":"light","remote_session":{"is_remote":false,"client":""}}
+        """#
+    }
+
+    private func windowedRig() throws -> Rig {
+        let rig = try makeRig(lines: windowedLines(), windows: twoWindows)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer())
+        rig.model.answer(whenSchemaHas: "findings", #"{"findings":[{"kind":"appointment","title":"Planning meeting","cited_lines":[3],"start_text":"10:00","date_text":"tomorrow"}]}"#)
+        return rig
+    }
+
+    private func readings(_ rig: Rig) throws -> [WindowReadingRecord] { try WindowReadingStore(database: rig.fixture.database).readings(imageID: rig.fixture.imageID) }
+
+    @Test func aCaptureWithWindowsStoresTheirReadingsAndTheWindowKeysOfItsFindings() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        #expect(await rig.runner.run(try job(rig), attempt: 1) == .success)
+        let stored = try readings(rig)
+        #expect(stored.map(\.windowKey) == ["w0", "w1"] && stored.map(\.relevant) == [true, false] && stored.map(\.appName) == ["Mail", "Terminal"])
+        let findings = try rig.results.findings(imageID: rig.fixture.imageID)
+        #expect(findings.map(\.title) == ["Planning meeting"] && findings.map(\.windowKey) == ["w0"])
+        let analysis = try #require(try rig.results.analysis(imageID: rig.fixture.imageID))
+        #expect(analysis.classifyVersion == "windows-v1" && analysis.windowsRead == 1 && analysis.kind == .email)
+        let run = try #require(try runs(rig).first { $0.step == "windows" })
+        #expect(run.promptVersion == "windows-v1")
+        #expect(stored.allSatisfy { $0.runID == run.id })
+        #expect(try runs(rig).map(\.step) == ["windows", "extract:w0"])
+    }
+
+    @Test func theWindowsCallIsSentAtTheClassificationSizeAndTheExtractionAtTheWindowsOwn() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        let stored = try runs(rig)
+        let windows = try #require(stored.first { $0.step == "windows" }), extract = try #require(stored.first { $0.step == "extract:w0" })
+        #expect(windows.imageLongEdge == 600)                  // the analysis copy of this fixture is smaller than 1024, so it is not enlarged
+        #expect(extract.promptVersion == "extract-email-v13")
+    }
+
+    @Test func readingsAreReplacedWhenThePictureIsAnalysedAgain() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        rig.model.answer(whenSchemaHas: "windows", windowsAnswer(mailRelevant: false))
+        _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
+        let stored = try readings(rig)
+        #expect(stored.count == 2 && stored.map(\.relevant) == [false, false])
+        #expect(try rig.results.findings(imageID: rig.fixture.imageID).isEmpty)
+    }
+
+    @Test func readingsGoWithTheirCapture() async throws {
+        let rig = try windowedRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(try readings(rig).count == 2)
+        try await rig.fixture.database.pool.write { try $0.execute(sql: "DELETE FROM capture_images WHERE id = ?", arguments: [rig.fixture.imageID]) }
+        #expect(try readings(rig).isEmpty)
+    }
+
+    @Test func aCaptureWithoutWindowsKeepsTheClassifyStepAndStoresNoReadings() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(try readings(rig).isEmpty)
+        #expect(try runs(rig).map(\.step) == ["classify", "extract"])
+        #expect(try rig.results.analysis(imageID: rig.fixture.imageID)?.classifyVersion == "classify-v2")
+    }
 }
 
 /// Records the pictures it is asked to write evidence for, and whether the picture was reconciled by then.

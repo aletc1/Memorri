@@ -25,6 +25,29 @@ public enum ExtractionSchemas {
         "calendar_name": string,
     ], required: ["screen_kind", "kind_confidence", "application", "platform_look", "remote_session", "theme", "calendar_name"])
 
+    public static let windowsSchemaVersion = "schema-windows-v1"
+
+    /// The windows call (spec 011): for every window it was given, whether it can hold appointments, tasks or reminders and which kind of view it
+    /// is, plus what the classify answer said about the capture as a whole. `keys` are the windows listed in the prompt: each entry's key is one of
+    /// them and there are exactly that many entries (the answer is also checked to name each once, see `WindowsAnswer`).
+    public static func windowsSchema(keys: [String]) -> JSONValue {
+        let entry = object([
+            "key": .object(["type": .string("string"), "enum": .array(keys.map { .string($0) })]),
+            "relevant": boolean,
+            "kind": .object(["type": .string("string"), "enum": .array(ScreenKind.allCases.map { .string($0.rawValue) })]),
+            "confidence": number,
+            "remote": boolean,
+            "calendar_name": string,
+        ], required: ["key", "relevant", "kind", "confidence", "remote", "calendar_name"])
+        return object([
+            "windows": .object(["type": .string("array"), "items": entry, "minItems": .int(keys.count), "maxItems": .int(keys.count)]),
+            "application": string,
+            "platform_look": string,
+            "theme": string,
+            "remote_session": object(["is_remote": boolean, "client": string], required: ["is_remote", "client"]),
+        ], required: ["windows", "application", "platform_look", "theme", "remote_session"])
+    }
+
     /// Month views gained `column_line` (the day label of the cell), so their schema is at version 2.
     public static func schemaVersion(for kind: ScreenKind) -> String { "schema-\(kind.rawValue)-\(kind == .calendarMonth ? "v2" : "v1")" }
 
