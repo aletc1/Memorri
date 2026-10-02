@@ -47,6 +47,18 @@ struct ItemDetailView: View {
                 }
             }
             .font(.callout)
+            if let line = model.syncLine(for: detail.item) {
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.checkmark").foregroundStyle(.secondary).accessibilityHidden(true)
+                    Text(line.text).foregroundStyle(.secondary)
+                    if line.canSyncAgain {
+                        Button("Sync again") { model.syncAgain(detail.item) }
+                            .help("Write this item to Calendar or Reminders again")
+                    }
+                }
+                .font(.callout)
+                .id(model.syncRefresh)
+            }
         }
     }
 

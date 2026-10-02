@@ -11,6 +11,31 @@ public enum SyncRender {
 
     public static func kind(of item: Item) -> SyncEntryKind { item.family == .event ? .event : .reminder }
 
+    // MARK: Calendar days
+
+    /// An all-day entry holds calendar days, not moments: the day `date` falls on in `zone`, as midnight UTC. The same value goes to the system store
+    /// and back whatever the Mac's own time zone, so a day never shifts and an unchanged all-day entry never looks edited.
+    public static func day(_ date: Date, in zone: TimeZone) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        return utc.date(from: parts) ?? date
+    }
+
+    /// The reverse: the start of the calendar day `day` names, in `zone`.
+    public static func moment(ofDay day: Date, in zone: TimeZone) -> Date {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let parts = utc.dateComponents([.year, .month, .day], from: day)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        return calendar.date(from: parts) ?? day
+    }
+
+    private static func zone(_ identifier: String) -> TimeZone { TimeZone(identifier: identifier) ?? TimeZone(identifier: "UTC")! }
+
     public static func title(_ item: Item, context: String?) -> String {
         guard let context, !context.trimmingCharacters(in: .whitespaces).isEmpty else { return item.title }
         return "[\(context)] \(item.title)"
@@ -25,12 +50,20 @@ public enum SyncRender {
         if kind == .reminder, let place = item.place, !place.isEmpty { notes.append("Place: \(place)") }
         notes += source.evidence.prefix(evidenceLines).map { "Seen: \($0)" }
         notes.append(link(itemID: item.id))
+        let zone = zone(item.timezone)
         if kind == .event {
+            if item.allDay, let start = item.start {
+                let first = day(start, in: zone)
+                let last = item.end.map { day($0, in: zone) }
+                return RenderedEntry(kind: .event, title: title, start: first, end: last.flatMap { $0 > first ? $0 : nil }, allDay: true, timezone: item.timezone,
+                                     location: item.place.flatMap { $0.isEmpty ? nil : $0 }, notes: notes.joined(separator: "\n"))
+            }
             let end = item.end ?? (item.allDay ? nil : item.start.map { $0.addingTimeInterval(3600) })
             return RenderedEntry(kind: .event, title: title, start: item.start, end: end, allDay: item.allDay, timezone: item.timezone,
                                  location: item.place.flatMap { $0.isEmpty ? nil : $0 }, notes: notes.joined(separator: "\n"))
         }
-        return RenderedEntry(kind: .reminder, title: title, allDay: item.allDay, timezone: item.timezone, due: item.due ?? item.start, alarm: item.remind,
+        let due = (item.due ?? item.start).map { item.allDay ? day($0, in: zone) : $0 }
+        return RenderedEntry(kind: .reminder, title: title, allDay: item.allDay, timezone: item.timezone, due: due, alarm: item.remind,
                              notes: notes.joined(separator: "\n"))
     }
 
@@ -72,13 +105,16 @@ public enum SyncRender {
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { out[.title] = .string(trimmed) }
         }
+        // A calendar day taken from an all-day entry becomes the start of that day in the item's own zone.
+        let zone = zone(last.timezone)
+        func moment(_ date: Date, _ allDay: Bool) -> Date { allDay ? Self.moment(ofDay: date, in: zone) : date }
         if last.kind == .event {
-            if let start = now.start, !same(last.start, start) { out[.start] = .date(start) }
-            if let end = now.end, !same(last.end, end) { out[.end] = .date(end) }
+            if let start = now.start, !same(last.start, start) { out[.start] = .date(moment(start, now.allDay)) }
+            if let end = now.end, !same(last.end, end) { out[.end] = .date(moment(end, now.allDay)) }
             if last.allDay != now.allDay { out[.allDay] = .bool(now.allDay) }
             if (last.location ?? "") != (now.location ?? "") { out[.place] = (now.location ?? "").isEmpty ? .null : .string(now.location!) }
         } else if let due = now.due, !same(last.due, due) {
-            out[.due] = .date(due)
+            out[.due] = .date(moment(due, now.allDay))
         }
         return out
     }

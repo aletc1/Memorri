@@ -23,9 +23,9 @@
 - [x] T012 [US4] Preview writes nothing (counting test); `SyncCoordinator` (first run held, debounce, no overlap) with tests (Sync/SyncCoordinator.swift, Tests/SyncCoordinatorTests.swift)
 
 ## Phase 6: App
-- [ ] T013 `EventKitStore` adapter; Info.plist usage strings and URL scheme; wiring and deep link (App/Sync/EventKitStore.swift, App/Info.plist/project.yml, App/AppEnvironment.swift)
-- [ ] T014 Settings > Calendar sync tab: access, targets, switch, Preview sheet, Sync now, runs, remove entries on switching off (App/Windows/CalendarSyncView.swift)
-- [ ] T015 Item detail sync row and `Sync again`; item history words (App/Windows/ItemDetailView.swift)
+- [x] T013 `EventKitStore` adapter; Info.plist usage strings and URL scheme; wiring and deep link (App/Sync/EventKitStore.swift, App/Info.plist/project.yml, App/AppEnvironment.swift)
+- [x] T014 Settings > Calendar sync tab: access, targets, switch, Preview sheet, Sync now, runs, remove entries on switching off (App/Windows/CalendarSyncView.swift)
+- [x] T015 Item detail sync row and `Sync again`; item history words (App/Windows/ItemDetailView.swift)
 
 ## Phase 7: Polish
 - [ ] T016 Scale test (1,000 items), logging without content, full suite, docs (DEVELOPER.md, roadmap, CLAUDE.md, pr-description)

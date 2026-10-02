@@ -84,3 +84,47 @@ import Testing
         #expect(edits == [.title: .string("Pay rent"), .due: .date(start.addingTimeInterval(86_400))])
     }
 }
+
+/// All-day entries hold calendar days, so they survive a Mac in another time zone unchanged.
+@Suite struct SyncRenderDayTests {
+    private let tokyo = TimeZone(identifier: "Asia/Tokyo")!
+
+    @Test func aDayIsMidnightUTCOfTheDateInTheItemsOwnZoneAndBack() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = tokyo
+        let start = calendar.date(from: DateComponents(year: 2026, month: 10, day: 14))!
+        let day = SyncRender.day(start, in: tokyo)
+        var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!
+        #expect(utc.dateComponents([.year, .month, .day, .hour], from: day) == DateComponents(year: 2026, month: 10, day: 14, hour: 0))
+        #expect(SyncRender.moment(ofDay: day, in: tokyo) == start)
+    }
+
+    @Test func anAllDayItemIsRenderedAsDaysAndASingleDayHasNoEnd() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = tokyo
+        let start = calendar.date(from: DateComponents(year: 2026, month: 10, day: 14))!
+        var item = syncItem(title: "Holiday", start: start, allDay: true)
+        item.timezone = "Asia/Tokyo"
+        let one = SyncRender.render(SyncSource(item: item))
+        #expect(one.allDay && one.start == SyncRender.day(start, in: tokyo) && one.end == nil)
+        item.end = calendar.date(from: DateComponents(year: 2026, month: 10, day: 16))!
+        let three = SyncRender.render(SyncSource(item: item))
+        #expect(three.end == SyncRender.day(item.end!, in: tokyo))
+    }
+
+    @Test func aDayChosenInCalendarComesBackAsTheStartOfThatDayInTheItemsZone() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = tokyo
+        let start = calendar.date(from: DateComponents(year: 2026, month: 10, day: 14))!
+        let last = RenderedEntry(kind: .event, title: "Holiday", start: SyncRender.day(start, in: tokyo), allDay: true, timezone: "Asia/Tokyo")
+        var now = last
+        now.start = SyncRender.day(calendar.date(from: DateComponents(year: 2026, month: 10, day: 15))!, in: tokyo)
+        let edits = SyncRender.outsideEdits(last: last, now: now, contextName: nil)
+        #expect(edits == [.start: .date(calendar.date(from: DateComponents(year: 2026, month: 10, day: 15))!)])
+    }
+
+    @Test func aReminderDueOnADayIsRenderedAsADay() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = tokyo
+        let due = calendar.date(from: DateComponents(year: 2026, month: 10, day: 14))!
+        var item = syncItem("t", kind: .task, start: nil, due: due, allDay: true)
+        item.timezone = "Asia/Tokyo"
+        #expect(SyncRender.render(SyncSource(item: item)).due == SyncRender.day(due, in: tokyo))
+    }
+}

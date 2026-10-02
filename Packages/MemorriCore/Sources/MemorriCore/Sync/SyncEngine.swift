@@ -39,6 +39,27 @@ public struct SyncEngine: Sendable {
     /// `allowMove` is true once the user confirmed moving Memorri's entries to a newly chosen calendar or list (FR-020).
     public func run(allowMove: Bool = false) async -> SyncOutcome { await go(preview: false, allowMove: allowMove) }
 
+    /// Switching sync off with `Remove Memorri's entries` (FR-017): deletes every entry Memorri made that is still there, through the scoped store (only
+    /// entries in `sync_links` can go), and marks the links removed so switching on again writes them afresh. Returns how many were removed.
+    @discardableResult
+    public func removeAllEntries() -> Int {
+        let links = (try? store.links()) ?? [:]
+        let settings = store.syncSettings(now: now())
+        let scoped = ScopedEventStore(base: events, calendarID: settings.calendarID, listID: settings.listID,
+                                      alsoRemovableFrom: Set(links.values.map(\.containerID)), isOurs: { [store] in store.isLinked(ekID: $0) })
+        var removed = 0
+        let date = now()
+        for var link in links.values where [.synced, .completed, .failed].contains(link.state) {
+            guard scoped.entry(id: link.ekID, kind: link.kind) != nil else { continue }
+            do { try scoped.delete(id: link.ekID, kind: link.kind) } catch { continue }
+            link.state = .removed; link.failure = nil; link.syncedAt = date
+            try? store.save(link, at: date)
+            removed += 1
+        }
+        Self.logger.info("removed \(removed) entries on switching off")
+        return removed
+    }
+
     // MARK: Reading what sync needs
 
     /// The items sync has to consider: those with a link (whatever became of them) and those that are ready.

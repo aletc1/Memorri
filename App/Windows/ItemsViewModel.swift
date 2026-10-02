@@ -118,6 +118,25 @@ final class ItemsViewModel {
     var statusAction: ItemListModel.StatusAction? { ItemListModel.statusAction(for: selectedRows) }
     var isAvailable: Bool { environment.items != nil }
 
+    // MARK: Calendar sync (spec 009)
+
+    /// Where the open item is in Calendar or Reminders, or why not; nil when sync has nothing to say about it.
+    func syncLine(for item: Item) -> (text: String, canSyncAgain: Bool)? {
+        guard let store = environment.sync?.store else { return nil }
+        let link = try? store.link(itemID: item.id)
+        guard let text = SyncWords.itemLine(item: item, link: link, enabled: store.enabled, now: Date()) else { return nil }
+        return (text, link?.state == .removedByUser)
+    }
+
+    /// The user deleted the entry and wants it back: the link is forgotten and the next sync writes it again.
+    func syncAgain(_ item: Item) {
+        guard let sync = environment.sync else { return }
+        try? sync.store.syncAgain(itemID: item.id)
+        Task { await sync.coordinator.changed() }
+        syncRefresh += 1
+    }
+    private(set) var syncRefresh = 0
+
     func contextName(_ id: String?) -> String? { id.flatMap { id in contexts.first { $0.id == id }?.name } }
 
     func title(of id: String) -> String { rows.first { $0.item.id == id }?.item.title ?? "Another item" }

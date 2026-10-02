@@ -227,3 +227,55 @@ import Testing
         #expect(Date().timeIntervalSince(started) < 60)
     }
 }
+
+/// Switching off and the change feed (spec 009 FR-012, FR-017).
+@Suite struct SyncSwitchOffTests {
+    private let clock = Date(timeIntervalSince1970: 1_791_961_200 + 86_400)
+
+    private func make(_ events: FakeEventStore) throws -> (ReconcileFixture, SyncStore, SyncEngine) {
+        let fixture = try ReconcileFixture()
+        for (n, title) in ["Standup", "Budget review"].enumerated() {
+            try fixture.write { try $0.execute(sql: """
+                INSERT INTO items (id, kind, family, status, title, timezone, confidence, first_seen, last_seen, created_at, updated_at, start_at, end_at, needs_review)
+                VALUES (?, 'appointment', 'event', 'active', ?, 'UTC', 0.9, datetime('now'), datetime('now'), datetime('now'), datetime('now'), ?, ?, 0)
+                """, arguments: ["i\(n)", title, ReconcileFixture.minutes(60 * (n + 1)), ReconcileFixture.minutes(60 * (n + 1) + 30)]) }
+        }
+        let store = SyncStore(database: fixture.database, settings: FakeSettingsStore())
+        store.setCalendarID("cal-memorri"); store.setListID("list-memorri"); store.setEnabled(true)
+        return (fixture, store, SyncEngine(database: fixture.database, store: store, events: events, operations: ItemOperations(database: fixture.database, now: { clock }), now: { clock }))
+    }
+
+    @Test func removingMemorrisEntriesDeletesOnlyThoseItMadeAndAFreshRunWritesThemAgain() async throws {
+        let events = FakeEventStore()
+        let (fixture, store, engine) = try make(events); defer { fixture.cleanUp() }
+        let foreign = events.seedForeign(in: "cal-memorri", title: "Not ours")          // the user's own entry in the same calendar
+        _ = await engine.run()
+        #expect(events.entries.count == 3)
+        #expect(engine.removeAllEntries() == 2)
+        #expect(events.entries.keys.sorted() == [foreign] && events.entries[foreign]?.entry.title == "Not ours")
+        #expect(try store.links().values.allSatisfy { $0.state == .removed })
+        let again = await engine.run()
+        #expect(again.run.created == 2 && events.entries.count == 3)
+    }
+
+    @Test func theChangeFeedReportsChangesToItemsButNotTheStartingState() async throws {
+        let events = FakeEventStore()
+        let (fixture, store, _) = try make(events); defer { fixture.cleanUp() }
+        let stream = store.observeItemChanges()
+        let received = Received()
+        let task = Task { for await _ in stream { received.add() } }
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(received.count == 0)
+        try fixture.write { try $0.execute(sql: "UPDATE items SET title = 'Daily standup', updated_at = datetime('now', '+1 minute') WHERE id = 'i0'") }
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(received.count == 1)
+        task.cancel()
+    }
+}
+
+private final class Received: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func add() { lock.withLock { value += 1 } }
+    var count: Int { lock.withLock { value } }
+}

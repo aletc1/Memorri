@@ -47,6 +47,8 @@ final class AppEnvironment {
     /// Search over items and captures (spec 007); `nil` when the storage is unavailable.
     let search: SearchService?
     let searchIndex: SearchIndex?
+    /// Calendar and Reminders sync (spec 009); `nil` when the storage is unavailable.
+    let sync: SyncServices?
     /// The floating quick-search panel.
     lazy var searchPanel = SearchPanelController(environment: self)
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
@@ -108,6 +110,11 @@ final class AppEnvironment {
             items = ItemStore(database: database)
             itemOperations = ItemOperations(database: database, reconciler: reconciler, evidence: evidence)
             operationLog = OperationLog(database: database)
+            let syncStore = SyncStore(database: database, settings: settingsStore)
+            let eventKit = EventKitStore()
+            let syncEngine = SyncEngine(database: database, store: syncStore, events: eventKit,
+                                        operations: ItemOperations(database: database, reconciler: reconciler, evidence: evidence))
+            sync = SyncServices(store: syncStore, engine: syncEngine, coordinator: SyncCoordinator(engine: syncEngine, store: syncStore), eventKit: eventKit)
             search = SearchService(database: database)
             searchIndex = SearchIndex(database: database)
         } else {
@@ -121,6 +128,7 @@ final class AppEnvironment {
             evidenceStore = nil
             evidenceWriter = nil
             reprocessing = nil
+            sync = nil
             search = nil
             searchIndex = nil
         }
@@ -166,6 +174,7 @@ final class AppEnvironment {
         }
         followAnalysisProgress()
         followReviewCount()
+        startSync()
         prepareSearchIndex()
         // Sightings from before evidence existed get their cut-outs a few at a time, newest first.
         if let evidenceWriter { Task.detached(priority: .utility) { _ = await evidenceWriter.backfill(limit: 200) } }
@@ -183,6 +192,24 @@ final class AppEnvironment {
             let final = (try? searchIndex.state()) ?? .ready          // the last word, whatever order the progress updates arrived in
             await MainActor.run { state.searchState = final }
         }
+    }
+
+    /// Sync runs when the app starts, a few seconds after items change, and when Calendar or Reminders change (spec 009 FR-012); it holds back until
+    /// the user switched it on and saw the first preview.
+    private func startSync() {
+        guard let sync else { return }
+        Task { await sync.coordinator.start() }
+        let changes = sync.store.observeItemChanges()
+        Task { for await _ in changes { await sync.coordinator.changed() } }
+        Task { for await _ in NotificationCenter.default.notifications(named: EventKitStore.changed) { await sync.coordinator.changed() } }
+    }
+
+    /// `memorri://item/<id>`, the link written into the notes of an entry: opens the Items window on that item.
+    func openDeepLink(_ url: URL) {
+        guard url.scheme == "memorri", url.host == "item" else { return }
+        let id = url.lastPathComponent
+        guard let item = try? items?.item(id: id) else { return }
+        showItem(id: item.id, status: item.status)
     }
 
     /// Keeps the menu's `Inbox (N)` current.

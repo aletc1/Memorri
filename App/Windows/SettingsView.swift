@@ -28,13 +28,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// What a later version will put here, for the placeholder sections.
-    var comingLater: String? {
-        switch self {
-        case .calendarSync: "the calendar and reminders list your items are copied to (spec 009)."
-        case .general, .permissions, .storage, .ollama, .analysis: nil
-        }
-    }
 }
 
 /// The Settings window: a sidebar of sections with the detail on the right.
@@ -72,12 +65,7 @@ struct SettingsView: View {
         case .analysis:
             AnalysisSettingsView(environment: environment)
         case .calendarSync:
-            VStack(alignment: .leading, spacing: 8) {
-                Text(section.title).font(.headline)
-                Text("Coming in a later version: \(section.comingLater ?? "")")
-                    .foregroundStyle(.secondary)
-            }
-            .padding(24)
+            CalendarSyncView(environment: environment)
         }
     }
 }

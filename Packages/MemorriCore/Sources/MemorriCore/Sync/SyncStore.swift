@@ -43,6 +43,25 @@ public struct SyncStore: Sendable {
 
     public func syncSettings(now: Date) -> SyncSettings { SyncSettings(calendarID: calendarID, listID: listID, now: now) }
 
+    /// Fires after every change to the items (a fingerprint of the table changes), so the coordinator can schedule a run. The first value, the state at
+    /// the start, is not reported.
+    public func observeItemChanges() -> AsyncStream<Void> {
+        let observation = ValueObservation.tracking { db in
+            try Row.fetchOne(db, sql: "SELECT COUNT(*) AS n, MAX(updated_at) AS latest, SUM(needs_review) AS review, SUM(status = 'active') AS active FROM items")
+                .map { "\($0["n"] as Int)|\(String(describing: $0["latest"] as DatabaseValue))|\(String(describing: $0["review"] as DatabaseValue))|\(String(describing: $0["active"] as DatabaseValue))" } ?? ""
+        }
+        .removeDuplicates()
+        let pool = database.pool
+        return AsyncStream { continuation in
+            let task = Task {
+                var first = true
+                do { for try await _ in observation.values(in: pool) { if first { first = false } else { continuation.yield() } } } catch {}
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     // MARK: Links
 
     public func links() throws -> [String: SyncLink] {
