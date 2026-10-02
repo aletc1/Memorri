@@ -21,6 +21,8 @@ final class AppState {
         var status: ItemStatus?
     }
     var itemsScopeRequest: ScopeRequest?
+    /// A capture a search result asked the capture window to show.
+    var captureRequest: CaptureRequest?
 
     /// The model queue: counts, pause flag and why it is holding (spec 003).
     var analysisProgress = QueueProgress(counts: JobCounts(waiting: 0, running: 0, finished: 0, failed: 0), paused: false, holdingReason: nil)

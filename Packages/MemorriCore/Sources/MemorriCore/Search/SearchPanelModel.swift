@@ -47,6 +47,29 @@ public enum SearchPanelModel {
         return parts.joined(separator: ", ")
     }
 
+    /// `<app> — <title>`, just the application or the title when the other is missing, nil when there is no window.
+    public static func windowText(app: String?, title: String?) -> String? {
+        func clean(_ text: String?) -> String? {
+            guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+            return text
+        }
+        switch (clean(app), clean(title)) {
+        case let (app?, title?): return "\(app) — \(title)"
+        case let (app?, nil): return app
+        case let (nil, title?): return title
+        case (nil, nil): return nil
+        }
+    }
+
+    /// The row as one sentence: `Capture, <time>, <display>, <window>, <first matching line>`.
+    public static func rowText(_ hit: CaptureHit, timezone: TimeZone = .current, locale: Locale = .current) -> String {
+        var parts = ["Capture", dateText(hit.capturedAt, timezone: timezone, locale: locale)]
+        if let display = hit.displayName, !display.isEmpty { parts.append(display) }
+        if let window = windowText(app: hit.windowApp, title: hit.windowTitle) { parts.append(window) }
+        if let line = hit.lines.first { parts.append(line.text.text) }
+        return parts.joined(separator: ", ")
+    }
+
     /// What the panel shows in place of results, or nil when there are results to show.
     public static func message(for query: SearchQuery, results: SearchResults, state: SearchState, contextName: String?) -> String? {
         if case .preparing(let done, let total) = state { return "Search is being prepared (\(done) of \(total))" }

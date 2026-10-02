@@ -54,6 +54,7 @@ struct SearchPanelView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         if !model.results.items.isEmpty { sectionTitle("Items") }
                         ForEach(Array(model.rows.enumerated()), id: \.offset) { index, row in
+                            if case .capture = row, index == model.rows.firstIndex(where: { if case .capture = $0 { true } else { false } }) { sectionTitle("Captures") }
                             rowView(row, selected: model.selection == index).id(index)
                                 .onTapGesture { model.selection = index; if let target = SearchPanelModel.target(rows: model.rows, selection: index) { onOpen(target) } }
                         }
@@ -75,8 +76,8 @@ struct SearchPanelView: View {
             switch row {
             case .item(let id):
                 if let hit = model.results.items.first(where: { $0.id == id }) { itemRow(hit) }
-            case .capture:
-                EmptyView()
+            case .capture(let id):
+                if let hit = model.results.captures.first(where: { $0.id == id }) { captureRow(hit) }
             case .showMoreItems:
                 Text("Show more items").foregroundStyle(Color.accentColor).padding(.vertical, 6)
             case .showMoreCaptures:
@@ -101,6 +102,20 @@ struct SearchPanelView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(SearchPanelModel.rowText(hit, contextName: contextName))
+    }
+
+    private func captureRow(_ hit: CaptureHit) -> some View {
+        let window = SearchPanelModel.windowText(app: hit.windowApp, title: hit.windowTitle)
+        let header = [SearchPanelModel.dateText(hit.capturedAt), hit.displayName, window].compactMap { $0 }.joined(separator: " · ")
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "camera.viewfinder").foregroundStyle(.secondary).frame(width: 18).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(header).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                ForEach(hit.lines, id: \.number) { line in Text(line.text.attributed).font(.callout).lineLimit(1) }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(SearchPanelModel.rowText(hit))
     }
 
     private func detail(_ hit: ItemHit, contextName: String?) -> String {

@@ -48,8 +48,11 @@ final class SearchPanelController {
             let status = model.results.items.first { $0.id == id }?.status ?? .active
             close()
             environment.showItem(id: id, status: status)
-        case .openCapture:
-            break      // the capture viewer arrives with task T018
+        case .openCapture(let id):
+            let query = model.query
+            let hit = model.results.captures.first { $0.id == id }
+            close()
+            if let hit { environment.showCapture(hit, query: query) }
         }
     }
 

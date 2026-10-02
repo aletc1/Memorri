@@ -179,6 +179,14 @@ final class AppEnvironment {
         windows.show(.items)
     }
 
+    /// Opens the capture window on a capture a search result named, with the matching lines outlined.
+    func showCapture(_ hit: CaptureHit, query: SearchQuery) {
+        let when = SearchPanelModel.dateText(hit.capturedAt)
+        let header = [when, hit.displayName, SearchPanelModel.windowText(app: hit.windowApp, title: hit.windowTitle)].compactMap { $0 }.joined(separator: " · ")
+        state.captureRequest = CaptureRequest(imageID: hit.id, query: query, header: header)
+        windows.show(.capture)
+    }
+
     /// Keeps the menu line and the settings block current.
     private func followAnalysisProgress() {
         guard let analysis else { return }
@@ -321,6 +329,7 @@ final class AppEnvironment {
     private func content(for id: WindowID) -> AnyView {
         switch id {
         case .items: AnyView(ItemsView(environment: self))
+        case .capture: AnyView(CaptureViewerView(environment: self))
         case .settings: AnyView(SettingsView(environment: self))
         case .onboarding: AnyView(OnboardingView(environment: self))
         }

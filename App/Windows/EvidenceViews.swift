@@ -85,10 +85,7 @@ struct WholeCaptureSheet: View {
     let onClose: () -> Void
     @State private var capture: WholeCapture?
     @State private var loaded = false
-    /// 1 shows the whole picture in the window; more zooms in and the picture scrolls.
-    @State private var zoom: CGFloat = 1
-    @State private var zoomAtGestureStart: CGFloat = 1
-    @State private var fitScale: CGFloat = 1
+    @State private var zoom = PictureZoom()
 
     private var cited: Set<Int> { Set(entry.sighting?.citedLines ?? entry.evidence?.citedLines ?? []) }
 
@@ -102,7 +99,8 @@ struct WholeCaptureSheet: View {
         VStack(spacing: 12) {
             Group {
                 if let capture {
-                    outlined(capture)
+                    OutlinedPicture(capture: capture, outlined: cited, region: entry.evidence?.region,
+                                    label: "The whole capture with the cited lines outlined. Zoom with the buttons or pinch, scroll to move.", zoom: $zoom)
                 } else if loaded {
                     Text("The capture is no longer stored.").foregroundStyle(.secondary)
                 } else {
@@ -114,18 +112,7 @@ struct WholeCaptureSheet: View {
                 Text("\(entry.capturedAt.formatted(date: .abbreviated, time: .shortened))\(entry.displayName.map { " · \($0)" } ?? "")")
                     .foregroundStyle(.secondary)
                 Spacer()
-                if capture != nil {
-                    Button { setZoom(zoom / 1.5) } label: { Image(systemName: "minus.magnifyingglass") }
-                        .keyboardShortcut("-", modifiers: .command).disabled(zoom <= 1)
-                        .help("Zoom out").accessibilityLabel("Zoom out")
-                    Button("Fit") { setZoom(1) }.disabled(zoom == 1)
-                        .help("Show the whole picture in the window").accessibilityLabel("Fit the picture to the window")
-                    Button("100%") { setZoom(1 / fitScale) }
-                        .help("One picture pixel per point").accessibilityLabel("Show the picture at its own size")
-                    Button { setZoom(zoom * 1.5) } label: { Image(systemName: "plus.magnifyingglass") }
-                        .keyboardShortcut("=", modifiers: .command).disabled(zoom >= Self.maxZoom)
-                        .help("Zoom in").accessibilityLabel("Zoom in")
-                }
+                if capture != nil { ZoomButtons(zoom: $zoom) }
                 Button("Close", action: onClose).keyboardShortcut(.cancelAction)
             }
         }
@@ -135,43 +122,6 @@ struct WholeCaptureSheet: View {
             let imageID = entry.sighting?.imageID ?? entry.evidence?.imageID ?? ""
             capture = await model.wholeCapture(imageID: imageID)
             loaded = true
-        }
-    }
-
-    private static let maxZoom: CGFloat = 16
-
-    private func setZoom(_ value: CGFloat) {
-        zoom = min(max(value, 1), Self.maxZoom)
-        zoomAtGestureStart = zoom
-    }
-
-    private func outlined(_ capture: WholeCapture) -> some View {
-        GeometryReader { geometry in
-            let width = CGFloat(capture.picture.width), height = CGFloat(capture.picture.height)
-            let fit = min(geometry.size.width / width, geometry.size.height / height)
-            let scale = fit * zoom
-            ScrollView([.horizontal, .vertical]) {
-                ZStack(alignment: .topLeading) {
-                    Image(decorative: capture.picture, scale: 1).resizable().interpolation(.high).frame(width: width * scale, height: height * scale)
-                    if let region = entry.evidence?.region {
-                        Rectangle().stroke(Color.orange, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
-                            .frame(width: CGFloat(region.width) * scale, height: CGFloat(region.height) * scale)
-                            .offset(x: CGFloat(region.x) * scale, y: CGFloat(region.y) * scale)
-                    }
-                    ForEach(capture.lines.filter { cited.contains($0.n) }, id: \.n) { line in
-                        Rectangle().stroke(Color.blue, lineWidth: 2)
-                            .frame(width: CGFloat(line.box.width) * scale, height: CGFloat(line.box.height) * scale)
-                            .offset(x: CGFloat(line.box.x) * scale, y: CGFloat(line.box.y) * scale)
-                    }
-                }
-                .frame(width: width * scale, height: height * scale)
-                .frame(minWidth: geometry.size.width, minHeight: geometry.size.height)       // centred while it is smaller than the window
-            }
-            .gesture(MagnifyGesture()
-                .onChanged { zoom = min(max(zoomAtGestureStart * $0.magnification, 1), Self.maxZoom) }
-                .onEnded { _ in zoomAtGestureStart = zoom })
-            .onChange(of: geometry.size, initial: true) { fitScale = fit }
-            .accessibilityLabel("The whole capture with the cited lines outlined. Zoom with the buttons or pinch, scroll to move.")
         }
     }
 }

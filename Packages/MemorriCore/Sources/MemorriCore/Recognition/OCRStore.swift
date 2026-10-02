@@ -20,6 +20,7 @@ public struct OCRStore: Sendable {
                     INSERT INTO ocr_lines (image_id, n, text, x, y, width, height, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """, arguments: [imageID, line.n, line.text, line.box.x, line.box.y, line.box.width, line.box.height, line.confidence])
             }
+            try SearchIndex.writeCapture(db, imageID: imageID, lines: lines)      // the text is searchable in the same step (spec 007)
         }
     }
 
