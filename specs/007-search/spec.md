@@ -78,7 +78,7 @@ The panel opens from a menu item and from a global shortcut the user can change 
 
 - A search of one letter or only punctuation does not search; the panel asks for more.
 - Very common words ("de", "the") are searchable but never hide rarer matches: results are ordered by how well and how rarely the words match.
-- Text in several languages and with accents: `cafe`, `Café` and `CAFÉ` are the same; `ñ`/`n` are treated as different only when typed exactly.
+- Text in several languages and with accents: `cafe`, `Café` and `CAFÉ` are the same; all accents fold, `ñ` included (`nino` finds `niño`).
 - Quotes search a phrase (`"daily standup"`); a minus sign excludes a word; other punctuation is ignored, and a bad query never shows an error or crashes.
 - Words typed in any order all must match (not any); the user can type a prefix of the last word while typing.
 - A capture with thousands of lines is still one result, with its best matching lines (up to three) shown.
