@@ -126,4 +126,13 @@ import Testing
         let none = try await search(f, "zzz").waitingToBeAnalysed
         #expect(none == 0)
     }
+
+    @Test func accentedAndPlainLinesBothMatchWithoutAccentsOrCase() async throws {
+        let f = try ReconcileFixture(); defer { f.cleanUp() }
+        try read(f, f.base.imageID, [line(1, "Reunión de Café"), line(2, "plain cafe line"), line(3, "CAFE")])
+        let hit = try #require(try await search(f, "cafe").captures.first)
+        #expect(hit.lines.map(\.number) == [1, 2, 3])
+        let viewer = try await SearchService(database: f.database).lines(imageID: f.base.imageID, matching: SearchQuery(text: "reunion cafe"))
+        #expect(viewer.map(\.number) == [1, 2, 3])
+    }
 }

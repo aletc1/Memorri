@@ -51,7 +51,7 @@ public struct SearchService: Sendable {
         let terms = query.terms
         guard query.isSearchable else { return [] }
         return try await database.pool.read { db in
-            Self.matches(in: try Self.lines(db, imageID: imageID), terms: terms).map { LineHit(number: $0.line.n, text: $0.marked) }
+            Self.matches(in: try Self.lines(db, imageID: imageID, mayHold: terms.words + terms.phrases.flatMap { $0 }), terms: terms).map { LineHit(number: $0.line.n, text: $0.marked) }
         }
     }
 
@@ -98,7 +98,7 @@ public struct SearchService: Sendable {
             """, arguments: StatementArguments(arguments) + [limit, offset])
         return try rows.map { row in
             let imageID: String = row["image_id"]
-            let all = Self.matches(in: try Self.lines(db, imageID: imageID), terms: terms)
+            let all = Self.matches(in: try Self.lines(db, imageID: imageID, mayHold: terms.words + terms.phrases.flatMap { $0 }), terms: terms)
             let best = all.sorted { $0.score != $1.score ? $0.score > $1.score : $0.line.n < $1.line.n }.prefix(3).sorted { $0.line.n < $1.line.n }
             let readings = try WindowReadingStore.readings(db, imageID: imageID).sorted { Self.stack($0.windowKey) < Self.stack($1.windowKey) }
             let window = all.lazy.compactMap { match in Self.window(of: match.line, in: readings) }.first
@@ -107,15 +107,25 @@ public struct SearchService: Sendable {
         }
     }
 
-    private static func lines(_ db: Database, imageID: String) throws -> [RecognisedLine] {
-        try Row.fetchAll(db, sql: "SELECT n, text, x, y, width, height, confidence FROM ocr_lines WHERE image_id = ? ORDER BY n", arguments: [imageID]).map { row in
+    /// The lines of one capture that can hold one of `words`: those with the word as a substring (ASCII, any case) and every line that has a
+    /// character beyond plain ASCII (accents are folded later, so they cannot be ruled out here). All lines when `words` is nil or has an accent.
+    private static func lines(_ db: Database, imageID: String, mayHold words: [String]? = nil) throws -> [RecognisedLine] {
+        var sql = "SELECT n, text, x, y, width, height, confidence FROM ocr_lines WHERE image_id = ?"
+        var arguments: [any DatabaseValueConvertible] = [imageID]
+        if let words, !words.isEmpty, words.allSatisfy({ $0.utf8.allSatisfy { $0 < 128 } }) {
+            sql += " AND (text GLOB '*[^ -~]*' OR " + words.map { _ in "instr(lower(text), ?) > 0" }.joined(separator: " OR ") + ")"
+            arguments += words
+        }
+        return try Row.fetchAll(db, sql: sql + " ORDER BY n", arguments: StatementArguments(arguments)).map { row in
             RecognisedLine(n: row["n"], text: row["text"], box: PixelBox(x: row["x"], y: row["y"], width: row["width"], height: row["height"]), confidence: row["confidence"])
         }
     }
 
     /// The lines that contain at least one query word, each with its marks and how many different words it holds.
     private static func matches(in lines: [RecognisedLine], terms: SearchQuery.Terms) -> [(line: RecognisedLine, marked: MarkedText, score: Int)] {
-        lines.compactMap { line in
+        let words = terms.words + terms.phrases.flatMap { $0 }
+        return lines.compactMap { line in
+            guard SearchText.mightMatch(line.text, words: words) else { return nil }
             let marked = MarkedText(line.text, terms: terms)
             guard !marked.marks.isEmpty else { return nil }
             return (line, marked, Set(marked.marks.map { SearchText.fold(String(line.text[$0])) }).count)
