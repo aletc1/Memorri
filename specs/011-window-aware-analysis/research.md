@@ -2,7 +2,7 @@
 
 ## R1. Visible windows
 
-- **Decision**: from `capture_windows` (stack order, frame in picture pixels), each window's visible region is its frame minus the union of the frames of the windows in front, as a list of rectangles. A recognised line belongs to the window whose visible region holds its centre; lines in no window are the **desktop** (menu bar, dock, wallpaper text). Windows whose visible area is under 2% of the picture or that hold fewer than 3 lines are dropped. Windows of the app itself (Memorri) and of the system UI (Dock, Window Server, Control Centre) are dropped by bundle id. A capture with no stack, or one window, is one window covering the picture (FR-010).
+- **Decision**: from `capture_windows` (stack order, frame in picture pixels), each window's visible region is its frame minus the union of the frames of the windows in front, as a list of rectangles. A recognised line belongs to the window whose visible region holds its centre; lines in no window are the **desktop** (menu bar, dock, wallpaper text). Windows whose visible area is under 2% of the picture or that hold fewer than 3 lines are dropped. Windows of the app itself (Memorri) and of the system UI (Dock, Window Server, Control Centre) are dropped by bundle id. A capture with no stack, or one window, is one window covering the picture (FR-010). System-UI windows (and menus or dialogs drawn over a window) are dropped **after** the visibility step: they still hide what lies under them, and their own lines are not given to any window, so a menu over a calendar never adds text to it.
 - **Rationale**: FR-001; rectangles are exact for the window model the system gives; the centre rule matches the stop-gap's `visibleLines`, whose tests carry over.
 - **Alternatives**: masks per pixel (no gain over rectangles); asking the model to find windows (costly, imprecise).
 
@@ -19,7 +19,7 @@
 
 ## R4. Reference clock
 
-- **Decision**: clock texts are lines that parse as a date with a time or as a time next to a weekday or date (`Jue 1 oct 20:31`, `Thu 10/1/2026 11:01 AM`, `20:31` under `01/10/2026`). Sources in order: inside the window's own surroundings (a remote-desktop window's taskbar strip: the bottom or top 6% of a window marked `remote` by the windows call), then the desktop's menu bar (desktop lines in the top 3% of the picture), then the capture time. A clock without a date takes the capture's date in its own time; a clock more than 24 h from the capture time is ignored and the dates that depend on the reference get `reference-assumed` (FR-005, clarification 2). The time zone stays the context's (or the Mac's); the clock gives the reference instant.
+- **Decision**: clock texts are lines that parse as a date with a time or as a time next to a weekday or date (`Jue 1 oct 20:31`, `Thu 10/1/2026 11:01 AM`, `20:31` under `01/10/2026`). Sources in order: inside the window's own surroundings (a remote-desktop window's taskbar strip: the bottom or top 6% of a window marked `remote` by the windows call), then the desktop's menu bar (desktop lines in the top 3% of the picture), then the capture time. For a capture with no stack (one `all` window) the top 3% strip is searched too, and when no clock is found the capture time is used **without** a flag, as before this feature (FR-005, FR-010); the flag applies only when windows are known. A clock without a date takes the capture's date in its own time; a clock more than 24 h from the capture time is ignored and the dates that depend on the reference get `reference-assumed` (FR-005, clarification 2). The time zone stays the context's (or the Mac's); the clock gives the reference instant.
 - **Rationale**: Story 3; the menu bar is always present on a normal capture and is the cheapest exact reference.
 
 ## R5. Month evidence and conflicts
@@ -37,7 +37,7 @@
 
 ## R8. Library re-read (FR-011a)
 
-- **Decision**: once, after the update (setting `library-reread-version` below `windows-v1`), every capture image with a stored picture and an analysis gets a job of kind `reread` with `priority = 1`; the queue orders by `priority, created_at`. A `reread` reuses the stored OCR lines, makes the windows call and the extractions afresh, saves, reconciles and writes evidence like `analyse`. Pictures whose files are gone are skipped (the job ends `finished` with nothing changed). Locks, approvals and dismissals live on items and are not touched by reanalysis (spec 005/006). The jobs persist, so a restart resumes.
+- **Decision**: once, after the update (integer setting `library-reread-version` below the current integer version, 1 for `windows-v1`), every capture image with a stored picture and an analysis gets a job of kind `reread` with `priority = 1`; the queue orders by `priority, created_at`. A `reread` reuses the stored OCR lines, makes the windows call and the extractions afresh, saves, reconciles and writes evidence like `analyse`. Pictures whose files are gone are skipped (the job ends `finished` with nothing changed). Locks, approvals and dismissals live on items and are not touched by reanalysis (spec 005/006). The jobs persist, so a restart resumes.
 - **Alternatives**: `not_before` in the future (waits even when idle); spec 008 (not built; the user asked for it now).
 
 ## R9. Reuse and cost

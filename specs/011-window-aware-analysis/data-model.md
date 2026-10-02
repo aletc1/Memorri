@@ -58,7 +58,7 @@ New `FieldProvenance.reason` values, all with origin `inferred` (so ReviewRules 
 
 ## Settings
 
-`library-reread-version`: the windows prompt version the library was last queued for; the one-off enqueue runs when it is lower than the current one.
+`library-reread-version`: an integer (1 for `windows-v1`) naming the re-read the library was last queued for; the one-off enqueue runs when it is lower than the current integer, which is raised whenever a prompt change should re-read the library.
 
 ## evidence (geometry 3)
 
