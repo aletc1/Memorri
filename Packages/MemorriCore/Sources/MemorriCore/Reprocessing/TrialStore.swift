@@ -238,6 +238,11 @@ public struct TrialStore: Sendable {
 
     // MARK: Out of date
 
+    /// How many captures a trial would read: those with an analysis (the pictures that are gone are counted as skipped).
+    public func eligibleCount() throws -> Int {
+        try database.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM image_analysis") ?? 0 }
+    }
+
     /// The window's application and title of a proposal finding, for the sighting it becomes.
     func window(_ db: Database, findingID: String) throws -> (app: String?, title: String?) {
         let row = try Row.fetchOne(db, sql: "SELECT window_app, window_title FROM trial_findings WHERE id = ?", arguments: [findingID])

@@ -42,6 +42,8 @@ final class AppEnvironment {
     /// The saved cut-outs that prove items, and the writer that makes them; `nil` when the storage is unavailable.
     let evidenceStore: EvidenceStore?
     let evidenceWriter: EvidenceWriter?
+    /// Reprocessing trials, their comparison and apply (spec 008).
+    let reprocessing: ReprocessServices?
     /// Search over items and captures (spec 007); `nil` when the storage is unavailable.
     let search: SearchService?
     let searchIndex: SearchIndex?
@@ -85,8 +87,14 @@ final class AppEnvironment {
                 service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                 results: AnalysisResultStore(database: database), jobs: jobs, settings: ollamaSettings, time: SystemTimeSource(),
                 contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler, evidence: evidence)
+            let trialStore = TrialStore(database: database, paths: context.paths)
+            let trialRunner = TrialJobRunner(service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
+                                             store: trialStore, settings: ollamaSettings, time: SystemTimeSource(), windows: CaptureStore(database: database))
+            reprocessing = ReprocessServices(store: trialStore, comparison: TrialComparison(database: database, reconciler: reconciler, store: trialStore),
+                                             applier: TrialApplier(database: database, reconciler: reconciler, store: trialStore, evidence: evidence))
             let runner = CompositeJobRunner(runners: [
                 "test": testRunner,
+                TrialStore.jobKind: trialRunner,
                 ImageAnalysisJobRunner.analyseKind: analyseRunner,
                 ImageAnalysisJobRunner.forceKind: analyseRunner,
                 ImageAnalysisJobRunner.rereadKind: analyseRunner,
@@ -111,6 +119,7 @@ final class AppEnvironment {
             operationLog = nil
             evidenceStore = nil
             evidenceWriter = nil
+            reprocessing = nil
             search = nil
             searchIndex = nil
         }
@@ -226,6 +235,38 @@ final class AppEnvironment {
     /// Adds every stored picture that was never analysed to the queue, oldest first. Returns how many.
     @discardableResult
     func analyseStoredCaptures() async -> Int { await analysis?.enqueueBacklog() ?? 0 }
+
+    /// The installed models that can read pictures, for the trial's model picker; nil when the server cannot be reached.
+    func visionModels() async -> [String]? {
+        guard let models = try? await ollama.client().models() else { return nil }
+        return models.filter(\.readsImages).map(\.name).sorted()
+    }
+
+    /// Starts a trial over every stored capture with the model; says why when it cannot (spec 008, FR-014).
+    func startTrial(model: String) async -> Result<TrialRecord, ReprocessError> {
+        guard let reprocessing else { return .failure(ReprocessError("The capture storage is not available.")) }
+        guard let installed = await visionModels() else { return .failure(ReprocessError("The Ollama server cannot be reached.")) }
+        guard installed.contains(model) else { return .failure(ReprocessError("\(model) is not installed or cannot read pictures.")) }
+        do {
+            let trial = try reprocessing.store.create(model: model, promptVersion: ExtractionPrompts.summary, think: ollamaSettings.think.rawValue, now: Date())
+            await analysis?.jobsAdded()
+            return .success(trial)
+        } catch TrialError.nothingToRead {
+            return .failure(ReprocessError("There are no analysed captures to read again."))
+        } catch {
+            return .failure(ReprocessError("The trial could not be started."))
+        }
+    }
+
+    func resumeTrial(_ id: String) async {
+        try? reprocessing?.store.resume(id, now: Date())
+        await analysis?.jobsAdded()
+    }
+
+    /// How many analysed captures were read with another model or prompt than the current ones.
+    func outOfDateCaptures() -> Int {
+        (try? reprocessing?.store.outOfDateCount(model: ollamaSettings.model, currentPromptVersions: ExtractionPrompts.currentVersions)) ?? 0
+    }
 
     /// The user picks another context for a picture: its findings are matched again among the items of that context.
     func changeContext(imageID: String, to contextID: String?) async {
@@ -351,4 +392,16 @@ final class AppEnvironment {
         case .onboarding: AnyView(OnboardingView(environment: self))
         }
     }
+}
+
+/// What the Reprocess section needs of the core (spec 008).
+struct ReprocessServices {
+    let store: TrialStore
+    let comparison: TrialComparison
+    let applier: TrialApplier
+}
+
+struct ReprocessError: Error {
+    let message: String
+    init(_ message: String) { self.message = message }
 }

@@ -72,14 +72,33 @@ public struct TrialComparison: Sendable {
         self.database = database; self.reconciler = reconciler; self.store = store
     }
 
+    /// How many captures are compared at once (reads run side by side; the plan is made without writing).
+    private static let width = 8
+
     public func report(trialID: String) async throws -> TrialReport {
-        var all: [TrialDifference] = []
-        for imageID in try store.readImageIDs(trialID: trialID) {
-            let proposals = try store.findings(trialID: trialID, imageID: imageID)
-            let plan = try await reconciler.plan(imageID: imageID, findings: proposals)
-            all += try await database.pool.read { db in try Self.classify(db, imageID: imageID, proposals: proposals, plan: plan) }
+        let images = try store.readImageIDs(trialID: trialID)
+        var results = [[TrialDifference]](repeating: [], count: images.count)
+        try await withThrowingTaskGroup(of: (Int, [TrialDifference]).self) { group in
+            var next = 0
+            func add(_ group: inout ThrowingTaskGroup<(Int, [TrialDifference]), Error>) {
+                guard next < images.count else { return }
+                let index = next, imageID = images[next]
+                next += 1
+                group.addTask { (index, try await self.differences(trialID: trialID, imageID: imageID)) }
+            }
+            for _ in 0..<Self.width { add(&group) }
+            while let (index, found) = try await group.next() {
+                results[index] = found
+                add(&group)
+            }
         }
-        return TrialReport(trialID: trialID, differences: all)
+        return TrialReport(trialID: trialID, differences: results.flatMap { $0 })
+    }
+
+    func differences(trialID: String, imageID: String) async throws -> [TrialDifference] {
+        let proposals = try store.findings(trialID: trialID, imageID: imageID)
+        let plan = try await reconciler.plan(imageID: imageID, findings: proposals)
+        return try await database.pool.read { db in try Self.classify(db, imageID: imageID, proposals: proposals, plan: plan) }
     }
 
     static func classify(_ db: Database, imageID: String, proposals: [Finding], plan: ReconcilePlan) throws -> [TrialDifference] {
