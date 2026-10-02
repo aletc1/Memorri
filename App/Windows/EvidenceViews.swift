@@ -29,6 +29,10 @@ struct EvidenceCardView: View {
                     Label("Source of the current title", systemImage: "checkmark.seal").font(.caption).foregroundStyle(.green)
                 }
                 Text(when)
+                if let window = ItemListModel.windowText(entry) {
+                    Label(window, systemImage: "macwindow").font(.callout).foregroundStyle(.secondary)
+                        .accessibilityLabel("Window: \(window)")
+                }
                 Text(details).font(.callout).foregroundStyle(.secondary)
                 if let sighting = entry.sighting {
                     let why = ItemListModel.whyText(decisionJSON: sighting.decisionJSON)

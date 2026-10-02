@@ -120,4 +120,34 @@ import Testing
         let without = try service.preview(olderThanDays: nil).bytes
         #expect(withEvidence - without == evidenceBytes && evidenceBytes > 0)
     }
+
+    // MARK: window names
+
+    @Test func theWindowNameStaysWithTheItemAfterItsCaptureIsGone() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        let frame = PixelBox(x: 0, y: 0, width: 700, height: 400)
+        let image = try await f.see([f.windowed(f.fixture.finding("Daily standup", cited: [1]), key: "w0")],
+                                    windows: [f.window("w0", app: "Calendar", title: "Week", frame: frame)])
+        await f.writer().write(imageID: image)
+        let item = try #require(try f.fixture.read { try String.fetchOne($0, sql: "SELECT id FROM items") })
+        try f.fixture.write { try $0.execute(sql: "UPDATE items SET user_touched = 1 WHERE id = ?", arguments: [item]) }
+        let sighting = try f.fixture.read { try Row.fetchOne($0, sql: "SELECT window_app, window_title FROM sightings") }
+        #expect(sighting?["window_app"] as String? == "Calendar" && sighting?["window_title"] as String? == "Week")
+        _ = try cleanup(f, now: Date(timeIntervalSince1970: 1_800_000_000 + 100 * 86_400)).delete(olderThanDays: 30)
+        let record = try #require(try f.store().evidence(itemID: item).first)
+        #expect(record.windowApp == "Calendar" && record.windowTitle == "Week")
+        let readings = try f.fixture.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM window_readings") ?? -1 }
+        #expect(readings == 0)             // the capture's own readings went with it
+    }
+
+    @Test func deleteEverythingRemovesTheEvidenceRowsWithTheirWindowNames() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        let frame = PixelBox(x: 0, y: 0, width: 700, height: 400)
+        let image = try await f.see([f.windowed(f.fixture.finding("Daily standup", cited: [1]), key: "w0")],
+                                    windows: [f.window("w0", app: "Calendar", title: "Week", frame: frame)])
+        await f.writer().write(imageID: image)
+        _ = try cleanup(f, now: clock).delete(olderThanDays: nil)
+        let names = try f.fixture.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM evidence WHERE window_app IS NOT NULL OR window_title IS NOT NULL") ?? -1 }
+        #expect(names == 0)
+    }
 }

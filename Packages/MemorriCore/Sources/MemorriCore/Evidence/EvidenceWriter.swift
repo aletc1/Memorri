@@ -26,6 +26,8 @@ public struct EvidenceWriter: ImageEvidenceWriting {
 
     private struct Target {
         let sightingID: String, itemID: String, imageID: String, title: String, capturedAt: Date, cited: [Int], displayName: String?
+        /// The window the finding came from, when the capture was read by window.
+        let window: PixelBox?, windowApp: String?, windowTitle: String?
     }
 
     /// Replaces the picture's evidence with one entry per sighting it has now. Returns how many cut-outs were saved.
@@ -111,13 +113,18 @@ public struct EvidenceWriter: ImageEvidenceWriting {
     private func targets(where clause: String, arguments: StatementArguments) throws -> [Target] {
         try database.pool.read { db in
             try Row.fetchAll(db, sql: """
-                SELECT s.id, s.item_id, s.image_id, s.title, s.captured_at, s.cited_lines_json, i.display_name
+                SELECT s.id, s.item_id, s.image_id, s.title, s.captured_at, s.cited_lines_json, i.display_name, s.window_app, s.window_title,
+                       w.frame_json AS window_frame
                 FROM sightings s LEFT JOIN capture_images i ON i.id = s.image_id
+                LEFT JOIN findings f ON f.id = s.finding_id
+                LEFT JOIN window_readings w ON w.image_id = s.image_id AND w.window_key = f.window_key
                 WHERE \(clause) ORDER BY s.captured_at DESC, s.id
                 """, arguments: arguments).map { row in
                 Target(sightingID: row["id"], itemID: row["item_id"], imageID: row["image_id"], title: row["title"], capturedAt: row["captured_at"],
                        cited: (try? JSONDecoder().decode([Int].self, from: Data((row["cited_lines_json"] as String).utf8))) ?? [],
-                       displayName: row["display_name"])
+                       displayName: row["display_name"],
+                       window: (row["window_frame"] as String?).flatMap { try? JSONDecoder().decode(PixelBox.self, from: Data($0.utf8)) },
+                       windowApp: row["window_app"], windowTitle: row["window_title"])
             }
         }
     }
@@ -135,7 +142,9 @@ public struct EvidenceWriter: ImageEvidenceWriting {
             let id = UUID().uuidString
             guard let picture else { rows.append((id, target, nil, nil, "picture-missing", 0)); skipped += 1; continue }
             let boxes = target.cited.compactMap { lines[$0] }
-            guard let region = EvidenceGeometry.region(lines: boxes, pictureWidth: picture.width, pictureHeight: picture.height) else {
+            let region = target.window.flatMap { EvidenceGeometry.region(lines: boxes, window: $0, pictureWidth: picture.width, pictureHeight: picture.height) }
+                ?? EvidenceGeometry.region(lines: boxes, pictureWidth: picture.width, pictureHeight: picture.height)
+            guard !boxes.isEmpty, let region else {
                 rows.append((id, target, nil, nil, "no-lines", 0)); skipped += 1; continue
             }
             do {
@@ -156,10 +165,11 @@ public struct EvidenceWriter: ImageEvidenceWriting {
                     let cited = (try? JSONEncoder().encode(row.target.cited)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
                     try db.execute(sql: """
                         INSERT INTO evidence (id, item_id, sighting_id, image_id, captured_at, display_name, title, cited_lines_json, region_json,
-                                              file_path, reason, bytes, created_at, geometry)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                              file_path, reason, bytes, created_at, geometry, window_app, window_title)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, arguments: [row.id, row.target.itemID, row.target.sightingID, imageID, row.target.capturedAt, row.target.displayName,
-                                         row.target.title, cited, regionJSON, row.path, row.reason, row.bytes, date, EvidenceGeometry.version])
+                                         row.target.title, cited, regionJSON, row.path, row.reason, row.bytes, date, EvidenceGeometry.version,
+                                         row.target.windowApp, row.target.windowTitle])
                 }
             }
         } catch {

@@ -148,10 +148,16 @@ extension Reconciler {
         let sightingID = UUID().uuidString
         let decision = SightingDecision(rule: step.rule, scores: step.scores, candidate: step.candidate, kind: finding.kind.rawValue, timezone: finding.timezone)
         let cited = (try? JSONEncoder().encode(finding.citedLines)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
+        // The window's application and title stay with the sighting, so they outlive the capture and its window readings.
+        let window = try finding.windowKey.flatMap {
+            try Row.fetchOne(db, sql: "SELECT app_name, title FROM window_readings WHERE image_id = ? AND window_key = ?", arguments: [imageID, $0])
+        }
         try db.execute(sql: """
-            INSERT INTO sightings (id, item_id, image_id, finding_id, captured_at, title, cited_lines_json, confidence, decision_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, arguments: [sightingID, itemID, imageID, finding.id, capturedAt, finding.title, cited, finding.confidence, decision.json(), date])
+            INSERT INTO sightings (id, item_id, image_id, finding_id, captured_at, title, cited_lines_json, confidence, decision_json, created_at,
+                                   window_app, window_title)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, arguments: [sightingID, itemID, imageID, finding.id, capturedAt, finding.title, cited, finding.confidence, decision.json(), date,
+                             window?["app_name"] as String?, window?["title"] as String?])
 
         func source(_ key: String) -> ObservationSource { finding.provenance[key]?.origin == .inferred ? .inferred : .read }
         var values: [(ItemField, JSONValue, ObservationSource)] = [(.title, .string(finding.title), .read), (.allDay, .bool(finding.allDay), .read)]

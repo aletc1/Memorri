@@ -89,4 +89,18 @@ import Testing
         #expect(all.count == 1)
         #expect(try sightings(fixture, item: all[0].id) == 2)
     }
+
+    @Test func aSightingCopiesTheApplicationAndTitleOfItsFindingsWindow() async throws {
+        let fixture = try ReconcileFixture(); defer { fixture.cleanUp() }
+        let reading = WindowReadingRecord(imageID: fixture.base.imageID, windowKey: "w1", appName: "Calendar", title: "Work week", frame: PixelBox(x: 0, y: 0, width: 10, height: 10),
+                                          visible: [], visibleShare: 1, relevant: true, kind: .calendarWeek, confidence: 0.9, remote: false, runID: nil,
+                                          promptVersion: "windows-v1", createdAt: Date(timeIntervalSince1970: 1_791_950_000))
+        try fixture.save([finding(fixture, "Sprint review", window: "w1"), finding(fixture, "Dentist", window: nil)])
+        try WindowReadingStore(database: fixture.database).save(imageID: fixture.base.imageID, readings: [reading])      // saving an analysis replaces them
+        _ = await reconciler(fixture, judge: FakeMeaningJudge(defaultAnswer: 0)).reconcile(imageID: fixture.base.imageID)
+        let rows = try fixture.read { try Row.fetchAll($0, sql: "SELECT title, window_app, window_title FROM sightings ORDER BY title") }
+        #expect(rows.count == 2)
+        #expect(rows[0]["title"] as String == "Dentist" && rows[0]["window_app"] as String? == nil && rows[0]["window_title"] as String? == nil)
+        #expect(rows[1]["window_app"] as String? == "Calendar" && rows[1]["window_title"] as String? == "Work week")
+    }
 }

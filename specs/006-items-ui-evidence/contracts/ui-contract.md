@@ -36,3 +36,4 @@ Adds `Evidence: <size>` under the pictures figure. The `Delete everything` confi
 - The window's `Kind` control is `All · Appointments · Tasks · Reminders`; `Tasks` includes deadlines.
 - Clicking a cut-out opens the whole capture (the same sheet as `Show whole capture`); a cut-out shows the context around the cited lines, not only the lines.
 - The whole-capture sheet takes 80% of the screen and can be zoomed (buttons `-`, `Fit`, `100%`, `+`, ⌘- and ⌘=, or pinch) and scrolled.
+- Spec 011: when a capture was read window by window, every evidence card shows the window it came from under the date and display (`<app> — <title>`, or just `<app>`); a capture read as a whole shows no window line. A cut-out of such a finding is the window (or a 1400 × 800 part of a larger one) around the cited lines, not a share of the picture; the window name is kept with the item after the capture is deleted.

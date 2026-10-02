@@ -102,4 +102,24 @@ import Testing
         let versions = try f.evidenceRows().map { $0["geometry"] as Int }.sorted()
         #expect(versions == [1, EvidenceGeometry.version, EvidenceGeometry.version])
     }
+
+    @Test func aVersionTwoCutOutOfAFindingWithAWindowIsMadeAgainAsTheWindowAndKeptWhenThePictureIsGone() async throws {
+        let f = try EvidenceFixture(); defer { f.cleanUp() }
+        let frame = PixelBox(x: 50, y: 40, width: 700, height: 400)
+        let image = try await f.see([f.windowed(f.fixture.finding("Daily standup", cited: [1]), key: "w0")],
+                                    windows: [f.window("w0", app: "Calendar", title: "Week", frame: frame)])
+        await f.writer().write(imageID: image)
+        try f.fixture.write { try $0.execute(sql: "UPDATE evidence SET geometry = 2, region_json = '{\"x\":0,\"y\":10,\"width\":600,\"height\":210}'") }
+        // the picture is gone: the version 2 cut-out stays as it is
+        try f.fixture.base.captures.markMissing(imageID: image)
+        #expect(await f.writer().backfill(itemID: try itemID(f)) == 0)
+        #expect(try #require(try f.evidenceRows().first)["geometry"] as Int == 2)
+        // the picture is stored again: the cut-out is made again, as the window
+        try f.fixture.write { try $0.execute(sql: "UPDATE capture_images SET missing = 0") }
+        #expect(await f.writer().backfill(itemID: try itemID(f)) == 1)
+        let row = try #require(try f.evidenceRows().first)
+        #expect(row["geometry"] as Int == EvidenceGeometry.version)
+        #expect(try JSONDecoder().decode(PixelRegion.self, from: Data((row["region_json"] as String).utf8)) == PixelRegion(x: 50, y: 40, width: 700, height: 400))
+        #expect(row["window_app"] as String? == "Calendar")
+    }
 }

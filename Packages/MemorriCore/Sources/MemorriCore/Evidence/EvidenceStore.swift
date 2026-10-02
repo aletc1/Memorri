@@ -19,6 +19,9 @@ public struct EvidenceRecord: Sendable, Equatable, Identifiable {
     public let filePath: String?
     /// `no-lines`, `picture-missing` or `failed` when there is no cut-out.
     public let reason: String?
+    /// The window the finding came from (application and title), when the capture was read by window.
+    public var windowApp: String? = nil
+    public var windowTitle: String? = nil
 }
 
 /// Reads evidence rows, their images and the whole capture behind them.
@@ -67,6 +70,7 @@ public struct EvidenceStore: Sendable {
         let region = (row["region_json"] as String?).flatMap { try? decoder.decode(PixelRegion?.self, from: Data($0.utf8)) } ?? nil
         return EvidenceRecord(id: row["id"], itemID: row["item_id"], sightingID: row["sighting_id"], imageID: row["image_id"],
                               capturedAt: row["captured_at"], displayName: row["display_name"], title: row["title"], citedLines: cited,
-                              region: region, filePath: row["file_path"], reason: row["reason"])
+                              region: region, filePath: row["file_path"], reason: row["reason"],
+                              windowApp: row["window_app"], windowTitle: row["window_title"])
     }
 }

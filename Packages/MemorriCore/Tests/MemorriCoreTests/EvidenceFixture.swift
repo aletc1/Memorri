@@ -52,12 +52,28 @@ final class EvidenceFixture {
 
     /// Stores the read lines and the findings of `imageID` and reconciles it (what the analyse job does before evidence).
     @discardableResult
-    func see(_ findings: [Finding], imageID: String? = nil, lines: [RecognisedLine] = EvidenceFixture.lines) async throws -> String {
+    func see(_ findings: [Finding], imageID: String? = nil, lines: [RecognisedLine] = EvidenceFixture.lines,
+             windows: [WindowReadingRecord] = []) async throws -> String {
         let id = imageID ?? fixture.base.imageID
         try OCRStore(database: database).save(imageID: id, lines: lines, durationMs: 1, recogniser: "test", at: Date(timeIntervalSince1970: 1_791_950_000))
         try fixture.save(findings, imageID: id)
+        // after the analysis, which replaces a picture's window readings with its own (none here)
+        if !windows.isEmpty { try WindowReadingStore(database: database).save(imageID: id, readings: windows) }
         _ = await reconciler().reconcile(imageID: id)
         return id
+    }
+
+    /// A finding that sits in the window `key`.
+    func windowed(_ base: Finding, key: String) -> Finding {
+        Finding(id: base.id, kind: base.kind, title: base.title, allDay: base.allDay, start: base.start, end: base.end, timezone: base.timezone,
+                citedLines: base.citedLines, confidence: base.confidence, provenance: base.provenance, windowKey: key)
+    }
+
+    /// What the windows step stored about a window of `imageID`.
+    func window(_ key: String, app: String?, title: String?, frame: PixelBox, imageID: String? = nil) -> WindowReadingRecord {
+        WindowReadingRecord(imageID: imageID ?? fixture.base.imageID, windowKey: key, appName: app, title: title, frame: frame, visible: [frame],
+                            visibleShare: 1, relevant: true, kind: .calendarWeek, confidence: 0.9, remote: false, runID: nil,
+                            promptVersion: "windows-v1", createdAt: Date(timeIntervalSince1970: 1_791_950_000))
     }
 
     func evidenceRows(imageID: String? = nil) throws -> [Row] {
