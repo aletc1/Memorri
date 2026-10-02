@@ -51,6 +51,8 @@ final class AppEnvironment {
     let sync: SyncServices?
     /// Export, backup, restore and safety copies (spec 010); `nil` when the storage is unavailable.
     let library: LibraryServices?
+    /// The notice of new items and the notification setting (spec 010).
+    let notifications: NotificationServices?
     /// The floating quick-search panel.
     lazy var searchPanel = SearchPanelController(environment: self)
     private static let logger = Logger(subsystem: MemorriCore.subsystem, category: "storage")
@@ -90,11 +92,19 @@ final class AppEnvironment {
             let evidence = EvidenceWriter(paths: context.paths, database: database, pictures: pictures)
             evidenceWriter = evidence
             evidenceStore = EvidenceStore(database: database, paths: context.paths, pictures: pictures)
+            let notificationSettings = NotificationSettings(store: settingsStore)
+            let centre = NotificationCentreAdapter(itemsAreInFront: { await MainActor.run { windows.isFrontmost(.items) } },
+                                                   open: { inbox in Task { @MainActor in
+                                                       state.itemsScopeRequest = AppState.ScopeRequest(scope: inbox ? .inbox : .all)
+                                                       windows.show(.items)
+                                                   } })
+            let notifier = NewItemsNotifier(database: database, enabled: { notificationSettings.enabled }, shower: centre)
+            notifications = NotificationServices(settings: notificationSettings, centre: centre)
             let analyseRunner = ImageAnalysisJobRunner(
                 service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                 results: AnalysisResultStore(database: database), jobs: jobs, settings: ollamaSettings, time: SystemTimeSource(),
                 contexts: ContextStore(database: database), windows: CaptureStore(database: database), reconciler: reconciler, evidence: evidence,
-                cancellation: CancellationDetector(database: database))
+                cancellation: CancellationDetector(database: database), notifier: notifier)
             let trialStore = TrialStore(database: database, paths: context.paths)
             let trialRunner = TrialJobRunner(service: ollama, pipeline: pipeline, pictures: pictures, fullPictures: pictures, ocr: OCRStore(database: database),
                                              store: trialStore, settings: ollamaSettings, time: SystemTimeSource(), windows: CaptureStore(database: database),
@@ -140,6 +150,7 @@ final class AppEnvironment {
             reprocessing = nil
             sync = nil
             library = nil
+            notifications = nil
             search = nil
             searchIndex = nil
         }
@@ -443,4 +454,10 @@ struct ReprocessServices {
 struct ReprocessError: Error {
     let message: String
     init(_ message: String) { self.message = message }
+}
+
+/// The notice of new items: its on/off setting and the adapter that shows it through macOS (spec 010).
+struct NotificationServices: Sendable {
+    let settings: NotificationSettings
+    let centre: NotificationCentreAdapter
 }

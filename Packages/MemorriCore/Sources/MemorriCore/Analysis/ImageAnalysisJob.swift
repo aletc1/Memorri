@@ -27,12 +27,13 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
     private let reconciler: (any ImageReconciling)?
     private let evidence: (any ImageEvidenceWriting)?
     private let cancellation: (any CancellationRecording)?
+    private let notifier: (any NewItemsNoting)?
 
     public init(service: OllamaService, pipeline: AnalysisPipeline, pictures: any AnalysisPictureProviding,
                 fullPictures: any FullPictureProviding, ocr: OCRStore, results: AnalysisResultStore, jobs: any AnalysisJobStoring,
                 settings: OllamaSettings, time: any TimeSource, recogniserName: String = VisionTextRecogniser.descriptor,
                 contexts: ContextStore? = nil, windows: (any WindowProviding)? = nil, reconciler: (any ImageReconciling)? = nil, evidence: (any ImageEvidenceWriting)? = nil,
-                cancellation: (any CancellationRecording)? = nil) {
+                cancellation: (any CancellationRecording)? = nil, notifier: (any NewItemsNoting)? = nil) {
         self.service = service
         self.pipeline = pipeline
         self.pictures = pictures
@@ -48,6 +49,7 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         self.reconciler = reconciler
         self.evidence = evidence
         self.cancellation = cancellation
+        self.notifier = notifier
     }
 
     private static let gone = JobOutcome.permanent("picture no longer stored")
@@ -162,8 +164,13 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         // reanalysis or the library re-read only drops suspicions its new sightings contradict. A failed reconcile says nothing about what is shown.
         if let summary, summary.error == nil, let cancellation {
             if forced || reread { try? cancellation.clearContradicted(imageID: imageID) }
-            else { _ = try? cancellation.record(imageID: imageID, coverage: analysis.coverage) }
+            else {
+                let flagged = (try? cancellation.record(imageID: imageID, coverage: analysis.coverage)) ?? []
+                if !flagged.isEmpty { await notifier?.itemsFlagged(flagged) }
+            }
         }
+        // New items are announced only for a first analysis: a reanalysis, the library re-read and trials replace what is known, they do not find it.
+        if let summary, summary.error == nil, !forced, !reread, !summary.createdItemIDs.isEmpty { await notifier?.itemsCreated(summary.createdItemIDs) }
         // The proof of each sighting is cut out of the full picture; it never fails the job either (ADR 0021).
         _ = await evidence?.write(imageID: imageID)
         return .success

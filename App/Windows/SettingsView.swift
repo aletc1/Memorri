@@ -84,6 +84,8 @@ private struct GeneralSettings: View {
                 Toggle("Flash the menu-bar icon", isOn: $flashIcon)
                 Toggle("Play a sound", isOn: $playSound)
             }
+
+            NotificationsRow(environment: environment)
         }
         .padding(24)
         .onAppear {
@@ -92,5 +94,40 @@ private struct GeneralSettings: View {
         }
         .onChange(of: flashIcon) { _, value in environment.feedbackSettings.flashIcon = value }
         .onChange(of: playSound) { _, value in environment.feedbackSettings.playSound = value }
+    }
+}
+
+/// `Notify me when new items arrive` with the state of macOS's permission (spec 010 FR-013).
+private struct NotificationsRow: View {
+    let environment: AppEnvironment
+    @State private var enabled = true
+    @State private var permission: SyncAccess = .notDetermined
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Notifications").font(.headline)
+            Toggle("Notify me when new items arrive", isOn: Binding(get: { enabled }, set: { value in
+                enabled = value
+                environment.notifications?.settings.enabled = value
+                if value, permission == .notDetermined { Task { _ = await environment.notifications?.centre.authorised(); await load() } }
+            }))
+            .help("One quiet notice such as 3 new items, 1 needs review, after a burst of captures. None while the Items window is in front")
+            if enabled, permission == .denied {
+                HStack {
+                    Text("macOS does not allow notifications from Memorri.").font(.callout).foregroundStyle(.orange)
+                    Button("Open System Settings") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") { NSWorkspace.shared.open(url) }
+                    }
+                }
+            } else if enabled, permission == .notDetermined {
+                Text("macOS will ask the first time there is something to announce.").font(.callout).foregroundStyle(.secondary)
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        enabled = environment.notifications?.settings.enabled ?? true
+        permission = await environment.notifications?.centre.permission() ?? .notDetermined
     }
 }

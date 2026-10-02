@@ -57,6 +57,9 @@ final class WindowCoordinator {
         windows[id]?.isVisible ?? false
     }
 
+    /// Whether the window is the one the user is looking at.
+    func isFrontmost(_ id: WindowID) -> Bool { NSApp.isActive && windows[id]?.isKeyWindow == true }
+
     var anyWindowVisible: Bool {
         windows.values.contains { $0.isVisible }
     }
