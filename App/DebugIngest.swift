@@ -21,6 +21,9 @@ enum DebugIngest {
         return arguments.indices.filter { arguments[$0] == flag && $0 + 1 < arguments.count }.map { arguments[$0 + 1] }
     }
 
+    /// `--open-search <text>`: opens the search panel with that text once the app has started, so the panel can be looked at without typing.
+    static func searchTextIfRequested() -> String? { value(after: "--open-search") }
+
     static func runIfRequested(storage: StorageContext?, analysis: AnalysisQueue?, settingsStore: any SettingsStore) async {
         var requests: [(picture: String, windows: String?)] = []
         if let picture = value(after: "--ingest-picture") { requests.append((picture, value(after: "--ingest-windows"))) }

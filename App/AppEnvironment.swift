@@ -151,6 +151,7 @@ final class AppEnvironment {
             }
             #if DEBUG
             await DebugIngest.runIfRequested(storage: storage, analysis: analysis, settingsStore: settingsStore)
+            if let text = DebugIngest.searchTextIfRequested() { await MainActor.run { [weak self] in self?.searchPanel.show(prefill: text) } }
             #endif
         }
         followAnalysisProgress()

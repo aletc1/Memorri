@@ -26,11 +26,14 @@ final class SearchPanelController {
 
     func toggle() { isVisible ? close() : show() }
 
-    func show() {
+    func show(prefill: String? = nil) {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         if !panel.isVisible { position(panel) }
         model.open()
+        if let prefill { model.text = prefill }
+        // An agent app is not active when the shortcut is pressed in another app; without this the keys would go on to that app.
+        NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         panel.orderFrontRegardless()
     }

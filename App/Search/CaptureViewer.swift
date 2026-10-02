@@ -108,9 +108,12 @@ struct CaptureViewerView: View {
                         }
                         .frame(minWidth: 360)
                     }
-                    List(model.textLines, id: \.number) { line in
-                        Text(line.text.attributed).font(.callout).textSelection(.enabled)
-                            .accessibilityLabel(line.text.marks.isEmpty ? line.text.text : "Matching line: \(line.text.text)")
+                    ScrollViewReader { proxy in
+                        List(model.textLines, id: \.number) { line in
+                            Text(line.text.attributed).font(.callout).textSelection(.enabled)
+                                .accessibilityLabel(line.text.marks.isEmpty ? line.text.text : "Matching line: \(line.text.text)")
+                        }
+                        .onAppear { if let first = model.matchingNumbers.first { proxy.scrollTo(first, anchor: .center) } }
                     }
                     .frame(minWidth: 240)
                 }
