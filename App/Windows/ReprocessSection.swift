@@ -117,6 +117,10 @@ private struct HistoryRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(entry.createdAt.formatted(date: .abbreviated, time: .shortened)) · applied \(entry.applied) from \(entry.model)")
+                if let started = entry.trialStarted {
+                    Text("Trial started \(started.formatted(date: .abbreviated, time: .shortened)), \(entry.captures) \(entry.captures == 1 ? "capture" : "captures") read")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Text(entry.undone ? "Undone" : "\(entry.items) \(entry.items == 1 ? "item" : "items") changed").font(.caption).foregroundStyle(.secondary)
                 if let note { Text(note).font(.caption).foregroundStyle(.orange) }
             }
@@ -208,8 +212,16 @@ struct TrialComparisonSheet: View {
                 else if shown.isEmpty { Text("Nothing to show: the trial read what the items already say.").foregroundStyle(.secondary) }
                 ForEach(groups, id: \.imageID) { group in
                     let info = infos[group.imageID]
-                    Text("Capture \(info.map { $0.capturedAt.formatted(date: .abbreviated, time: .shortened) } ?? "")\(info?.displayName.map { " · \($0)" } ?? "")")
-                        .font(.subheadline).bold().padding(.top, 8)
+                    HStack {
+                        Text("Capture \(info.map { $0.capturedAt.formatted(date: .abbreviated, time: .shortened) } ?? "")\(info?.displayName.map { " · \($0)" } ?? "")")
+                            .font(.subheadline).bold()
+                        let open = group.rows.filter(\.applicable).map(\.id)
+                        if !open.isEmpty {
+                            Button("Select all") { selection.formUnion(open) }.buttonStyle(.link)
+                                .help("Tick every difference of this capture that can be applied")
+                        }
+                    }
+                    .padding(.top, 8)
                     ForEach(group.rows) { row in
                         DifferenceRow(difference: row, trial: trial, environment: environment,
                                       checked: Binding(get: { selection.contains(row.id) }, set: { if $0 { selection.insert(row.id) } else { selection.remove(row.id) } }))

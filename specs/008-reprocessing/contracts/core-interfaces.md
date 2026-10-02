@@ -1,19 +1,20 @@
 # Core interfaces: reprocessing (spec 008)
 
 ```swift
-public struct TrialStore                 // trials, trial_images, trial_findings, differences
-  func create(model:, promptVersion:, think:) throws -> TrialRecord      // queues one job per stored capture with a kept picture (priority 1)
-  func cancel(_ id), resume(_ id), delete(_ id)
-  func all() -> [TrialRecord]; func progress(_ id) -> TrialProgress; func observe() -> AsyncStream<[TrialRecord]>
-  func outOfDateCount(model:, promptVersions:) -> Int                    // FR-013
-public struct TrialJobRunner: JobRunning                                  // kind "trial"; read, store proposals, stop
-public enum TrialComparison
-  static func compare(trial:, database:, reconciler:) async throws -> TrialReport   // totals + [TrialDifference]; dry run
-  static func compare(_ a: trial, with b: trial, ...) async throws -> TrialReport
-public struct TrialReport { totals: TrialTotals; differences: [TrialDifference] }
-public struct TrialDifference { id, kind(.new/.changed/.notFound), imageID, itemID?, fields: [FieldChange], protected: ProtectedReason?, state }
+public struct TrialStore                 // trials, trial_images, trial_findings
+  func create(model:, promptVersion:, think:, now:) throws -> TrialRecord  // a trial job per kept capture (priority 1); the others recorded skipped
+  func cancel(_ id, now:), resume(_ id, now:), delete(_ id)
+  func trial(id:), all(), observe() -> AsyncStream<[TrialRecord]>
+  func readImageIDs(trialID:), findings(trialID:imageID:), state(trialID:imageID:)
+  func saveProposal(...), mark(...)                                         // used by the job
+  func eligibleCount(), outOfDateCount(model:, currentPromptVersions:)      // FR-013
+  func captureInfo(imageIDs:), history() -> [TrialHistoryEntry]             // headings and the audit trail
+public struct TrialJobRunner: AnalysisJobRunning                            // kind "trial": stored OCR, the user's contexts, the trial's model; stops after the pipeline
+public struct TrialComparison
+  func report(trialID:) async throws -> TrialReport                         // totals + [TrialDifference]; dry run of Reconciler.plan(imageID:findings:)
+  func between(_ first: String, _ second: String) throws -> [TrialPairDifference]
 public struct TrialApplier
-  func apply(trial:, differences ids: [String]) async throws -> TrialApplyResult   // one op `apply_trial`; skipped with reasons
-ItemOperations.undo handles OperationKind.applyTrial
+  func apply(trialID:, differenceIDs:) async throws -> TrialApplyResult     // one operation `apply_trial`; skipped with reasons
+ItemOperations.undo handles OperationKind.applyTrial (and makes the cut-outs again through its evidence writer)
+TrialWords                                                                  // the words of the section
 ```
-Pure parts (classification, protection, totals, words) are in `TrialComparison` and `TrialWords` and tested without UI.

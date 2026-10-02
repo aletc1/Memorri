@@ -47,7 +47,7 @@ When a trial finishes (or has partial results), the user opens its comparison. I
 2. **Given** a difference on a field the user edited or locked, **When** shown, **Then** it is marked `You set this` and cannot be applied.
 3. **Given** a dismissed item, **When** a trial finds it again, **Then** it is shown as dismissed and never proposed as new.
 4. **Given** an item the trial did not find, **When** shown, **Then** it is listed as `Not found in this trial`, with its evidence, and is never removed by applying.
-5. **Given** two trials of different models on the same captures, **When** the user compares them, **Then** each difference between the two trials is shown next to the current items.
+5. **Given** two trials of different models on the same captures, **When** the user compares them, **Then** each difference between the two trials is shown, capture by capture.
 
 ---
 
@@ -84,7 +84,7 @@ The Reprocess section of Settings > Analysis says how many stored captures were 
 
 - A trial of a capture produces no findings: the comparison lists the current items of that capture as `Not found in this trial`; nothing is removed.
 - The model fails on some captures (timeout, bad output): the capture is marked failed in the trial with the reason, the rest continue, and failed captures can be retried.
-- A capture analysed again while a trial holds its proposal: the proposal shows as out of date and can be refreshed or discarded.
+- A capture analysed again while a trial holds its proposal: the comparison is always made against the items as they are now, so it stays correct; the proposal itself is not marked.
 - An item changed (edited, merged, split, dismissed) after the trial ran: the difference is checked again at apply time and skipped with a reason if it no longer holds.
 - Many trials pile up: the user can delete a trial; deleting a trial never changes items or the audit trail.
 - A trial on 1,000 stored captures runs for hours: the app stays responsive, the queue order is kept, progress and a cancel button remain available.
@@ -95,17 +95,17 @@ The Reprocess section of Settings > Analysis says how many stored captures were 
 
 ### Functional Requirements
 
-- **FR-001**: The user MUST be able to start a trial over all stored captures whose pictures are kept, with a chosen model and prompt version; the choices default to the current ones.
+- **FR-001**: The user MUST be able to start a trial over all stored captures whose pictures are kept, with a chosen model; the prompt version in force is recorded with the trial. The model defaults to the current one.
 - **FR-002**: A trial MUST never change items, sightings, evidence, approvals or the Inbox; its results are stored apart as proposals labelled with model, prompt version and time.
 - **FR-003**: Trials MUST run in the background behind new captures and other queued work, show progress, be cancelable, and resume after a restart; partial results MUST be kept.
 - **FR-004**: Captures whose picture is gone MUST be skipped and counted as skipped; failures MUST be recorded per capture with a reason and be retryable.
 - **FR-005**: The comparison MUST show totals (created, changed, not found, unchanged, protected, flagged for review) and a list of differences by capture and by item, each with current value, proposed value, evidence and confidence.
 - **FR-006**: Differences on a field the user edited or locked, and on items the user approved or dismissed, MUST be shown as protected and MUST NOT be applicable; a dismissed item MUST NOT be proposed as new.
-- **FR-007**: The user MUST be able to apply one difference, all differences of a capture or of an item, or all that are not protected.
+- **FR-007**: The user MUST be able to apply one difference, all the differences of a capture (a "Select all" on the capture), or all that are not protected.
 - **FR-008**: Applying MUST go through the same reconciliation, Inbox rules and locks as a new capture, MUST be idempotent (no duplicate items or sightings when repeated) and MUST be one undoable operation.
 - **FR-009**: Items the trial did not find MUST be reported as such and MUST NOT be removed or changed by applying.
 - **FR-010**: Differences MUST be checked again when applied; those that no longer hold MUST be skipped with a reason.
-- **FR-011**: Every trial and every apply MUST be written to an audit trail with time, model, prompt version, captures, counts and outcome (including undone); an item's history MUST show the trial that changed it.
+- **FR-011**: Every apply MUST be written to an audit trail with time, the trial's model, prompt version and start time, how many captures it had read, counts and outcome (including undone); the record MUST outlive the trial. An item's history MUST show the apply that changed it. Trials themselves are listed while they exist.
 - **FR-012**: The user MUST be able to compare two trials of the same captures and to delete a trial without affecting items or the audit trail.
 - **FR-013**: The app MUST show how many stored captures were last read with a different model or prompt version and show it next to the control that starts a trial; it MUST NOT queue anything automatically.
 - **FR-014**: Starting a trial MUST check that the model is installed and the server reachable, and say why when it is not.
@@ -115,7 +115,7 @@ The Reprocess section of Settings > Analysis says how many stored captures were 
 
 ### Key Entities
 
-- **Trial**: one run of a model and prompt version over a set of captures: id, model, prompt version, created, state (queued, running, finished, cancelled), counts.
+- **Trial**: one run of a model and prompt version over a set of captures: id, model, prompt version, created, state (running from its creation, finished, cancelled), counts.
 - **Proposal**: what a trial read from one capture (the findings with their cited lines and confidence), kept apart from items.
 - **Difference**: a proposed change against a current item (new item, changed field, not found, protected), with current and proposed values, evidence and status (open, applied, skipped, out of date).
 - **Audit entry**: a record of a trial or an apply: when, model, prompt version, captures, counts, outcome, undone or not.

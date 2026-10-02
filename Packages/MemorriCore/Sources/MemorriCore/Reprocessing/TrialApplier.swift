@@ -143,6 +143,8 @@ public struct TrialApplier: Sendable {
             for id in touched { try ItemStore.recompute(db, itemID: id, at: date) }
             let detail: [String: JSONValue] = [
                 "trial": .string(trialID), "model": .string(trial.model), "promptVersion": .string(trial.promptVersion),
+                // What the audit trail keeps of the trial itself, so it outlives deleting the trial.
+                "trialStarted": .string(ISO8601DateFormatter().string(from: trial.createdAt)), "captures": .int(trial.counts.read),
                 "differences": .array(applied.map(JSONValue.string)), "created": .array(created.map(JSONValue.string)),
                 "sightings": .array(newSightings.map(JSONValue.string)), "removed": .array(removed),
                 "images": .array(jobs.map { .string($0.imageID) }),

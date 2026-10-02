@@ -16,6 +16,9 @@ public struct TrialHistoryEntry: Sendable, Equatable, Identifiable {
     public let promptVersion: String
     public let applied: Int
     public let items: Int
+    /// When the trial was started and how many captures it had read when it was applied; they stay after the trial is deleted.
+    public let trialStarted: Date?
+    public let captures: Int
 }
 
 extension TrialStore {
@@ -36,11 +39,15 @@ extension TrialStore {
     /// The applies of trials, newest first (the audit trail, spec 008 FR-011). Survives deleting the trial.
     public func history() throws -> [TrialHistoryEntry] {
         try database.pool.read { db in
-            try Row.fetchAll(db, sql: "SELECT id FROM reconcile_ops WHERE kind = 'apply_trial' ORDER BY created_at DESC, rowid DESC").compactMap { row in
+            try Row.fetchAll(db, sql: "SELECT id FROM reconcile_ops WHERE kind = 'apply_trial' ORDER BY created_at DESC, rowid DESC").compactMap { row -> TrialHistoryEntry? in
                 guard let op = try OperationLog.fetch(db, id: row["id"]) else { return nil }
+                var captures = 0
+                if case .int(let n)? = op.detail["captures"] { captures = n }
                 return TrialHistoryEntry(id: op.id, createdAt: op.createdAt, undone: op.undoneBy != nil, model: op.detail["model"]?.asString ?? "?",
                                          promptVersion: op.detail["promptVersion"]?.asString ?? "?",
-                                         applied: op.detail["differences"]?.arrayValue?.count ?? 0, items: op.itemIDs.count)
+                                         applied: op.detail["differences"]?.arrayValue?.count ?? 0, items: op.itemIDs.count,
+                                         trialStarted: op.detail["trialStarted"]?.asString.flatMap { ISO8601DateFormatter().date(from: $0) },
+                                         captures: captures)
             }
         }
     }

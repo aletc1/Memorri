@@ -212,5 +212,9 @@ import Testing
         let before = try rig.f.snapshot(), ops = try rig.f.count("reconcile_ops")
         try rig.store.delete(t.id)
         #expect(try rig.f.snapshot() == before && rig.f.count("reconcile_ops") == ops)
+        // The audit trail still says which trial it was: model, prompt, when it started and how many captures it had read.
+        let entry = try #require(try rig.store.history().first)
+        #expect(entry.model == "other" && entry.promptVersion == "p" && entry.captures == 1 && entry.applied == 1)
+        #expect(entry.trialStarted.map { abs($0.timeIntervalSince(clock)) < 1 } == true)
     }
 }
