@@ -10,6 +10,14 @@
 
 **Input**: User description: "Hardening for daily use. (1) Cancellation detection: when a calendar view that was captured earlier showed an item and a later capture of the same calendar range no longer shows it, the item becomes possibly cancelled and goes to the Inbox for review, never removed silently; coverage is the context plus the date range a calendar view showed. (2) Notifications: a local notification when new items arrive and when some need review (for example "3 new items, 1 needs review"), grouped so a burst gives one notice, with a setting to turn it off. (3) Launch at login, a setting. (4) Backup and export: export the items (and optionally the library) to a file the user chooses, and restore from a backup, with nothing sent to any service. (5) Diagnostics: a diagnostics view or export of the app's own log and counts (queue, sync, storage) that never includes captured content or item text." (roadmap 010). Specs 003 to 009 and 011 already ship the queue, items, the Inbox, search, reprocessing and the Calendar and Reminders sync.
 
+## Clarifications
+
+### Session 2026-10-02
+
+- Q: How many later captures of the same calendar dates must leave out a meeting before it is marked `Possibly cancelled`? → A: Two separate later captures (taken at different moments) that cover the meeting's day and time and do not show it; a capture showing it in between resets the count.
+- Q: Are new-item notifications on or off by default? → A: On; macOS is asked for permission the first time there is something to announce.
+- Q: Does a full backup include the capture pictures? → A: The user chooses: `Include capture pictures` is offered with both sizes shown, on by default; without them the backup keeps the database and cut-outs, and a restored library cannot re-read or reprocess those captures.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A meeting that disappeared from the calendar is flagged, not lost (Priority: P1)
@@ -17,10 +25,10 @@ The user captures their work calendar every day. When a calendar view that once 
 
 **Why this priority**: a calendar full of meetings that no longer exist is worse than no calendar; it is the main way a captured item turns false over time.
 
-**Independent Test**: Capture a week view showing three meetings, then a week view of the same dates and context showing two. The missing one appears in the Inbox as `Possibly cancelled` with both captures as evidence. Press `Cancelled`: it is dismissed. For another, press `Still happening`: it leaves the Inbox and a further capture without it does not flag it again unless it is shown once more and then missing again.
+**Independent Test**: Capture a week view showing three meetings, then twice a week view of the same dates and context showing two. After the first of those nothing changes; after the second the missing one appears in the Inbox as `Possibly cancelled` with both captures as evidence. Press `Cancelled`: it is dismissed. For another, press `Still happening`: it leaves the Inbox and a further capture without it does not flag it again unless it is shown once more and then missing again.
 
 **Acceptance Scenarios**:
-1. **Given** an item seen in a calendar view of context C covering dates D, **When** a later capture of a calendar view of C whose dates cover the item's day and time shows no sighting of it, **Then** the item gets the review reason `Possibly cancelled` and is listed in the Inbox.
+1. **Given** an item seen in a calendar view of context C covering dates D, **When** two later captures of a calendar view of C whose dates cover the item's day and time show no sighting of it, **Then** the item gets the review reason `Possibly cancelled` and is listed in the Inbox; after only one such capture nothing happens yet.
 2. **Given** a later capture that does not cover the item's day (another week, another month) or is of another context, **When** it shows no sighting of the item, **Then** nothing happens to the item.
 3. **Given** a later capture of a screen that is not a calendar view (mail, chat, a document), **When** it is analysed, **Then** it never counts as evidence of absence.
 4. **Given** an item that is possibly cancelled, **When** a still later capture of the range shows it again, **Then** the flag is cleared by itself and the item is back where it was.
@@ -40,7 +48,7 @@ In Settings the user can export their items to a file they choose (every item wi
 
 **Acceptance Scenarios**:
 1. **Given** a library with items, **When** the user chooses `Export items…`, **Then** a single file with all items (including dismissed ones, marked as such) is written where they chose, and it contains no capture pictures.
-2. **Given** the user chooses `Back up library…`, **When** it finishes, **Then** the backup holds everything needed to restore (items, sightings, captures with their text and cut-outs, contexts, settings of the library) and says how big it is before it starts.
+2. **Given** the user chooses `Back up library…`, **When** it finishes, **Then** the backup holds everything needed to restore (items, sightings, captures with their text and cut-outs, contexts, settings of the library, and the capture pictures unless the user turned `Include capture pictures` off), and both sizes were shown before it started.
 3. **Given** a backup, **When** the user chooses `Restore…` and confirms, **Then** the library becomes the backup's, the app shows the restored items, and the replaced library remains as a safety copy that Settings > Storage shows and can delete.
 4. **Given** a file that is damaged, not from Memorri, or from a newer version, **When** the user tries to restore it, **Then** nothing changes and the reason is shown.
 5. **Given** the backup is large, **When** it runs, **Then** it shows progress, can be cancelled with nothing left half written, and the app stays usable.
@@ -115,17 +123,17 @@ Settings has a Diagnostics section showing what the app is doing and a button to
 
 **Cancellation detection**
 - **FR-001**: For every analysed capture of a calendar view, Memorri MUST record what that view covered: the context, the dates it showed, and which part of those dates was visible.
-- **FR-002**: When a later capture of a calendar view of the same context covers an item's day and time and holds no sighting of that item, Memorri MUST mark the item `Possibly cancelled` and put it in the Inbox with that reason.
+- **FR-002**: When two later captures (taken at different moments, after the last capture that showed the item) of a calendar view of the same context cover an item's day and time and hold no sighting of that item, Memorri MUST mark the item `Possibly cancelled` and put it in the Inbox with that reason. One such capture alone MUST NOT flag it; a capture that shows the item again resets the count.
 - **FR-003**: Captures that are not calendar views, views of another context, views whose dates do not cover the item, and views whose dates could not be read MUST NOT count as evidence of absence.
 - **FR-004**: Memorri MUST NOT dismiss, delete, change or unsync an item or its Calendar entry because of a suspected cancellation; only the user's decision does.
 - **FR-005**: `Cancelled` MUST dismiss the item exactly as `Dismiss` does (tombstone, sync removes the entry, undoable). `Still happening` MUST approve the item and MUST NOT flag it again until it has been seen in a later capture.
 - **FR-006**: If a later covering view shows the item again, the flag MUST be removed automatically unless the user already decided.
-- **FR-007**: The reason, and the two captures (the last that showed the item and the one that did not), MUST be visible in the item's detail.
+- **FR-007**: The reason, the last capture that showed the item and the captures that covered it without it, MUST be visible in the item's detail.
 - **FR-008**: Reprocessing trials, the library re-read and a reanalysis of the same capture MUST NOT create suspicions on their own; only new captures do.
 
 **Notifications**
 - **FR-009**: After analysis adds items, Memorri MUST show at most one local notification per quiet period, stating how many items are new and how many need review.
-- **FR-010**: No notification MUST be shown when the Items window is frontmost, when nothing is new, when the setting is off, or when macOS notifications are not allowed; permission MUST be asked only when the user switches the setting on (or on the first notice, if on by default).
+- **FR-010**: No notification MUST be shown when the Items window is frontmost, when nothing is new, when the setting is off, or when macOS notifications are not allowed; the setting MUST be on by default, and macOS permission MUST be asked only when the first notice is due (or when the user switches the setting on again), never at launch.
 - **FR-011**: Clicking the notification MUST open the Items window on the Inbox, or on the new items when none need review.
 - **FR-012**: Items that arrive through reprocessing apply, restore or library re-read MUST NOT be announced.
 - **FR-013**: A setting in Settings MUST turn notifications on or off, and show the macOS permission state.
@@ -136,7 +144,7 @@ Settings has a Diagnostics section showing what the app is doing and a button to
 
 **Backup and export**
 - **FR-016**: The user MUST be able to export all items, with fields, status, user edits and the text of their sightings (no pictures), to one file they choose, in a form readable outside Memorri.
-- **FR-017**: The user MUST be able to make a full backup of the library (database, captures with their pictures, cut-outs) to a location they choose, after being shown its size, with progress and cancel; a cancelled or failed backup MUST leave no partial file.
+- **FR-017**: The user MUST be able to make a backup of the library (database, cut-outs and, when `Include capture pictures` is on, which it is by default, the capture pictures) to a location they choose, after being shown its size with and without pictures, with progress and cancel; a cancelled or failed backup MUST leave no partial file. A backup without pictures MUST say so when restored, and the restored captures MUST show as having no picture (they cannot be re-read or reprocessed).
 - **FR-018**: A backup MUST be consistent as of one moment even while the app keeps working.
 - **FR-019**: Restore MUST validate the file (is a Memorri backup, intact, not from a newer version), show what will be replaced, require confirmation, pause background work, keep the replaced library as a safety copy, and leave the current library untouched on any failure.
 - **FR-020**: After a restore, sync MUST NOT write anything until the user has seen a preview and confirmed (links may be stale).
@@ -152,9 +160,9 @@ Settings has a Diagnostics section showing what the app is doing and a button to
 ### Key Entities
 
 - **Calendar coverage**: for one analysed capture of a calendar view: the context, the first and last day shown, the time range visible, and which days were hidden or cut off.
-- **Cancellation suspicion**: an item's review reason `Possibly cancelled`, with the last capture that showed it and the capture that covered it without it; cleared by reappearance or by the user's decision.
+- **Cancellation suspicion**: an item's review reason `Possibly cancelled`, with the last capture that showed it and the (at least two) captures that covered it without it; cleared by reappearance or by the user's decision.
 - **Notification setting and pending notice**: whether on, the counts waiting for the quiet period, when the last notice was shown.
-- **Library backup**: one file or folder holding the library at a moment, with a version, a manifest of what it holds and a check value.
+- **Library backup**: one file or folder holding the library at a moment, with a version, whether it includes pictures, a manifest of what it holds and a check value.
 - **Safety copy**: the library a restore replaced, kept until the user deletes it.
 - **Diagnostic report**: a plain text or JSON file of figures, states and sanitised log lines.
 

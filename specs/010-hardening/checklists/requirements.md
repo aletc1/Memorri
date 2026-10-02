@@ -33,3 +33,4 @@
 
 - Five areas in one spec, as the roadmap lists them; each user story is independently testable and shippable in the order of its priority.
 - Defaults chosen instead of questions: `Cancelled` dismisses and `Still happening` approves (FR-005); restore replaces the whole library and keeps a safety copy (FR-019); export is one JSON file without pictures (FR-016); notifications are grouped by a quiet period (FR-009). `/speckit-clarify` may revisit them.
+- Clarified 2026-10-02: two covering captures without the meeting before it is flagged (FR-002); notifications on by default, permission asked at the first notice (FR-010); the backup offers `Include capture pictures`, on by default (FR-017).
