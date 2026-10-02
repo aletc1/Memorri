@@ -127,10 +127,10 @@ extension ItemOperations {
                     try db.execute(sql: "INSERT INTO field_locks (item_id, field, observation_id, locked_at) VALUES (?, ?, ?, ?)", arguments: [itemID, field, observation, date])
                 }
             }
-            try db.execute(sql: "UPDATE items SET status = ?, merged_into = ?, user_touched = ?, approved_at = ?, approved_values_json = ?, updated_at = ? WHERE id = ?",
+            try db.execute(sql: "UPDATE items SET status = ?, merged_into = ?, user_touched = ?, approved_at = ?, approved_values_json = ?, cancel_cleared_at = ?, updated_at = ? WHERE id = ?",
                            arguments: [state.status, state.mergedInto, state.userTouched ? 1 : 0, state.approvedAt,
                                        state.approvedValues.map { ReviewRules.encode(Dictionary(uniqueKeysWithValues: $0.compactMap { name, value in ItemField(rawValue: name).map { ($0, value) } })) },
-                                       date, itemID])
+                                       state.cancelClearedAt, date, itemID])
             restored.insert(itemID)
             touch(itemID)
             didSomething = true
@@ -143,6 +143,15 @@ extension ItemOperations {
         case .edit:
             if case .string(let observation)? = op.detail["observation"], let item = op.itemIDs.first, restored.contains(item) {
                 try db.execute(sql: "DELETE FROM observations WHERE id = ? AND sighting_id IS NULL", arguments: [observation])
+            }
+        case .stillHappening:
+            // The captures that had not shown the meeting count again (those whose picture is still kept).
+            if case .array(let rows)? = op.detail["absences"], let item = op.itemIDs.first, restored.contains(item) {
+                for case .object(let row) in rows {
+                    guard case .string(let image)? = row["image"], case .string(let event)? = row["event"], let at = row["at"]?.asDate,
+                          try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM capture_images WHERE id = ?)", arguments: [image]) == true else { continue }
+                    try db.execute(sql: "INSERT OR IGNORE INTO cancel_absences (item_id, image_id, event_id, captured_at) VALUES (?, ?, ?, ?)", arguments: [item, image, event, at])
+                }
             }
         case .merge:
             let pair = op.itemIDs.sorted()

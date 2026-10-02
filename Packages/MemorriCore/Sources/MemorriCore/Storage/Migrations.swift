@@ -550,6 +550,24 @@ enum Migrations {
             }
             try db.create(index: "cancel_absences_item", on: "cancel_absences", columns: ["item_id", "captured_at"])
             try db.alter(table: "items") { t in t.add(column: "cancel_cleared_at", .datetime) }
+
+            // `Still happening` is an operation of its own (undoable), so the log accepts one more kind.
+            try db.create(table: "reconcile_ops_v12") { t in
+                t.primaryKey("id", .text)
+                t.column("kind", .text).notNull()
+                    .check(sql: "kind IN ('auto_merge', 'merge', 'split', 'dismiss', 'restore', 'edit', 'unlock', 'context', 'different', 'undo', 'approve', 'apply_trial', 'still_happening')")
+                t.column("by_user", .integer).notNull()
+                t.column("item_ids_json", .text).notNull()
+                t.column("moved_json", .text).notNull()
+                t.column("before_json", .text).notNull()
+                t.column("detail_json", .text).notNull()
+                t.column("undone_by", .text)
+                t.column("created_at", .datetime).notNull()
+            }
+            try db.execute(sql: "INSERT INTO reconcile_ops_v12 SELECT id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at FROM reconcile_ops")
+            try db.drop(table: "reconcile_ops")
+            try db.rename(table: "reconcile_ops_v12", to: "reconcile_ops")
+            try db.create(index: "reconcile_ops_created_at", on: "reconcile_ops", columns: ["created_at"])
         }
         return migrator
     }

@@ -884,7 +884,14 @@ import Testing
         do {
             let pool = try DatabasePool(path: paths.database.path)
             try Migrations.make().migrate(pool, upTo: "v11")
-            try pool.write { try self.insertItem($0, id: "i1", title: "Daily standup") }
+            try pool.write { db in
+                try self.insertItem(db, id: "i1", title: "Daily standup")
+                try db.execute(sql: """
+                    INSERT INTO reconcile_ops (id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at)
+                    VALUES ('op1', 'approve', 1, '["i1"]', '[]', '{}', '{"note":"kept"}', NULL, '2026-10-01 10:00:00.000')
+                    """)
+                try db.execute(sql: "INSERT INTO reconcile_op_items (op_id, item_id) VALUES ('op1', 'i1')")
+            }
             try pool.writeWithoutTransaction { try $0.checkpoint(.truncate) }
             try pool.close()
         }
@@ -896,6 +903,14 @@ import Testing
             #expect(try db.columns(in: "items").map(\.name).contains("cancel_cleared_at"))
             #expect(try db.indexes(on: "cancel_absences").contains { $0.name == "cancel_absences_item" })
             #expect(try String.fetchOne(db, sql: "SELECT cancel_cleared_at FROM items WHERE id = 'i1'") == nil)
+            // The operation log keeps its rows and its links to items, and accepts the new kind.
+            let opIDs = try String.fetchAll(db, sql: "SELECT id FROM reconcile_ops"), linked = try String.fetchAll(db, sql: "SELECT op_id FROM reconcile_op_items")
+            #expect(opIDs == ["op1"] && linked == ["op1"])
+            try db.execute(sql: """
+                INSERT INTO reconcile_ops (id, kind, by_user, item_ids_json, moved_json, before_json, detail_json, undone_by, created_at)
+                VALUES ('op2', 'still_happening', 1, '["i1"]', '[]', '{}', '{}', NULL, '2026-10-01 11:00:00.000')
+                """)
+            #expect(try db.indexes(on: "reconcile_ops").contains { $0.name == "reconcile_ops_created_at" })
             let foreign = try db.foreignKeys(on: "cancel_absences").map(\.destinationTable)
             let coverageForeign = try db.foreignKeys(on: "calendar_coverage").map(\.destinationTable)
             #expect(Set(foreign) == ["items", "capture_images"] && Set(coverageForeign) == ["capture_images"])

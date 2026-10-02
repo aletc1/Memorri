@@ -26,11 +26,13 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
     private let windows: (any WindowProviding)?
     private let reconciler: (any ImageReconciling)?
     private let evidence: (any ImageEvidenceWriting)?
+    private let cancellation: (any CancellationRecording)?
 
     public init(service: OllamaService, pipeline: AnalysisPipeline, pictures: any AnalysisPictureProviding,
                 fullPictures: any FullPictureProviding, ocr: OCRStore, results: AnalysisResultStore, jobs: any AnalysisJobStoring,
                 settings: OllamaSettings, time: any TimeSource, recogniserName: String = VisionTextRecogniser.descriptor,
-                contexts: ContextStore? = nil, windows: (any WindowProviding)? = nil, reconciler: (any ImageReconciling)? = nil, evidence: (any ImageEvidenceWriting)? = nil) {
+                contexts: ContextStore? = nil, windows: (any WindowProviding)? = nil, reconciler: (any ImageReconciling)? = nil, evidence: (any ImageEvidenceWriting)? = nil,
+                cancellation: (any CancellationRecording)? = nil) {
         self.service = service
         self.pipeline = pipeline
         self.pictures = pictures
@@ -45,6 +47,7 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         self.windows = windows
         self.reconciler = reconciler
         self.evidence = evidence
+        self.cancellation = cancellation
     }
 
     private static let gone = JobOutcome.permanent("picture no longer stored")
@@ -154,7 +157,13 @@ public struct ImageAnalysisJobRunner: AnalysisJobRunning {
         Self.logger.info("analysis stored image=\(imageID, privacy: .public)")
         // Reconciliation turns the findings into items. It never fails the job: a failure is stored on the picture and retried with
         // the next analysis (ADR 0020).
-        _ = await reconciler?.reconcile(imageID: imageID)
+        let summary = await reconciler?.reconcile(imageID: imageID)
+        // What the picture's calendar views covered (spec 010). Only the first analysis of a picture can raise a suspicion that a meeting is gone; a
+        // reanalysis or the library re-read only drops suspicions its new sightings contradict. A failed reconcile says nothing about what is shown.
+        if let summary, summary.error == nil, let cancellation {
+            if forced || reread { try? cancellation.clearContradicted(imageID: imageID) }
+            else { _ = try? cancellation.record(imageID: imageID, coverage: analysis.coverage) }
+        }
         // The proof of each sighting is cut out of the full picture; it never fails the job either (ADR 0021).
         _ = await evidence?.write(imageID: imageID)
         return .success

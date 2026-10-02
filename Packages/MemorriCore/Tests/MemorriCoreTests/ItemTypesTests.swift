@@ -4,7 +4,7 @@ import Testing
 
 @Suite struct ItemTypesTests {
     @Test func reviewReasonRawValuesAreTheStoredWordsInShowingOrder() {
-        #expect(ReviewReason.allCases.map(\.rawValue) == ["low-confidence", "guessed-start", "guessed-end", "guessed-due", "possible-duplicate", "changed-after-approval"])
+        #expect(ReviewReason.allCases.map(\.rawValue) == ["low-confidence", "guessed-start", "guessed-end", "guessed-due", "possible-duplicate", "changed-after-approval", "possibly-cancelled"])
         #expect(Item.sample().needsReview == false && Item.sample().reviewReasons.isEmpty && Item.sample().approvedAt == nil)
     }
 

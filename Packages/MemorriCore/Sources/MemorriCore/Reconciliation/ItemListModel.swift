@@ -357,6 +357,7 @@ public enum ItemListModel {
         case "context": "Context changed"
         case "different": "Marked as different"
         case "approve": "Approved"
+        case "still_happening": "Marked as still happening"
         case "undo": "Undone"
         case "apply_trial": "Applied a reprocessing trial"
         default: kind

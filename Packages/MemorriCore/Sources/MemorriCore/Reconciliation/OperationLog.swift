@@ -3,6 +3,8 @@ import GRDB
 
 public enum OperationKind: String, Sendable, Equatable, Codable {
     case autoMerge = "auto_merge", merge, split, dismiss, restore, edit, unlock, context, different, approve, undo
+    /// `Still happening` on an item that was possibly cancelled (spec 010): approves it and stops the suspicion until it is seen again.
+    case stillHappening = "still_happening"
     /// Chosen differences of a reprocessing trial applied (spec 008).
     case applyTrial = "apply_trial"
 }
@@ -29,11 +31,13 @@ public struct ItemState: Sendable, Equatable, Codable {
     /// The approval (spec 006): when, and the values it vouched for. Absent in entries written before it existed.
     public var approvedAt: Date?
     public var approvedValues: [String: JSONValue]?
+    /// When the user said `Still happening` (spec 010). Absent in entries written before it existed.
+    public var cancelClearedAt: Date?
 
     public init(status: String, mergedInto: String?, userTouched: Bool, locks: [String: String], observations: [String],
-                approvedAt: Date? = nil, approvedValues: [String: JSONValue]? = nil) {
+                approvedAt: Date? = nil, approvedValues: [String: JSONValue]? = nil, cancelClearedAt: Date? = nil) {
         self.status = status; self.mergedInto = mergedInto; self.userTouched = userTouched; self.locks = locks; self.observations = observations
-        self.approvedAt = approvedAt; self.approvedValues = approvedValues
+        self.approvedAt = approvedAt; self.approvedValues = approvedValues; self.cancelClearedAt = cancelClearedAt
     }
 }
 
@@ -110,7 +114,7 @@ public struct OperationLog: Sendable {
 
     /// The state an undo has to restore for an item; nil when it does not exist.
     static func state(_ db: Database, itemID: String) throws -> ItemState? {
-        guard let row = try Row.fetchOne(db, sql: "SELECT status, merged_into, user_touched, approved_at, approved_values_json FROM items WHERE id = ?", arguments: [itemID]) else { return nil }
+        guard let row = try Row.fetchOne(db, sql: "SELECT status, merged_into, user_touched, approved_at, approved_values_json, cancel_cleared_at FROM items WHERE id = ?", arguments: [itemID]) else { return nil }
         var locks: [String: String] = [:]
         for lock in try Row.fetchAll(db, sql: "SELECT field, observation_id FROM field_locks WHERE item_id = ?", arguments: [itemID]) {
             locks[lock["field"]] = lock["observation_id"]
@@ -118,7 +122,7 @@ public struct OperationLog: Sendable {
         let own = try String.fetchAll(db, sql: "SELECT id FROM observations WHERE item_id = ? AND sighting_id IS NULL ORDER BY id", arguments: [itemID])
         let values = (row["approved_values_json"] as String?).flatMap { try? JSONDecoder().decode([String: JSONValue].self, from: Data($0.utf8)) }
         return ItemState(status: row["status"], mergedInto: row["merged_into"], userTouched: (row["user_touched"] as Int) != 0, locks: locks, observations: own,
-                         approvedAt: row["approved_at"], approvedValues: values)
+                         approvedAt: row["approved_at"], approvedValues: values, cancelClearedAt: row["cancel_cleared_at"])
     }
 
     private static func encode<T: Encodable>(_ value: T) -> String {

@@ -18,6 +18,16 @@ import Testing
         let evidence: FakeEvidenceWriter
         /// The real reconciler, when the rig was made with one (the fake is then not wired in).
         let real: Reconciler?
+        let cancellation: FakeCancellationRecorder
+    }
+
+    final class FakeCancellationRecorder: CancellationRecording, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _recorded: [String] = [], _cleared: [String] = []
+        var recorded: [String] { lock.withLock { _recorded } }
+        var cleared: [String] { lock.withLock { _cleared } }
+        func record(imageID: String, coverage: [CoverageDraft]) throws -> [String] { lock.withLock { _recorded.append(imageID) }; return [] }
+        func clearContradicted(imageID: String) throws { lock.withLock { _cleared.append(imageID) } }
     }
 
     private func sampleLines() -> [RecognisedLine] {
@@ -27,6 +37,7 @@ import Testing
 
     private func makeRig(lines: [RecognisedLine]? = nil, failWith error: Error? = nil, model modelName: String? = "qwen3.8:27b-mlx",
                          windows: [WindowInfo] = [], reconcileSummary: ReconcileSummary = ReconcileSummary(), realReconciler: Bool = false) throws -> Rig {
+        let cancellation = FakeCancellationRecorder()
         let fixture = try makePipelineFixture(windows: windows)
         let recogniser = FakeTextRecogniser(lines: lines ?? sampleLines(), failWith: error)
         let model = FakeModelChatting()
@@ -52,9 +63,9 @@ import Testing
         let runner = ImageAnalysisJobRunner(service: service, pipeline: pipeline, pictures: provider, fullPictures: provider, ocr: ocr,
                                             results: results, jobs: jobs, settings: settings, time: time,
                                             contexts: ContextStore(database: fixture.database), windows: fixture.captures,
-                                            reconciler: real ?? reconciler, evidence: real == nil ? evidence : nil)
+                                            reconciler: real ?? reconciler, evidence: real == nil ? evidence : nil, cancellation: cancellation)
         return Rig(fixture: fixture, recogniser: recogniser, model: model, runner: runner, ocr: ocr, results: results, jobs: jobs, settings: settings,
-                   contexts: ContextStore(database: fixture.database), reconciler: reconciler, evidence: evidence, real: real)
+                   contexts: ContextStore(database: fixture.database), reconciler: reconciler, evidence: evidence, real: real, cancellation: cancellation)
     }
 
     private func job(_ rig: Rig, kind: String = "analyse", imageID: String? = nil, nilImage: Bool = false) throws -> AnalysisJobRecord {
@@ -287,6 +298,21 @@ import Testing
         #expect(rig.reconciler.imageIDs == [rig.fixture.imageID])
         // it is asked after the analysis is in the database
         #expect(rig.reconciler.analysisWasStoredWhenAsked == [true])
+    }
+
+    @Test func onlyAFirstAnalysisRecordsWhatTheCalendarViewsCovered() async throws {
+        let rig = try makeRig(); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(rig.cancellation.recorded == [rig.fixture.imageID] && rig.cancellation.cleared.isEmpty)
+        _ = await rig.runner.run(try job(rig, kind: "analyse-force"), attempt: 1)
+        _ = await rig.runner.run(try job(rig, kind: "reread"), attempt: 1)
+        #expect(rig.cancellation.recorded.count == 1 && rig.cancellation.cleared.count == 2)          // a reanalysis and a re-read only clear
+    }
+
+    @Test func aFailedReconcileRecordsNothing() async throws {
+        let rig = try makeRig(reconcileSummary: ReconcileSummary(error: "boom")); defer { rig.fixture.cleanUp() }
+        _ = await rig.runner.run(try job(rig), attempt: 1)
+        #expect(rig.cancellation.recorded.isEmpty && rig.cancellation.cleared.isEmpty)
     }
 
     @Test func evidenceIsWrittenOnceAfterReconciliationAndNeverFailsTheJob() async throws {
