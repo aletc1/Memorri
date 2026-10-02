@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Related ADRs**: 0014 (analysis jobs), 0018 (month grids are read from their geometry), 0020 (reconciliation), 0021 (evidence and review state)
+**Related ADRs**: 0014 (analysis jobs), 0018 (month grids are read from their geometry), 0020 (reconciliation), 0021 (evidence and review state), 0022 (window-aware analysis, Proposed)
 
 **Related**: `docs/postmortems/2026-10-01-month-view-read-as-the-capture-month.md`
 
