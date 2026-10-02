@@ -59,8 +59,8 @@ Paths are relative to `Packages/MemorriCore/Sources/MemorriCore/` (Sources), `Pa
 - [x] T030 [US6] Run the script, commit the asset, set `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` in `project.yml`, regenerate and build, look at the app in Finder (project.yml, App/Resources/Assets.xcassets/AppIcon.appiconset)
 
 ## Phase 8: Polish
-- [ ] T031 Scale: coverage and absence work under 100 ms per first analysis on 10,000 items; backup of a 1 GB library under 2 minutes (a generated tree), off the main actor (Tests/HardeningScaleTests.swift)
-- [ ] T032 Docs: `DEVELOPER.md` section "How hardening works", `docs/roadmap.md`, `CLAUDE.md` stack line, `specs/010-hardening/pr-description.md`
+- [x] T031 Scale: coverage and absence work under 100 ms per first analysis on 10,000 items; backup of a 1 GB library under 2 minutes (a generated tree), off the main actor (Tests/HardeningScaleTests.swift)
+- [x] T032 Docs: `DEVELOPER.md` section "How hardening works", `docs/roadmap.md`, `CLAUDE.md` stack line, `specs/010-hardening/pr-description.md`
 - [ ] T033 Full suite and app build; run in the app on the real library with permission, counts only: items flagged, a backup and restore on a copy, a notification, the diagnostics file searched for known strings, and a check that no network connection is opened during a backup, an export or a report (quickstart)
 
 ## Dependencies

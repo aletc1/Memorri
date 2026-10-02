@@ -44,13 +44,15 @@ public struct CancellationDetector: CancellationRecording {
             let shown = try String.fetchAll(db, sql: "SELECT DISTINCT item_id FROM sightings WHERE image_id = ?", arguments: [imageID])
             for id in shown { try db.execute(sql: "DELETE FROM cancel_absences WHERE item_id = ? AND captured_at < ?", arguments: [id, capturedAt]) }
 
+            // Only items that start inside the covered stretches are looked at (the filter in SQL keeps a large library cheap).
+            guard let earliest = spans.map(\.start).min(), let latest = spans.map(\.end).max() else { return [] }
             let candidates = try Row.fetchAll(db, sql: """
                 SELECT i.id, i.start_at, i.review_reasons_json FROM items i
-                WHERE i.status = 'active' AND i.family = 'event' AND i.all_day = 0 AND i.start_at IS NOT NULL AND i.context_id = ?
+                WHERE i.status = 'active' AND i.family = 'event' AND i.all_day = 0 AND i.start_at BETWEEN ? AND ? AND i.context_id = ?
                   AND NOT EXISTS (SELECT 1 FROM sightings s WHERE s.item_id = i.id AND s.image_id = ?)
                   AND EXISTS (SELECT 1 FROM sightings s JOIN calendar_coverage c ON c.image_id = s.image_id
                               WHERE s.item_id = i.id AND s.captured_at < ?)
-                """, arguments: [context, imageID, capturedAt])
+                """, arguments: [earliest, latest, context, imageID, capturedAt])
             var touched: [String] = []
             for row in candidates {
                 let start: Date = row["start_at"]
