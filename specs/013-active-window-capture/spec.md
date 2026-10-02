@@ -137,7 +137,7 @@ In the menu's last-capture line and in the item detail, a window capture is show
 
 **What is captured**
 
-- **FR-005**: The window capture MUST take exactly one picture: the window that has keyboard focus in the frontmost application at the moment of the request (a panel or dialog when it is the focused one, otherwise the application's main window), at its native pixel size, without the pointer.
+- **FR-005**: The window capture MUST take exactly one picture: the window that has keyboard focus in the frontmost application at the moment of the request (a panel or dialog when it is the focused one, otherwise the application's main window; found without Accessibility permission, see Assumptions), at its native pixel size, without the pointer.
 - **FR-006**: The window capture MUST NOT take pictures of any display and MUST NOT store anything outside the captured window.
 - **FR-007**: The window capture MUST NOT capture Memorri's own windows, the menu bar, the Dock or other system overlays; when no other window qualifies, it MUST store nothing and report "no window to capture" with the warning look and sound.
 - **FR-008**: The picture MUST show what was on the screen inside the window's outline at that moment, including anything drawn over the window (another window, a floating panel, a menu); content of the window that was covered MUST NOT be recovered. The red border outlines the same area.

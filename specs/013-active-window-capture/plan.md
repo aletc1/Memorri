@@ -71,7 +71,7 @@ Packages/MemorriCore/Sources/MemorriCore/
 ├── Capture/
 │   ├── WindowCapturing.swift         # new: protocol, WindowCaptureResult, WindowCaptureFailure
 │   ├── ActiveWindowPicker.swift      # new: pure choice of the window from the front-to-back list
-│   ├── CaptureOutline.swift          # new: pure outline geometry per display, CaptureOutlining protocol
+│   ├── CaptureOutline.swift          # new: pure outline geometry per display (the CaptureOutlining protocol is in WindowCapturing.swift)
 │   ├── CapturePipeline.swift         # + runWindow(trigger:); run(trigger:) untouched
 │   ├── CaptureRequestService.swift   # + requestWindow(_:), one shared debounce and busy rule
 │   ├── CaptureOutcome.swift          # + .windowComplete(app:), .noWindow(reason)

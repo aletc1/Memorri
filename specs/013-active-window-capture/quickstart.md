@@ -28,8 +28,9 @@ open .build/xcode/Build/Products/Debug/Memorri.app
 3. **Story 3.** Press Control+Option+Command+M and use "Capture now": every display is captured as before, no border.
 4. **Story 4.** In Settings, set the window shortcut to the capture shortcut: it is refused and the old one stays. Choose "Capture window" in the menu with a window in front of another application: it captures that window.
 5. **Story 5.** The menu's last-capture line says `Last window capture: <app>`; an item from the capture names the window in its detail.
-6. **Edge cases.** Focus the desktop (Finder with no window), press the shortcut: warning look and sound, nothing stored. Open Memorri's own Settings window in front and press it: warning, nothing stored. Revoke Screen Recording and press it: onboarding opens.
-7. **Debug ingest.** `Memorri --ingest-case eval/golden/synthetic/window-capture-mail` stores it as a window capture and queues its analysis.
+6. **Covered window.** Place a small window over part of the target window and capture it: the stored picture shows the small window, and nothing of the target that it covers.
+7. **Edge cases.** Focus the desktop (Finder with no window), press the shortcut: warning look and sound, nothing stored. Open Memorri's own Settings window in front and press it: warning, nothing stored. Revoke Screen Recording and press it: onboarding opens.
+8. **Debug ingest.** `Memorri --ingest-case eval/golden/synthetic/window-capture-mail` stores it as a window capture and queues its analysis.
 
 ## 4. Expected database state
 
