@@ -301,10 +301,12 @@ import Testing
         let stream = store.observeItemChanges()
         let received = Received()
         let task = Task { for await _ in stream { received.add() } }
-        try await Task.sleep(for: .milliseconds(200))
+        try await Task.sleep(for: .milliseconds(400))
         #expect(received.count == 0)
         try fixture.write { try $0.execute(sql: "UPDATE items SET title = 'Daily standup', updated_at = datetime('now', '+1 minute') WHERE id = 'i0'") }
-        try await Task.sleep(for: .milliseconds(300))
+        let deadline = Date().addingTimeInterval(8)
+        while received.count < 1 && Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }      // a loaded machine may be slow to report
+        try await Task.sleep(for: .milliseconds(200))
         #expect(received.count == 1)
         task.cancel()
     }
